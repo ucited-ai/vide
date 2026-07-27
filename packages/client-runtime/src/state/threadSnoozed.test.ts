@@ -1,5 +1,5 @@
-import { ThreadId } from "@t3tools/contracts";
-import { TurnId } from "@t3tools/contracts";
+import { ThreadId } from "@vide/contracts";
+import { TurnId } from "@vide/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {

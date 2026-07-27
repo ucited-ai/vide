@@ -1,4 +1,4 @@
-import type { RelayManagedEndpoint } from "@t3tools/contracts/relay";
+import type { RelayManagedEndpoint } from "@vide/contracts/relay";
 import { and, eq } from "drizzle-orm";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
@@ -123,7 +123,7 @@ export class ManagedEndpointAllocations extends Context.Service<
       input: ManagedEndpointAllocationKey,
     ) => Effect.Effect<void, ManagedEndpointAllocationPersistenceError>;
   }
->()("t3code-relay/environments/ManagedEndpointAllocations") {}
+>()("vide-relay/environments/ManagedEndpointAllocations") {}
 
 const allocationSelection = {
   userId: relayManagedEndpointAllocations.userId,

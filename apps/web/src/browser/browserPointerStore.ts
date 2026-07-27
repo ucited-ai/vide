@@ -1,4 +1,4 @@
-import type { DesktopPreviewPointerEvent } from "@t3tools/contracts";
+import type { DesktopPreviewPointerEvent } from "@vide/contracts";
 import { create } from "zustand";
 
 interface BrowserPointerStoreState {

@@ -85,9 +85,6 @@ describe("brand-assets", () => {
 
   it("keeps development, nightly, and production icon families separate", () => {
     expect([
-      BRAND_ASSET_PATHS.developmentIconComposerProject,
-      BRAND_ASSET_PATHS.nightlyIconComposerProject,
-      BRAND_ASSET_PATHS.productionIconComposerProject,
     ]).toEqual([
       "assets/dev/app-icon.icon",
       "assets/nightly/app-icon.icon",

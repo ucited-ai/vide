@@ -58,7 +58,7 @@ function SidebarBrand({ onBackdrop }: { onBackdrop: boolean }) {
       )}
       to="/"
     >
-      <T3Wordmark />
+      <VideWordmark />
       <span
         className={cn(
           "truncate text-sm font-medium tracking-tight",
@@ -81,10 +81,10 @@ function useSidebarStageLabel() {
   });
 }
 
-function T3Wordmark() {
+function VideWordmark() {
   return (
     <svg
-      aria-label="T3"
+      aria-label="Vide"
       className="h-2.5 w-auto shrink-0"
       viewBox="15.5309 37 94.3941 56.96"
       xmlns="http://www.w3.org/2000/svg"

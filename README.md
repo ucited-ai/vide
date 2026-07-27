@@ -1,92 +1,83 @@
-# T3 Code
+# Vide
 
-T3 Code is a minimal web GUI for coding agents (currently Codex, Claude, Cursor, and OpenCode, more coming soon).
+A native-feeling macOS GUI for coding agents — Claude Code, Codex, Cursor, and OpenCode.
 
-## Installation
+*Vibe coding + IDE.* Personal build, maintained for one machine.
 
-> [!WARNING]
-> T3 Code currently supports Codex, Claude, Cursor, and OpenCode.
-> Install and authenticate at least one provider before use:
->
-> - Codex: install [Codex CLI](https://developers.openai.com/codex/cli) and run `codex login`
-> - Claude: install [Claude Code](https://claude.com/product/claude-code) and run `claude auth login`
-> - Cursor: install [Cursor CLI](https://cursor.com/cli) and run `cursor-agent login`
-> - OpenCode: install [OpenCode](https://opencode.ai) and run `opencode auth login`
+---
 
-### Run without installing
+## What this is
 
-```bash
-npx t3@latest
-```
+A customized fork of [T3 Code](https://github.com/pingdotgg/t3code) (MIT), rebuilt around a
+single goal: an app that feels like it belongs on macOS rather than a web page in a window.
 
-Tip: Use `npx t3@latest --help` for the full CLI reference.
+Everything mobile, marketing, and vendored-reference has been stripped out. What remains:
 
-### Desktop app
+| Path | What it does |
+|---|---|
+| `apps/web` | The UI — React 19, Tailwind v4, TanStack Router, Base UI |
+| `apps/desktop` | The Electron shell that turns it into `Vide.app` |
+| `apps/server` | Backend + the `vide` CLI; talks to the agent providers |
+| `packages/*` | Shared contracts, runtime, SSH, Tailscale |
+| `assets/brand` | `vide-mark.svg` — the single source for every icon |
 
-Install the latest version of the desktop app from [GitHub Releases](https://github.com/pingdotgg/t3code/releases), or from your favorite package registry:
+## Requirements
 
-#### Windows (`winget`)
+- **Node 24.13.1+** (`nvm install 24`)
+- **Vite+** — `curl -fsSL https://vite.plus | bash`
+- At least one authenticated agent CLI: `claude`, `codex`, `cursor-agent`, or `opencode`
 
-```bash
-winget install T3Tools.T3Code
-```
-
-#### macOS (Homebrew)
+## Working on it
 
 ```bash
-brew install --cask t3-code
+vp i                    # install dependencies
+vp run dev:desktop      # Electron with hot reload — the customization loop
+vp run tc               # typecheck
+vp run test             # tests
 ```
 
-#### Arch Linux (AUR)
+## Building the real app
 
 ```bash
-yay -S t3code-bin
+vp run dist:desktop:dmg:arm64    # -> Vide.app + .dmg
 ```
 
-## Some notes
+Local builds carry no update feed, so the app never replaces itself. Its bundle id is
+`com.vide.app` and its state lives in `~/.vide`, both distinct from upstream's — an official
+T3 Code install can sit alongside this one without either touching the other's data.
 
-We are very very early in this project. Expect bugs.
+## Icons
 
-We are not accepting contributions yet.
-
-There's no public docs site yet, checkout the miscellaneous markdown files in [docs](./docs).
-
-## Documentation
-
-- [Getting started](./docs/getting-started/quick-start.md)
-- [Remote access](./docs/user/remote-access.md)
-- [Keeping T3 Code in sync](./docs/user/server-updates.md)
-- [Architecture overview](./docs/architecture/overview.md)
-- [Provider guides](./docs/providers/codex.md)
-- [Operations](./docs/operations/ci.md)
-- [Reference](./docs/reference/encyclopedia.md)
-
-## If you REALLY want to contribute still.... read this first
-
-### Install `vp`
-
-T3 Code uses Vite+ so you'll need to install the global `vp` command-line tool.
-
-#### macOS / Linux
+Every icon derives from one file. Edit `assets/brand/vide-mark.svg`, then:
 
 ```bash
-curl -fsSL https://vite.plus | bash
+vp run icons
 ```
 
-#### Windows
+That regenerates all PNG/ICO/ICNS variants across the three channels, the Electron packaging
+resources, and the web favicons. Upstream's Icon Composer pipeline was removed — it required
+Xcode 26 and produced upstream's mark.
+
+## Tracking upstream
 
 ```bash
-irm https://vite.plus/ps1 | iex
+git fetch upstream
+git merge upstream/main
 ```
 
-Checkout their getting started guide for more information: https://viteplus.dev/guide/
+Conflicts appear only in files this fork has touched. Customizations therefore prefer *new*
+files (own components, own theme layer) over edits to upstream files wherever that is possible.
 
-### Install dependencies
+Deleted directories (`apps/mobile`, `apps/marketing`, `.repos`, `.github/workflows`) will show
+up as modify/delete conflicts if upstream changes them — resolve by keeping them deleted:
 
 ```bash
-vp i
+git rm -r <path>
 ```
 
-Read [CONTRIBUTING.md](./CONTRIBUTING.md) before opening an issue or PR.
+Anything removed is recoverable: `git checkout upstream/main -- <path>`.
 
-Need support? Join the [Discord](https://discord.gg/jn4EGJjrvv).
+## Attribution
+
+Built on [T3 Code](https://github.com/pingdotgg/t3code) by T3 Tools Inc., MIT licensed.
+The original copyright notice is retained in [LICENSE](./LICENSE), as that license requires.

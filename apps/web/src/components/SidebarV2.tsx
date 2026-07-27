@@ -5,14 +5,14 @@ import {
   effectiveSettled,
   effectiveSnoozed,
   threadWokeAt,
-} from "@t3tools/client-runtime/state/thread-settled";
-import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
+} from "@vide/client-runtime/state/thread-settled";
+import type { EnvironmentThreadShell } from "@vide/client-runtime/state/models";
 import {
   scopeProjectRef,
   scopeThreadRef,
   scopedThreadKey,
-} from "@t3tools/client-runtime/environment";
-import type { ScopedThreadRef, SidebarProjectGroupingMode } from "@t3tools/contracts";
+} from "@vide/client-runtime/environment";
+import type { ScopedThreadRef, SidebarProjectGroupingMode } from "@vide/contracts";
 import {
   AlarmClockIcon,
   AlarmClockOffIcon,
@@ -52,7 +52,7 @@ import {
   isAtomCommandInterrupted,
   settlePromise,
   squashAtomCommandFailure,
-} from "@t3tools/client-runtime/state/runtime";
+} from "@vide/client-runtime/state/runtime";
 import { isElectron } from "../env";
 import {
   resolveShortcutCommand,

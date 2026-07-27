@@ -1,5 +1,5 @@
 {
-  "name": "@t3tools/shared",
+  "name": "@vide/shared",
   "private": true,
   "type": "module",
   "exports": {
@@ -87,9 +87,9 @@
       "types": "./src/projectScripts.ts",
       "import": "./src/projectScripts.ts"
     },
-    "./t3ProjectFile": {
-      "types": "./src/t3ProjectFile.ts",
-      "import": "./src/t3ProjectFile.ts"
+    "./videProjectFile": {
+      "types": "./src/videProjectFile.ts",
+      "import": "./src/videProjectFile.ts"
     },
     "./orchestrationTiming": {
       "types": "./src/orchestrationTiming.ts",
@@ -211,7 +211,7 @@
   "dependencies": {
     "@noble/curves": "catalog:",
     "@noble/hashes": "catalog:",
-    "@t3tools/contracts": "workspace:*",
+    "@vide/contracts": "workspace:*",
     "effect": "catalog:",
     "jose": "catalog:",
     "yaml": "catalog:"

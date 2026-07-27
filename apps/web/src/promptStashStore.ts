@@ -1,11 +1,11 @@
-import { ModelSelection, ProviderInstanceId } from "@t3tools/contracts";
+import { ModelSelection, ProviderInstanceId } from "@vide/contracts";
 import * as Schema from "effect/Schema";
 import { create } from "zustand";
 
 import { PersistedComposerImageAttachment } from "./composerDraftStore";
 import { createMemoryStorage, type StateStorage } from "./lib/storage";
 
-export const PROMPT_STASH_STORAGE_KEY = "t3code:prompt-stash:v1";
+export const PROMPT_STASH_STORAGE_KEY = "vide:prompt-stash:v1";
 const PROMPT_STASH_STORAGE_VERSION = 1;
 
 /**
