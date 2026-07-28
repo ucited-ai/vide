@@ -71,8 +71,10 @@ import { rehypeChatStreamWords } from "../markdown-stream-words";
 import { useChatStreamReveal } from "../chatStreamReveal";
 import {
   normalizeMarkdownLinkDestination,
+  resolveInlineCodeFileLinkMeta,
   resolveMarkdownFileLinkMeta,
   rewriteMarkdownFileUriHref,
+  type MarkdownFileLinkMeta,
 } from "../markdown-links";
 import { readLocalApi } from "../localApi";
 import { cn } from "../lib/utils";
@@ -180,7 +182,7 @@ const CHAT_MARKDOWN_SANITIZE_SCHEMA = {
   attributes: {
     ...defaultSchema.attributes,
     "*": (defaultSchema.attributes?.["*"] ?? []).filter((attribute) => attribute !== "title"),
-    code: [...(defaultSchema.attributes?.code ?? []), "dataCodeMeta"],
+    code: [...(defaultSchema.attributes?.code ?? []), "dataCodeMeta", "dataInlineCode"],
   },
   protocols: {
     ...defaultSchema.protocols,
@@ -192,6 +194,7 @@ const CHAT_MARKDOWN_REMARK_PLUGINS = [
   remarkGfm,
   remarkNormalizeListItemIndentation,
   remarkPreserveCodeMeta,
+  remarkTagInlineCode,
 ] satisfies NonNullable<ReactMarkdownOptions["remarkPlugins"]>;
 
 const CHAT_MARKDOWN_REMARK_PLUGINS_WITH_BREAKS = [
@@ -199,6 +202,7 @@ const CHAT_MARKDOWN_REMARK_PLUGINS_WITH_BREAKS = [
   remarkNormalizeListItemIndentation,
   remarkBreaks,
   remarkPreserveCodeMeta,
+  remarkTagInlineCode,
 ] satisfies NonNullable<ReactMarkdownOptions["remarkPlugins"]>;
 
 const CHAT_MARKDOWN_REHYPE_PLUGINS = [
@@ -271,6 +275,33 @@ function remarkPreserveCodeMeta() {
   };
 }
 
+/**
+ * Fenced code also lands on the `code` component, and inline vs block is no
+ * longer distinguishable there once both render `<code>` — so inline spans are
+ * tagged on the mdast, where the distinction still exists. Code inside a link
+ * label stays untagged: linkifying it would nest an anchor inside the link's
+ * anchor and steal its clicks.
+ */
+function remarkTagInlineCode() {
+  return (tree: MarkdownAstNode) => {
+    const visit = (node: MarkdownAstNode, insideLink: boolean) => {
+      if (node.type === "inlineCode" && !insideLink) {
+        node.data = {
+          ...node.data,
+          hProperties: {
+            ...node.data?.hProperties,
+            dataInlineCode: "",
+          },
+        };
+      }
+      const childInsideLink = insideLink || node.type === "link" || node.type === "linkReference";
+      node.children?.forEach((child) => visit(child, childInsideLink));
+    };
+
+    visit(tree, false);
+  };
+}
+
 function nodeToPlainText(node: ReactNode): string {
   if (typeof node === "string" || typeof node === "number") {
     return String(node);
@@ -294,9 +325,15 @@ function extractCodeBlock(
 
   const onlyChild = childNodes[0];
   if (
-    !isValidElement<{ className?: string; children?: ReactNode }>(onlyChild) ||
-    onlyChild.type !== "code"
+    !isValidElement<{ className?: string; children?: ReactNode; node?: { tagName?: string } }>(
+      onlyChild,
+    )
   ) {
+    return null;
+  }
+  // With a custom `code` component the child's type is that component, not
+  // the "code" tag — the hast node react-markdown attaches still names it.
+  if (onlyChild.type !== "code" && onlyChild.props.node?.tagName !== "code") {
     return null;
   }
 
@@ -835,6 +872,21 @@ function buildFileLinkParentSuffixByPath(filePaths: ReadonlyArray<string>): Map<
   return suffixByPath;
 }
 
+const FENCED_CODE_SEGMENT_PATTERN = /(```[\s\S]*?(?:```|$))/;
+const INLINE_CODE_SPAN_PATTERN = /`([^`\n]+)`/g;
+
+function extractInlineCodeSpans(text: string): string[] {
+  const spans: string[] = [];
+  const segments = text.split(FENCED_CODE_SEGMENT_PATTERN);
+  for (let index = 0; index < segments.length; index += 2) {
+    for (const match of (segments[index] ?? "").matchAll(INLINE_CODE_SPAN_PATTERN)) {
+      const span = match[1]?.trim();
+      if (span) spans.push(span);
+    }
+  }
+  return spans;
+}
+
 function extractMarkdownLinkHrefs(text: string): string[] {
   const hrefs: string[] = [];
   for (const match of text.matchAll(MARKDOWN_LINK_HREF_PATTERN)) {
@@ -1311,10 +1363,24 @@ function ChatMarkdown({
     }
     return metaByHref;
   }, [cwd, text]);
+  const inlineCodeFileLinkMetaByText = useMemo(() => {
+    const metaByText = new Map<string, MarkdownFileLinkMeta>();
+    for (const span of extractInlineCodeSpans(text)) {
+      if (metaByText.has(span)) continue;
+      const meta = resolveInlineCodeFileLinkMeta(span, cwd);
+      if (meta) {
+        metaByText.set(span, meta);
+      }
+    }
+    return metaByText;
+  }, [cwd, text]);
   const fileLinkParentSuffixByPath = useMemo(() => {
-    const filePaths = [...markdownFileLinkMetaByHref.values()].map((meta) => meta.filePath);
+    const filePaths = [
+      ...[...markdownFileLinkMetaByHref.values()].map((meta) => meta.filePath),
+      ...[...inlineCodeFileLinkMetaByText.values()].map((meta) => meta.filePath),
+    ];
     return buildFileLinkParentSuffixByPath(filePaths);
-  }, [markdownFileLinkMetaByHref]);
+  }, [inlineCodeFileLinkMetaByText, markdownFileLinkMetaByHref]);
   /*
    * Everything below that a renderer derives from `text`, reached through a ref
    * rather than through a dependency list.
@@ -1334,8 +1400,14 @@ function ChatMarkdown({
     text,
     markdownFileLinkMetaByHref,
     fileLinkParentSuffixByPath,
+    inlineCodeFileLinkMetaByText,
   });
-  latestFromText.current = { text, markdownFileLinkMetaByHref, fileLinkParentSuffixByPath };
+  latestFromText.current = {
+    text,
+    markdownFileLinkMetaByHref,
+    fileLinkParentSuffixByPath,
+    inlineCodeFileLinkMetaByText,
+  };
   const markdownUrlTransform = useCallback((href: string) => {
     return rewriteMarkdownFileUriHref(href) ?? defaultUrlTransform(href);
   }, []);
@@ -1390,8 +1462,57 @@ function ChatMarkdown({
     },
     [createAssetUrl, openPreview, preparedConnection, threadRef],
   );
-  const markdownComponents = useMemo<Components>(
-    () => ({
+  const markdownComponents = useMemo<Components>(() => {
+    const fileLinkChip = (
+      fileLinkMeta: MarkdownFileLinkMeta,
+      copyMarkdown: string,
+      className?: string,
+    ) => {
+      // Through the ref, not the closure: the map is derived from `text`, and
+      // a captured copy would go stale the moment a delta lands (see the
+      // latestFromText comment above).
+      const parentSuffix = latestFromText.current.fileLinkParentSuffixByPath.get(
+        fileLinkMeta.filePath,
+      );
+      // The file name carries the link; where it lives and which line only
+      // qualify it, so they render as one muted trail behind the name.
+      const qualifierParts: string[] = [];
+      if (typeof parentSuffix === "string" && parentSuffix.length > 0) {
+        qualifierParts.push(parentSuffix);
+      }
+      if (fileLinkMeta.line) {
+        qualifierParts.push(
+          `L${fileLinkMeta.line}${fileLinkMeta.column ? `:C${fileLinkMeta.column}` : ""}`,
+        );
+      }
+
+      return (
+        <MarkdownFileLink
+          href={fileLinkMeta.targetPath}
+          targetPath={fileLinkMeta.targetPath}
+          iconPath={fileLinkMeta.filePath}
+          displayPath={fileLinkMeta.displayPath}
+          workspaceRelativePath={fileLinkMeta.workspaceRelativePath}
+          line={fileLinkMeta.line}
+          label={fileLinkMeta.basename}
+          qualifier={qualifierParts.join(" · ")}
+          copyMarkdown={copyMarkdown}
+          theme={resolvedTheme}
+          threadRef={threadRef}
+          onOpen={openInPreferredEditor}
+          onOpenInBrowser={
+            threadRef &&
+            isPreviewSupportedInRuntime() &&
+            isBrowserPreviewFile(fileLinkMeta.filePath)
+              ? () => openMarkdownFileInPreview(fileLinkMeta.filePath)
+              : undefined
+          }
+          className={className}
+        />
+      );
+    };
+
+    return {
       p({ node: _node, children, ...props }) {
         return <p {...props}>{renderSkillInlineMarkdownChildren(children, skills)}</p>;
       },
@@ -1510,44 +1631,26 @@ function ChatMarkdown({
           );
         }
 
-        // The file name carries the link; where it lives and which line only
-        // qualify it, so they render as one muted trail behind the name.
-        const parentSuffix = latestFromText.current.fileLinkParentSuffixByPath.get(
-          fileLinkMeta.filePath,
+        return fileLinkChip(
+          fileLinkMeta,
+          `[${fileLinkMeta.basename}](${normalizedHref})`,
+          props.className,
         );
-        const qualifierParts: string[] = [];
-        if (typeof parentSuffix === "string" && parentSuffix.length > 0) {
-          qualifierParts.push(parentSuffix);
+      },
+      code({ node, children, className, ...props }) {
+        if (node?.properties?.dataInlineCode != null) {
+          const codeText = nodeToPlainText(children);
+          const fileLinkMeta =
+            latestFromText.current.inlineCodeFileLinkMetaByText.get(codeText.trim()) ??
+            resolveInlineCodeFileLinkMeta(codeText, cwd);
+          if (fileLinkMeta) {
+            return fileLinkChip(fileLinkMeta, `\`${codeText}\``);
+          }
         }
-        if (fileLinkMeta.line) {
-          qualifierParts.push(
-            `L${fileLinkMeta.line}${fileLinkMeta.column ? `:C${fileLinkMeta.column}` : ""}`,
-          );
-        }
-
         return (
-          <MarkdownFileLink
-            href={fileLinkMeta.targetPath}
-            targetPath={fileLinkMeta.targetPath}
-            iconPath={fileLinkMeta.filePath}
-            displayPath={fileLinkMeta.displayPath}
-            workspaceRelativePath={fileLinkMeta.workspaceRelativePath}
-            line={fileLinkMeta.line}
-            label={fileLinkMeta.basename}
-            qualifier={qualifierParts.join(" · ")}
-            copyMarkdown={`[${fileLinkMeta.basename}](${normalizedHref})`}
-            theme={resolvedTheme}
-            threadRef={threadRef}
-            onOpen={openInPreferredEditor}
-            onOpenInBrowser={
-              threadRef &&
-              isPreviewSupportedInRuntime() &&
-              isBrowserPreviewFile(fileLinkMeta.filePath)
-                ? () => openMarkdownFileInPreview(fileLinkMeta.filePath)
-                : undefined
-            }
-            className={props.className}
-          />
+          <code {...props} className={className}>
+            {children}
+          </code>
         );
       },
       table({ node: _node, ...props }) {
@@ -1584,22 +1687,24 @@ function ChatMarkdown({
           </MarkdownCodeBlock>
         );
       },
-    }),
-    // `text` and the two maps derived from it are deliberately absent: they
-    // reach the renderers through `latestFromText`, so the renderers keep their
-    // identities — and their DOM — while a message streams.
-    [
-      diffThemeName,
-      isStreaming,
-      onTaskListChange,
-      openInPreferredEditor,
-      openExternalLinkInPreview,
-      openMarkdownFileInPreview,
-      resolvedTheme,
-      skills,
-      threadRef,
-    ],
-  );
+    };
+    // `text` and the three maps derived from it are deliberately absent: they
+    // reach the renderers through `latestFromText`, so the renderers keep
+    // their identities — and their DOM — while a message streams. `cwd` is the
+    // thread's, not the text's: it changes only with the thread, and the code
+    // renderer's fallback resolution reads it directly.
+  }, [
+    cwd,
+    diffThemeName,
+    isStreaming,
+    onTaskListChange,
+    openInPreferredEditor,
+    openExternalLinkInPreview,
+    openMarkdownFileInPreview,
+    resolvedTheme,
+    skills,
+    threadRef,
+  ]);
 
   // Only text a running turn is still adding to is worth wrapping word by word,
   // and only for a variant that has motion to show. Everything else renders the
