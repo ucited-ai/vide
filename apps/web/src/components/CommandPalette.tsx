@@ -25,7 +25,6 @@ import {
   CornerLeftUpIcon,
   FolderIcon,
   FolderPlusIcon,
-  LinkIcon,
   MessageSquareIcon,
   SettingsIcon,
   SquarePenIcon,
@@ -75,6 +74,7 @@ import {
   resolveProjectPathForDispatch,
 } from "../lib/projectPaths";
 import { onOpenCommandPalette } from "../commandPaletteBus";
+import { getEnvironmentBrowsePlatform } from "../lib/environmentPlatform";
 import { isTerminalFocused } from "../lib/terminalFocus";
 import { getLatestThreadForProject, sortThreads } from "../lib/threadSort";
 import { cn, isMacPlatform, isWindowsPlatform, newProjectId } from "../lib/utils";
@@ -145,53 +145,37 @@ function getLocalFileManagerName(platform: string): string {
   return "Files";
 }
 
-function getEnvironmentBrowsePlatform(os: string | null | undefined): string {
-  if (os === "windows") {
-    return "Win32";
-  }
-  if (os === "darwin") {
-    return "MacIntel";
-  }
-  if (os === "linux") {
-    return "Linux";
-  }
-  return typeof navigator === "undefined" ? "" : navigator.platform;
-}
-
 interface AddProjectEnvironmentOption {
   readonly environmentId: EnvironmentId;
   readonly label: string;
   readonly isPrimary: boolean;
 }
 
+// Only providers with a connected, discoverable repository listing flow
+// through this screen -- a plain Git URL clone and a local folder are handled
+// directly by the lightweight AddProjectMenu dropdown (see
+// components/AddProjectMenu.tsx), which is the sole entry point into this
+// flow (see the "add-project" openCommandPalette intent).
 type AddProjectRemoteProviderKind = Extract<
   SourceControlProviderKind,
   "github" | "gitlab" | "bitbucket" | "azure-devops"
 >;
-type AddProjectRemoteSource = AddProjectRemoteProviderKind | "url";
 
 type AddProjectCloneFlow =
   | {
       readonly step: "repository";
       readonly environmentId: EnvironmentId;
-      readonly source: AddProjectRemoteSource;
+      readonly source: AddProjectRemoteProviderKind;
     }
   | {
       readonly step: "confirm";
       readonly environmentId: EnvironmentId;
-      readonly source: AddProjectRemoteSource;
+      readonly source: AddProjectRemoteProviderKind;
       readonly repositoryInput: string;
       readonly repository: SourceControlRepositoryInfo | null;
       readonly remoteUrl: string;
     };
 
-const REMOTE_PROJECT_SOURCES: ReadonlyArray<AddProjectRemoteSource> = [
-  "url",
-  "github",
-  "gitlab",
-  "bitbucket",
-  "azure-devops",
-];
 const REMOTE_PROJECT_PROVIDER_SOURCES: ReadonlyArray<AddProjectRemoteProviderKind> = [
   "github",
   "gitlab",
@@ -199,7 +183,7 @@ const REMOTE_PROJECT_PROVIDER_SOURCES: ReadonlyArray<AddProjectRemoteProviderKin
   "azure-devops",
 ];
 
-function remoteProjectSourceLabel(source: AddProjectRemoteSource): string {
+function remoteProjectSourceLabel(source: AddProjectRemoteProviderKind): string {
   switch (source) {
     case "github":
       return "GitHub";
@@ -209,12 +193,10 @@ function remoteProjectSourceLabel(source: AddProjectRemoteSource): string {
       return "Bitbucket";
     case "azure-devops":
       return "Azure DevOps";
-    case "url":
-      return "Git URL";
   }
 }
 
-function remoteProjectSourcePathHint(source: AddProjectRemoteSource): string {
+function remoteProjectSourcePathHint(source: AddProjectRemoteProviderKind): string {
   switch (source) {
     case "github":
       return "owner/repo";
@@ -224,18 +206,13 @@ function remoteProjectSourcePathHint(source: AddProjectRemoteSource): string {
       return "workspace/repository";
     case "azure-devops":
       return "project/repository";
-    case "url":
-      return "URL";
   }
 }
 
-function remoteProjectSourceProvider(
-  source: AddProjectRemoteSource,
-): AddProjectRemoteProviderKind | null {
-  return source === "url" ? null : source;
-}
-
-function remoteProjectSourceIcon(source: AddProjectRemoteSource, className: string): ReactNode {
+function remoteProjectSourceIcon(
+  source: AddProjectRemoteProviderKind,
+  className: string,
+): ReactNode {
   switch (source) {
     case "github":
       return <GitHubIcon className={className} />;
@@ -245,22 +222,13 @@ function remoteProjectSourceIcon(source: AddProjectRemoteSource, className: stri
       return <BitbucketIcon className={className} />;
     case "azure-devops":
       return <AzureDevOpsIcon className={className} />;
-    case "url":
-      return <LinkIcon className={className} />;
   }
 }
 
 function remoteProjectInputPlaceholder(flow: AddProjectCloneFlow | null): string | null {
   if (!flow) return null;
   if (flow.step === "confirm") return null;
-  if (flow.source === "url") {
-    return "Enter Git clone URL";
-  }
   return `Enter ${remoteProjectSourceLabel(flow.source)} repository (${remoteProjectSourcePathHint(flow.source)})`;
-}
-
-function sourceProviderKind(source: AddProjectRemoteSource): AddProjectRemoteProviderKind | null {
-  return source === "url" ? null : source;
 }
 
 function sortAddProjectProviderSources(
@@ -277,7 +245,7 @@ function sortAddProjectProviderSources(
 }
 
 type AddProjectRemoteSourceReadiness = Record<
-  AddProjectRemoteSource,
+  AddProjectRemoteProviderKind,
   { readonly ready: boolean; readonly hint: string | null }
 >;
 
@@ -289,7 +257,6 @@ function buildAddProjectRemoteSourceReadiness(
     hint: "Provider status unavailable. Open Settings -> Source Control and rescan.",
   } as const;
   const defaultReadiness: AddProjectRemoteSourceReadiness = {
-    url: { ready: true, hint: null },
     github: unavailable,
     gitlab: unavailable,
     bitbucket: unavailable,
@@ -305,20 +272,18 @@ function buildAddProjectRemoteSourceReadiness(
   );
   const readiness = { ...defaultReadiness };
 
-  for (const source of REMOTE_PROJECT_SOURCES) {
-    const kind = sourceProviderKind(source);
-    if (!kind) continue;
+  for (const kind of REMOTE_PROJECT_PROVIDER_SOURCES) {
     const provider = providerByKind.get(kind);
     if (!provider) {
-      readiness[source] = unavailable;
+      readiness[kind] = unavailable;
       continue;
     }
     if (provider.status !== "available") {
-      readiness[source] = { ready: false, hint: provider.installHint };
+      readiness[kind] = { ready: false, hint: provider.installHint };
       continue;
     }
     if (provider.auth.status === "unauthenticated") {
-      readiness[source] = {
+      readiness[kind] = {
         ready: false,
         hint:
           Option.getOrNull(provider.auth.detail) ??
@@ -326,7 +291,7 @@ function buildAddProjectRemoteSourceReadiness(
       };
       continue;
     }
-    readiness[source] = { ready: true, hint: null };
+    readiness[kind] = { ready: true, hint: null };
   }
 
   return readiness;
@@ -918,7 +883,7 @@ function OpenCommandPaletteDialog(props: {
   );
 
   const startAddProjectClone = useCallback(
-    (environmentId: EnvironmentId, source: AddProjectRemoteSource): void => {
+    (environmentId: EnvironmentId, source: AddProjectRemoteProviderKind): void => {
       setAddProjectEnvironmentId(environmentId);
       setAddProjectCloneFlow({ step: "repository", environmentId, source });
       pushPaletteView({
@@ -940,33 +905,14 @@ function OpenCommandPaletteDialog(props: {
       environmentId: EnvironmentId,
       readinessBySource: AddProjectRemoteSourceReadiness,
     ): CommandPaletteView["groups"] => {
-      const sourceItems: Array<CommandPaletteActionItem | CommandPaletteSubmenuItem> = [
-        {
-          kind: "action",
-          value: `action:add-project:${environmentId}:local`,
-          searchTerms: ["local", "folder", "directory", "browse"],
-          title: "Local folder",
-          description: "Browse a folder on disk",
-          icon: <FolderPlusIcon className={ITEM_ICON_CLASS} />,
-          keepOpen: true,
-          run: async () => {
-            startAddProjectBrowse(environmentId);
-          },
-        },
-      ];
+      const sourceItems: Array<CommandPaletteActionItem | CommandPaletteSubmenuItem> = [];
 
-      const orderedSources: ReadonlyArray<AddProjectRemoteSource> = [
-        "url",
-        ...sortAddProjectProviderSources(readinessBySource),
-      ];
+      const orderedSources = sortAddProjectProviderSources(readinessBySource);
 
       for (const source of orderedSources) {
         const label = remoteProjectSourceLabel(source);
-        const title = source === "url" ? "Git URL" : `${label} repository`;
-        const description =
-          source === "url"
-            ? "Clone from a remote URL"
-            : `Clone ${label} ${remoteProjectSourcePathHint(source)}`;
+        const title = `${label} repository`;
+        const description = `Clone ${label} ${remoteProjectSourcePathHint(source)}`;
         const readiness = readinessBySource[source];
         const disabledHint = readiness.hint;
 
@@ -1026,7 +972,7 @@ function OpenCommandPaletteDialog(props: {
 
       return [{ value: `sources:${environmentId}`, label: "Sources", items: sourceItems }];
     },
-    [openSourceControlSettings, startAddProjectBrowse, startAddProjectClone],
+    [openSourceControlSettings, startAddProjectClone],
   );
 
   const startAddProjectSourceSelection = useCallback(
@@ -1191,9 +1137,6 @@ function OpenCommandPaletteDialog(props: {
     value: "action:add-project",
     searchTerms: [
       "add project",
-      "folder",
-      "directory",
-      "browse",
       "clone",
       "remote",
       "repository",
@@ -1204,10 +1147,9 @@ function OpenCommandPaletteDialog(props: {
       "bitbucket",
       "azure",
       "devops",
-      "url",
       "environment",
     ],
-    title: "Add project",
+    title: "Add existing repository",
     icon: <FolderPlusIcon className={ITEM_ICON_CLASS} />,
     keepOpen: true,
     run: async () => {
@@ -1428,28 +1370,11 @@ function OpenCommandPaletteDialog(props: {
         return;
       }
 
-      const provider = remoteProjectSourceProvider(addProjectCloneFlow.source);
-      if (!provider) {
-        const destinationPath = getDefaultCloneParentPath(addProjectCloneFlow.environmentId);
-        setAddProjectCloneFlow({
-          step: "confirm",
-          environmentId: addProjectCloneFlow.environmentId,
-          source: addProjectCloneFlow.source,
-          repositoryInput: rawRepository,
-          repository: null,
-          remoteUrl: rawRepository,
-        });
-        setHighlightedItemValue(null);
-        setQuery(destinationPath);
-        setBrowseGeneration((generation) => generation + 1);
-        return;
-      }
-
       setIsRemoteProjectLookingUp(true);
       const lookupResult = await lookupRepository({
         environmentId: addProjectCloneFlow.environmentId,
         input: {
-          provider,
+          provider: addProjectCloneFlow.source,
           repository: rawRepository,
         },
       });
@@ -1631,11 +1556,7 @@ function OpenCommandPaletteDialog(props: {
       ? "Create & Add"
       : "Add";
   const addShortcutLabel = hasHighlightedBrowseItem ? `${submitModifierLabel} Enter` : "Enter";
-  const remoteProjectButtonLabel = addProjectCloneFlow
-    ? addProjectCloneFlow.source === "url"
-      ? "Continue"
-      : "Lookup"
-    : null;
+  const remoteProjectButtonLabel = addProjectCloneFlow ? "Lookup" : null;
   const isRemoteProjectPending = isRemoteProjectLookingUp || isRemoteProjectCloning;
   const canSubmitRemoteProjectFlow =
     addProjectCloneFlow?.step === "repository" &&
@@ -2024,10 +1945,7 @@ function OpenCommandPaletteDialog(props: {
             onExecuteItem={executeItem}
             {...(addProjectCloneFlow?.step === "repository"
               ? {
-                  emptyStateMessage:
-                    addProjectCloneFlow.source === "url"
-                      ? "Enter a Git clone URL and press Enter to continue."
-                      : "Enter a repository path and press Enter to look it up.",
+                  emptyStateMessage: "Enter a repository path and press Enter to look it up.",
                 }
               : addProjectCloneFlow?.step === "confirm"
                 ? { emptyStateMessage: "Choose a destination path and press Enter to clone." }

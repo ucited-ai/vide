@@ -1,9 +1,8 @@
 import type { ScopedProjectRef } from "@vide/contracts";
 import { scopedProjectKey, scopeProjectRef } from "@vide/client-runtime/environment";
 import { FolderPlusIcon } from "lucide-react";
-import { useCallback, useMemo } from "react";
+import { useMemo } from "react";
 
-import { openCommandPalette } from "~/commandPaletteBus";
 import { useNewThreadHandler } from "~/hooks/useHandleNewThread";
 import { useClientSettings } from "~/hooks/useSettings";
 import { selectProjectGroupingSettings } from "~/logicalProject";
@@ -14,13 +13,14 @@ import {
 import { useProjects, useThreadShells } from "~/state/entities";
 import { useEnvironments, usePrimaryEnvironmentId } from "~/state/environments";
 import { sortLogicalProjectsForSidebar } from "../Sidebar.logic";
+import { AddProjectMenu, AddProjectSubmenu } from "../AddProjectMenu";
 import {
   Menu,
-  MenuItem,
   MenuPopup,
   MenuRadioGroup,
   MenuRadioItem,
   MenuSeparator,
+  MenuSubTrigger,
   MenuTrigger,
 } from "../ui/menu";
 
@@ -40,7 +40,6 @@ export function DraftHeroHeadline({
   const projectGroupingSettings = useClientSettings(selectProjectGroupingSettings);
   const projectSortOrder = useClientSettings((settings) => settings.sidebarProjectSortOrder);
   const handleNewThread = useNewThreadHandler();
-  const openAddProject = useCallback(() => openCommandPalette({ open: "add-project" }), []);
 
   const environmentLabelById = useMemo(
     () =>
@@ -128,20 +127,20 @@ export function DraftHeroHeadline({
           })}
         </MenuRadioGroup>
         <MenuSeparator />
-        <MenuItem onClick={openAddProject}>
-          <FolderPlusIcon />
-          New project
-        </MenuItem>
+        <AddProjectSubmenu>
+          <MenuSubTrigger>
+            <FolderPlusIcon />
+            New project
+          </MenuSubTrigger>
+        </AddProjectSubmenu>
       </MenuPopup>
     </Menu>
   ) : (
-    <button
-      type="button"
-      onClick={openAddProject}
-      className="pointer-events-auto inline cursor-pointer border-current border-b border-dotted text-muted-foreground/60 underline-offset-8 transition-opacity hover:opacity-75 focus-visible:rounded-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
-    >
-      {activeProjectTitle ?? "Add a project"}
-    </button>
+    <AddProjectMenu>
+      <MenuTrigger className="pointer-events-auto inline cursor-pointer border-current border-b border-dotted text-muted-foreground/60 underline-offset-8 transition-opacity hover:opacity-75 focus-visible:rounded-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">
+        {activeProjectTitle ?? "Add a project"}
+      </MenuTrigger>
+    </AddProjectMenu>
   );
 
   return (
