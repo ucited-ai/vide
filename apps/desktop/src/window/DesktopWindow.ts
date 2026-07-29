@@ -103,6 +103,39 @@ function getInitialWindowBackgroundColor(shouldUseDarkColors: boolean): string {
   return shouldUseDarkColors ? "#0a0a0a" : "#ffffff";
 }
 
+type WindowMaterialOptions = Pick<
+  Electron.BrowserWindowConstructorOptions,
+  "backgroundColor" | "vibrancy" | "visualEffectState"
+>;
+
+/**
+ * On macOS the window is backed by a real NSVisualEffectView rather than a CSS
+ * approximation of one: the desktop behind the window is sampled, blurred, and
+ * tinted by the compositor, which no `backdrop-filter` can reproduce because the
+ * renderer cannot see outside its own surface.
+ *
+ * This only shows through if the renderer keeps its chrome translucent, so it is
+ * paired with the `html.electron:not(.electron-windows)` rules in vide-glass.css.
+ * A transparent backgroundColor is what lets the material reach the glass; note
+ * that `transparent: true` is deliberately *not* set, since that would discard
+ * the native frame, its rounded corners, and its shadow.
+ */
+function getWindowMaterialOptions(
+  shouldUseDarkColors: boolean,
+  platform: NodeJS.Platform,
+): WindowMaterialOptions {
+  if (platform !== "darwin") {
+    return { backgroundColor: getInitialWindowBackgroundColor(shouldUseDarkColors) };
+  }
+
+  return {
+    backgroundColor: "#00000000",
+    vibrancy: "under-window",
+    // Dim the material when the window loses focus, the way every native app does.
+    visualEffectState: "followWindow",
+  };
+}
+
 type DisplayBounds = Pick<Electron.Rectangle, "x" | "y" | "width" | "height">;
 
 function windowFitsWithinDisplay(
@@ -212,7 +245,11 @@ function syncWindowAppearance(
       return;
     }
 
-    window.setBackgroundColor(getInitialWindowBackgroundColor(shouldUseDarkColors));
+    // Re-applying an opaque colour here would paint over the vibrancy material.
+    const { backgroundColor } = getWindowMaterialOptions(shouldUseDarkColors, platform);
+    if (backgroundColor !== undefined) {
+      window.setBackgroundColor(backgroundColor);
+    }
     const { titleBarOverlay } = getWindowTitleBarOptions(shouldUseDarkColors, platform);
     if (typeof titleBarOverlay === "object") {
       window.setTitleBarOverlay(titleBarOverlay);
@@ -325,7 +362,7 @@ export const make = Effect.gen(function* () {
       show: false,
       autoHideMenuBar: true,
       ...(environment.platform === "darwin" ? { disableAutoHideCursor: true } : {}),
-      backgroundColor: getInitialWindowBackgroundColor(shouldUseDarkColors),
+      ...getWindowMaterialOptions(shouldUseDarkColors, environment.platform),
       ...iconOption,
       title: environment.displayName,
       ...getWindowTitleBarOptions(shouldUseDarkColors, environment.platform),

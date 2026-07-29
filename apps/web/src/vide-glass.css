@@ -1,0 +1,253 @@
+/*
+ * Vide — macOS material layer
+ *
+ * Kept in its own file so upstream merges land in index.css and this file stays
+ * ours. Everything here is either a token override or a new utility; no upstream
+ * selector is edited in place.
+ *
+ * It is imported at the top of index.css, because CSS `@import` is only valid
+ * there. Upstream then declares `:root` and `.dark` further down at equal
+ * specificity and would win on source order, so the token blocks below double
+ * their selector (`:root:root`) to outrank it without reaching for !important.
+ *
+ * Two ideas do most of the work:
+ *
+ * 1. On macOS the window already has a real NSVisualEffectView behind it
+ *    (see getWindowMaterialOptions in apps/desktop). Chrome surfaces therefore
+ *    go *translucent* rather than painting their own grey, so the desktop is
+ *    what you see through the app. `backdrop-filter` then layers depth on top
+ *    of that material instead of faking it from scratch.
+ *
+ * 2. Apple's hierarchy is opacity, not colour: one label colour at 100 / 60 /
+ *    30 percent, one separator at 10 percent. Encoding that directly keeps the
+ *    UI from drifting into the many-greys look it had before.
+ */
+
+/* ---------------------------------------------------------------- typography */
+
+@theme inline {
+  /* SF Pro is the single strongest native cue after the window material. The
+     app shipped DM Sans, which reads as a web page no matter how it is styled. */
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI Variable",
+    "Segoe UI", system-ui, sans-serif;
+  --font-mono:
+    ui-monospace, "SF Mono", "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace;
+}
+
+:root:root {
+  /* macOS body text is 13px; the web default of 14–16 is what makes Electron
+     apps feel oversized next to native ones. */
+  --vide-text-body: 13px;
+  --vide-text-caption: 11px;
+  --vide-text-title: 15px;
+  --vide-text-large-title: 22px;
+
+  /* Apple tracks tighter as size grows. */
+  --vide-tracking-body: 0.006em;
+  --vide-tracking-title: -0.012em;
+  --vide-tracking-large-title: -0.021em;
+}
+
+/* -------------------------------------------------------------- materials */
+
+:root:root {
+  /* Apple's material scale. Blur radii are far higher than typical web glass —
+     that depth is most of why NSVisualEffectView reads as glass and a 12px
+     blur reads as a translucent div. */
+  --material-blur-ultra-thin: 20px;
+  --material-blur-thin: 30px;
+  --material-blur-regular: 44px;
+  --material-blur-thick: 60px;
+
+  /* Saturation boost is the other half: blurred backdrops lose chroma, and
+     pushing it back is what makes colour bleed through the way glass does. */
+  --material-saturate: 1.8;
+
+  --glass-blur: var(--material-blur-regular);
+  --glass-saturation: var(--material-saturate);
+  --glass-opacity: 62%;
+
+  /* One hairline, everywhere. 0.5px is a true single device pixel on Retina. */
+  --hairline: 0.5px;
+  --separator: rgb(0 0 0 / 11%);
+  --separator-strong: rgb(0 0 0 / 18%);
+
+  /* Specular top edge — the lit rim Apple draws on every raised glass surface. */
+  --glass-rim: rgb(255 255 255 / 65%);
+
+  /* macOS control radii: small controls stay tight, panels stay soft. */
+  --radius: 0.5rem;
+}
+
+.dark.dark {
+  --glass-opacity: 52%;
+  --separator: rgb(255 255 255 / 10%);
+  --separator-strong: rgb(255 255 255 / 16%);
+  --glass-rim: rgb(255 255 255 / 14%);
+}
+
+/* --------------------------------------------------- translucent chrome */
+
+/*
+ * Only inside the macOS app. In a browser tab there is no material behind the
+ * page, so transparent chrome would expose white and the UI keeps its solid
+ * surfaces.
+ */
+html.electron:not(.electron-windows) {
+  /* Hand the base layer to the compositor's material. */
+  --background: transparent;
+}
+
+html.electron:not(.electron-windows) body,
+html.electron:not(.electron-windows) #root {
+  background: transparent;
+}
+
+/* Upstream's dark sidebar variants paint pure #000, which blocks the material
+   and is the flattest, most brutalist surface in the app. Replace them with a
+   tinted translucency that lets the desktop through. */
+html.electron:not(.electron-windows) .dark [data-sidebar-version="v1"],
+html.electron:not(.electron-windows) .dark [data-sidebar-version="v2"] {
+  --background: transparent;
+  --card: rgb(30 30 34 / 55%);
+  --sidebar: transparent;
+  --muted: rgb(255 255 255 / 5%);
+  --accent: rgb(255 255 255 / 8%);
+  --border: var(--separator);
+}
+
+html.electron:not(.electron-windows) [data-sidebar-version="v1"],
+html.electron:not(.electron-windows) [data-sidebar-version="v2"] {
+  --sidebar: transparent;
+  --border: var(--separator);
+}
+
+/*
+ * Chrome refinements, expressed as overrides rather than component edits so
+ * that upstream can keep changing the components underneath. These selectors
+ * are unlayered and therefore outrank the Tailwind utilities in the markup.
+ */
+
+/* The sidebar carries a 1px `border-r` in the markup. At 2x that is two device
+   pixels and reads as a drawn rule; a native sidebar has an edge, not a rule. */
+html.electron:not(.electron-windows) [data-app-sidebar] {
+  border-right: var(--hairline) solid var(--separator);
+  background: transparent;
+}
+
+/* Let the material, not a painted panel, be the sidebar's surface. */
+html.electron:not(.electron-windows) [data-app-sidebar] [data-slot="sidebar-inner"],
+html.electron:not(.electron-windows) [data-app-sidebar] [data-slot="sidebar-content"] {
+  background: transparent;
+}
+
+/* ------------------------------------------------------------- utilities */
+
+@layer components {
+  /*
+   * A raised glass surface: popovers, palettes, floating panels.
+   * Blur, then rim, then shadow — the same order AppKit composites them.
+   */
+  .vide-material {
+    background: color-mix(in srgb, var(--card) var(--glass-opacity), transparent);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
+    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
+    border: var(--hairline) solid var(--separator);
+    box-shadow:
+      inset 0 var(--hairline) 0 0 var(--glass-rim),
+      0 0 0 var(--hairline) rgb(0 0 0 / 6%),
+      0 12px 32px -8px rgb(0 0 0 / 24%),
+      0 2px 8px -2px rgb(0 0 0 / 16%);
+  }
+
+  .vide-material-thin {
+    background: color-mix(in srgb, var(--card) 40%, transparent);
+    -webkit-backdrop-filter: blur(var(--material-blur-thin)) saturate(var(--material-saturate));
+    backdrop-filter: blur(var(--material-blur-thin)) saturate(var(--material-saturate));
+  }
+
+  /* Hairline separators. A 1px border at 2x is two device pixels and reads as
+     a drawn line; 0.5px reads as an edge. */
+  .vide-hairline-b {
+    border-bottom: var(--hairline) solid var(--separator);
+  }
+
+  .vide-hairline-t {
+    border-top: var(--hairline) solid var(--separator);
+  }
+
+  .vide-hairline-r {
+    border-right: var(--hairline) solid var(--separator);
+  }
+
+  /*
+   * Scroll-edge effect: content dissolves under the toolbar instead of being
+   * clipped by it. This is the detail the SwiftUI lab in experiments/ was
+   * chasing, and the one thing that most separates a Mac app from a web page
+   * in a window.
+   *
+   * Stacked blurs behind a fading mask approximate a progressive blur, which
+   * CSS cannot express directly.
+   */
+  .vide-scroll-edge {
+    position: relative;
+  }
+
+  .vide-scroll-edge::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: var(--vide-scroll-edge-height, 52px);
+    pointer-events: none;
+    z-index: 20;
+    -webkit-backdrop-filter: blur(var(--material-blur-thin)) saturate(var(--material-saturate));
+    backdrop-filter: blur(var(--material-blur-thin)) saturate(var(--material-saturate));
+    mask-image: linear-gradient(to bottom, #000 0%, #000 42%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 42%, transparent 100%);
+  }
+
+  /* Selected rows in a native sidebar are a tinted fill with a hairline, not a
+     flat block of accent colour. */
+  .vide-selection {
+    background: color-mix(in srgb, var(--primary) 22%, transparent);
+    box-shadow: inset 0 0 0 var(--hairline) color-mix(in srgb, var(--primary) 34%, transparent);
+  }
+}
+
+/* ------------------------------------------------------------ refinements */
+
+@layer base {
+  html.electron:not(.electron-windows) {
+    /* SF Pro's optical sizing is what makes native text look settled. */
+    font-synthesis-weight: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    letter-spacing: var(--vide-tracking-body);
+  }
+
+  /* Never let a text cursor appear over chrome; nothing on macOS does that. */
+  html.electron:not(.electron-windows) button,
+  html.electron:not(.electron-windows) [role="button"] {
+    cursor: default;
+  }
+
+  /* Focus rings follow the accent at Apple's ring weight rather than a
+     browser default outline. */
+  html.electron:not(.electron-windows) :focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--primary) 70%, transparent);
+    outline-offset: 1px;
+  }
+}
+
+/* Respect the system setting; blur is expensive and disorienting to some. */
+@media (prefers-reduced-transparency: reduce) {
+  :root:root:root {
+    --glass-opacity: 96%;
+    --glass-blur: 0px;
+  }
+
+  .vide-scroll-edge::before {
+    display: none;
+  }
+}
