@@ -222,7 +222,6 @@ import {
 import { environmentShell } from "../state/shell";
 import { ChatComposer, type ChatComposerHandle } from "./chat/ChatComposer";
 import { DraftHeroHeadline } from "./chat/DraftHeroHeadline";
-import { DraftHeroMark } from "./chat/DraftHeroMark";
 import { DraftHeroSuggestions } from "./chat/DraftHeroSuggestions";
 import { ExpandedImageDialog } from "./chat/ExpandedImageDialog";
 import { PullRequestThreadDialog } from "./PullRequestThreadDialog";
@@ -5769,7 +5768,11 @@ function ChatViewContent(props: ChatViewProps) {
               data-chat-composer-overlay="true"
               className={
                 isDraftHeroState
-                  ? "pointer-events-none absolute inset-0 z-20 flex items-center"
+                  ? // Sit the draft block low rather than centring it. Centring puts the
+                    // composer at eye level with nothing beneath it, which reads as an
+                    // unfinished page; anchoring near the bottom keeps the input where it
+                    // will stay once the thread fills in above it.
+                    "pointer-events-none absolute inset-0 z-20 flex items-end pb-[9vh]"
                   : "pointer-events-none absolute inset-x-0 bottom-0 z-20 pt-1.5 sm:pt-2"
               }
             >
@@ -5790,7 +5793,6 @@ function ChatViewContent(props: ChatViewProps) {
                             : undefined
                         }
                       >
-                        <DraftHeroMark />
                         <DraftHeroHeadline
                           activeProjectRef={activeProjectRef}
                           activeProjectTitle={activeProject?.title ?? null}

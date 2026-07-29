@@ -99,8 +99,9 @@ function getIconOption(
   });
 }
 
+/** Matches --background in apps/web/src/vide-theme.css so there is no flash on load. */
 function getInitialWindowBackgroundColor(shouldUseDarkColors: boolean): string {
-  return shouldUseDarkColors ? "#0a0a0a" : "#ffffff";
+  return shouldUseDarkColors ? "#0e0e10" : "#f6f6f7";
 }
 
 type WindowMaterialOptions = Pick<
@@ -109,31 +110,19 @@ type WindowMaterialOptions = Pick<
 >;
 
 /**
- * On macOS the window is backed by a real NSVisualEffectView rather than a CSS
- * approximation of one: the desktop behind the window is sampled, blurred, and
- * tinted by the compositor, which no `backdrop-filter` can reproduce because the
- * renderer cannot see outside its own surface.
+ * The window paints its own opaque surfaces rather than sampling the desktop.
  *
- * This only shows through if the renderer keeps its chrome translucent, so it is
- * paired with the `html.electron:not(.electron-windows)` rules in vide-glass.css.
- * A transparent backgroundColor is what lets the material reach the glass; note
- * that `transparent: true` is deliberately *not* set, since that would discard
- * the native frame, its rounded corners, and its shadow.
+ * An earlier revision backed the window with NSVisualEffectView vibrancy, which
+ * makes chrome translucent. That is the wrong material for this app: the design
+ * calls for solid, lifted greys where the sidebar reads *lighter* than the
+ * content pane, and translucency destroys that relationship by letting whatever
+ * sits behind the window drive both surfaces.
  */
 function getWindowMaterialOptions(
   shouldUseDarkColors: boolean,
-  platform: NodeJS.Platform,
+  _platform: NodeJS.Platform,
 ): WindowMaterialOptions {
-  if (platform !== "darwin") {
-    return { backgroundColor: getInitialWindowBackgroundColor(shouldUseDarkColors) };
-  }
-
-  return {
-    backgroundColor: "#00000000",
-    vibrancy: "under-window",
-    // Dim the material when the window loses focus, the way every native app does.
-    visualEffectState: "followWindow",
-  };
+  return { backgroundColor: getInitialWindowBackgroundColor(shouldUseDarkColors) };
 }
 
 type DisplayBounds = Pick<Electron.Rectangle, "x" | "y" | "width" | "height">;

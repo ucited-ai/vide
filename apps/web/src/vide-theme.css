@@ -1,0 +1,327 @@
+/*
+ * Vide — surface, type, and motion layer
+ *
+ * Kept in its own file so upstream merges land in index.css and this file stays
+ * ours. Everything here is either a token override or a new utility; no upstream
+ * selector is edited in place.
+ *
+ * It is imported at the top of index.css, because CSS `@import` is only valid
+ * there. Upstream then declares `:root`, `.dark`, and the sidebar-version blocks
+ * further down at equal specificity and would win on source order, so the blocks
+ * below double their selector (`:root:root`, `.dark.dark`) to outrank it without
+ * reaching for !important.
+ *
+ * The organising idea is a surface ladder. Upstream builds dark mode from
+ * neutral-950 and then paints the sidebar pure #000, so chrome sits *below* the
+ * content pane and the whole app bottoms out at black. That is inverted. Here
+ * the content pane is the darkest surface and every chrome surface — sidebar,
+ * composer, popover — steps *up* from it. Nothing is transparent and nothing is
+ * pure black: depth comes from opaque greys at measured intervals, which is
+ * what keeps large panels from reading as holes.
+ */
+
+/* ------------------------------------------------------------- typography */
+
+@theme inline {
+  /* SF Pro. DM Sans reads as a web page no matter how it is styled. */
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI Variable",
+    "Segoe UI", system-ui, sans-serif;
+  --font-mono:
+    ui-monospace, "SF Mono", "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace;
+}
+
+/* ---------------------------------------------------------- surface ladder */
+
+:root:root {
+  /* Light. Content pane is the tinted floor; chrome lifts toward white. */
+  --surface-content: #f6f6f7;
+  --surface-chrome: #fdfdfd;
+  --surface-raised-1: #ffffff;
+  --surface-raised-2: #ffffff;
+
+  --ink: #17171a;
+  --ink-secondary: #5f5f68;
+  --ink-tertiary: #8e8e98;
+
+  --edge: rgb(0 0 0 / 9%);
+  --edge-strong: rgb(0 0 0 / 14%);
+
+  --wash-hover: rgb(0 0 0 / 4%);
+  --wash-active: rgb(0 0 0 / 7%);
+  --wash-selected: rgb(0 0 0 / 6%);
+
+  --hairline: 0.5px;
+
+  /* macOS control radii. */
+  --radius: 0.5rem;
+
+  /* Motion. One duration scale and one curve, so every surface in the app
+     accelerates and settles identically — that consistency reads as "smooth"
+     far more than any individual animation does. */
+  --ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.45, 0, 0.25, 1);
+  --duration-fast: 120ms;
+  --duration-base: 200ms;
+  --duration-slow: 320ms;
+}
+
+.dark.dark {
+  /* Dark. Content pane is the darkest surface — but never #000 — and the
+     sidebar sits a measured step above it, the relationship Codex uses. */
+  --surface-content: #0e0e10;
+  --surface-chrome: #191a1d;
+  --surface-raised-1: #202126;
+  --surface-raised-2: #26272c;
+
+  --ink: #ededf0;
+  --ink-secondary: #9a9aa4;
+  --ink-tertiary: #6e6e78;
+
+  --edge: rgb(255 255 255 / 8%);
+  --edge-strong: rgb(255 255 255 / 13%);
+
+  --wash-hover: rgb(255 255 255 / 5%);
+  --wash-active: rgb(255 255 255 / 9%);
+  --wash-selected: rgb(255 255 255 / 7%);
+}
+
+/* ------------------------------------------- map the ladder onto app tokens */
+
+:root:root {
+  --background: var(--surface-content);
+  --app-chrome-background: var(--surface-content);
+  --foreground: var(--ink);
+
+  --card: var(--surface-chrome);
+  --card-foreground: var(--ink);
+  --popover: var(--surface-raised-1);
+  --popover-foreground: var(--ink);
+
+  --muted: var(--wash-hover);
+  --muted-foreground: var(--ink-secondary);
+  --accent: var(--wash-hover);
+  --accent-foreground: var(--ink);
+  --secondary: var(--wash-hover);
+  --secondary-foreground: var(--ink);
+
+  --border: var(--edge);
+  --input: var(--edge-strong);
+
+  /*
+   * Monochrome accent. Upstream's primary is a saturated blue used for the send
+   * button, focus rings, and selection alike. Ink-on-surface keeps emphasis
+   * coming from contrast rather than hue, which is what makes the app read as
+   * one material instead of a UI with a brand colour stamped on it.
+   */
+  --primary: var(--ink);
+  --primary-foreground: var(--surface-content);
+  --ring: var(--ink-tertiary);
+}
+
+/* Chrome surfaces sit one step above the content pane. Doubling the class
+   outranks upstream's `.dark [data-sidebar-version=...]` block, which paints
+   these same tokens pure black. */
+:root:root [data-sidebar-version="v1"],
+:root:root [data-sidebar-version="v2"],
+.dark.dark [data-sidebar-version="v1"],
+.dark.dark [data-sidebar-version="v2"] {
+  --background: var(--surface-chrome);
+  --card: var(--surface-chrome);
+  --card-foreground: var(--ink);
+  --foreground: var(--ink);
+  --muted: var(--wash-hover);
+  --muted-foreground: var(--ink-secondary);
+  --accent: var(--wash-hover);
+  --accent-foreground: var(--ink);
+  --border: var(--edge);
+  --input: var(--edge-strong);
+
+  --sidebar: var(--surface-chrome);
+  --sidebar-foreground: var(--ink);
+  --sidebar-muted-foreground: var(--ink-secondary);
+  --sidebar-border: var(--edge);
+  --sidebar-control-surface: var(--wash-hover);
+  --sidebar-row-hover: var(--wash-hover);
+  --sidebar-row-active: var(--wash-active);
+  --sidebar-row-selected: var(--wash-selected);
+  --sidebar-stage-fade: var(--surface-chrome);
+}
+
+/* ------------------------------------------------------- sidebar typography */
+
+/*
+ * The sidebar is the app's index: project names and thread titles are scanned,
+ * not read. It therefore runs a step larger and looser than the content pane,
+ * which inverts the usual web instinct to shrink navigation.
+ */
+:root:root [data-app-sidebar] {
+  font-size: 13.5px;
+  line-height: 1.45;
+  letter-spacing: -0.003em;
+}
+
+:root:root [data-app-sidebar] [data-sidebar="menu-button"],
+:root:root [data-app-sidebar] [data-slot="sidebar-menu-button"] {
+  font-size: 13.5px;
+  min-height: 30px;
+}
+
+/* Section labels: the one place small type is correct, because it is a
+   signpost rather than content. */
+:root:root [data-app-sidebar] [data-sidebar="group-label"],
+:root:root [data-app-sidebar] [data-slot="sidebar-group-label"] {
+  font-size: 11.5px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--ink-tertiary);
+}
+
+/* ------------------------------------------------------------- the composer */
+
+/*
+ * Upstream lets the composer span the full content pane and gives it a
+ * translucent "glass" shell. Both are undone here: a measured column keeps line
+ * length readable and stops the input from dominating the empty screen, and an
+ * opaque surface one step above the pane keeps it legible over scrolling text
+ * instead of letting the transcript smear through it.
+ */
+:root:root .chat-composer-horizontal-inset {
+  --composer-max-width: 46rem;
+
+  margin-inline: auto;
+  max-width: calc(var(--composer-max-width) + 1.5rem);
+}
+
+:root:root .chat-composer-glass,
+:root:root .chat-composer-glass-shell::before {
+  background: var(--surface-chrome);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+:root:root .chat-composer-glass-shell {
+  --chat-composer-glass-surface: var(--surface-chrome);
+}
+
+/* ---------------------------------------------------------------- utilities */
+
+@layer components {
+  /* An opaque surface one step above its parent, with a hairline edge. */
+  .vide-surface {
+    background: var(--surface-raised-1);
+    border: var(--hairline) solid var(--edge);
+  }
+
+  .vide-hairline-b {
+    border-bottom: var(--hairline) solid var(--edge);
+  }
+
+  .vide-hairline-t {
+    border-top: var(--hairline) solid var(--edge);
+  }
+
+  .vide-hairline-r {
+    border-right: var(--hairline) solid var(--edge);
+  }
+
+  /*
+   * Shared motion primitives. Components opt in by class so a single change to
+   * the curve or duration retunes the whole app at once.
+   */
+  .vide-fade-in {
+    animation: vide-fade-in var(--duration-base) var(--ease-out) both;
+  }
+
+  .vide-slide-in-left {
+    animation: vide-slide-in-left var(--duration-base) var(--ease-out) both;
+  }
+
+  .vide-slide-in-up {
+    animation: vide-slide-in-up var(--duration-base) var(--ease-out) both;
+  }
+
+  /* Anything that opens, closes, expands, or collapses. */
+  .vide-transition {
+    transition-duration: var(--duration-base);
+    transition-timing-function: var(--ease-out);
+  }
+}
+
+@keyframes vide-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes vide-slide-in-left {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes vide-slide-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ------------------------------------------------------------- refinements */
+
+@layer base {
+  html.electron {
+    font-synthesis-weight: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Nothing on macOS shows a text cursor over chrome. */
+  html.electron button,
+  html.electron [role="button"] {
+    cursor: default;
+  }
+
+  html.electron :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 1px;
+  }
+
+  /*
+   * The sidebar panel and the content pane both animate their width on collapse.
+   * Upstream drives that with a linear ease; the shared curve makes the panel
+   * settle instead of stopping dead.
+   */
+  [data-slot="sidebar-container"],
+  [data-slot="sidebar-gap"],
+  [data-slot="sidebar-inset"] {
+    transition-duration: var(--duration-base) !important;
+    transition-timing-function: var(--ease-out) !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vide-fade-in,
+  .vide-slide-in-left,
+  .vide-slide-in-up {
+    animation: none;
+  }
+
+  [data-slot="sidebar-container"],
+  [data-slot="sidebar-gap"],
+  [data-slot="sidebar-inset"] {
+    transition-duration: 0ms !important;
+  }
+}

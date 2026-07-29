@@ -11,12 +11,20 @@ export type SidebarStageBackdropVariant = "nightly" | "dev";
 // more horizontal canvas instead of zooming the scene.
 const STAGE_BACKDROP_VIEW_BOX = "0 0 8192 96";
 
+/**
+ * Stage art is disabled.
+ *
+ * The dev and nightly channels used to paint a saturated blue blueprint scene
+ * behind the sidebar header and inside the composer's send button. Vide is
+ * monochrome: emphasis comes from contrast, not hue, and a coloured banner on
+ * the largest chrome surface fights everything around it.
+ *
+ * The call sites and art components are removed in a follow-up pass; returning
+ * null here switches the art off everywhere at once in the meantime.
+ */
 export function resolveSidebarStageBackdropVariant(
-  stageLabel: string,
+  _stageLabel: string,
 ): SidebarStageBackdropVariant | null {
-  const normalized = stageLabel.trim().toLowerCase();
-  if (normalized === "nightly") return "nightly";
-  if (normalized === "dev") return "dev";
   return null;
 }
 
