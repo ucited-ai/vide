@@ -222,6 +222,8 @@ import {
 import { environmentShell } from "../state/shell";
 import { ChatComposer, type ChatComposerHandle } from "./chat/ChatComposer";
 import { DraftHeroHeadline } from "./chat/DraftHeroHeadline";
+import { DraftHeroMark } from "./chat/DraftHeroMark";
+import { DraftHeroSuggestions } from "./chat/DraftHeroSuggestions";
 import { ExpandedImageDialog } from "./chat/ExpandedImageDialog";
 import { PullRequestThreadDialog } from "./PullRequestThreadDialog";
 import { MessagesTimeline } from "./chat/MessagesTimeline";
@@ -5788,10 +5790,12 @@ function ChatViewContent(props: ChatViewProps) {
                             : undefined
                         }
                       >
+                        <DraftHeroMark />
                         <DraftHeroHeadline
                           activeProjectRef={activeProjectRef}
                           activeProjectTitle={activeProject?.title ?? null}
                         />
+                        <DraftHeroSuggestions />
                       </div>
                       <ComposerBannerStack className="relative z-0" items={composerBannerItems} />
                     </div>
