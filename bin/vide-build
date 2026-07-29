@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+#
+# Build Vide.app and install it into /Applications.
+#
+# Everything the repo needs lives outside a login shell's default PATH — Node
+# comes from nvm and `vp` from ~/.vite-plus — so both are resolved here rather
+# than assumed, which is what lets this run from a double-click or a cron job
+# and not just an interactive terminal.
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+APP_NAME="Vide"
+INSTALL_DIR="/Applications"
+
+cd "$REPO_ROOT"
+
+export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+# shellcheck disable=SC1091
+[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+nvm use 24 >/dev/null 2>&1 || {
+  echo "Node 24 is not installed. Run: nvm install 24" >&2
+  exit 1
+}
+export PATH="$HOME/.vite-plus/bin:$PATH"
+
+command -v vp >/dev/null || {
+  echo "vp is not installed. Run: curl -fsSL https://vite.plus | bash" >&2
+  exit 1
+}
+
+echo "==> Building ${APP_NAME}.app (arm64). This takes a few minutes."
+vp run dist:desktop:dmg:arm64
+
+# The build stages into a temporary directory and removes it afterwards, so no
+# unpacked bundle survives in the repo — only the artifacts in release/. The zip
+# is the one that holds Vide.app directly, so unpack that rather than mounting
+# the dmg.
+ARCHIVE="$(find "$REPO_ROOT/release" -maxdepth 1 -name "${APP_NAME}-*-arm64.zip" -type f 2>/dev/null |
+  sort | tail -1)"
+
+if [ -z "$ARCHIVE" ]; then
+  echo "Build finished but no ${APP_NAME} zip was produced. Check the output above." >&2
+  exit 1
+fi
+
+UNPACK_DIR="$(mktemp -d)"
+trap 'rm -rf "$UNPACK_DIR"' EXIT
+echo "==> Unpacking $(basename "$ARCHIVE")"
+ditto -xk "$ARCHIVE" "$UNPACK_DIR"
+
+APP_PATH="${UNPACK_DIR}/${APP_NAME}.app"
+if [ ! -d "$APP_PATH" ]; then
+  echo "Archive did not contain ${APP_NAME}.app." >&2
+  exit 1
+fi
+
+echo "==> Installing to ${INSTALL_DIR}"
+# Quit a running copy first: replacing a bundle underneath a live process leaves
+# it with half-swapped resources.
+osascript -e "tell application \"${APP_NAME}\" to quit" >/dev/null 2>&1 || true
+sleep 1
+
+rm -rf "${INSTALL_DIR:?}/${APP_NAME}.app"
+cp -R "$APP_PATH" "${INSTALL_DIR}/"
+
+echo "==> Done. ${INSTALL_DIR}/${APP_NAME}.app"
+echo "    Bundle id com.vide.app, state in ~/.vide, no update feed."
