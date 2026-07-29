@@ -246,6 +246,76 @@
     transition-duration: var(--duration-base);
     transition-timing-function: var(--ease-out);
   }
+
+  /*
+   * Panels that mount when opened. Because they are conditionally rendered they
+   * unmount on close, so only the entrance can be expressed in CSS — an exit
+   * would need the element to outlive the state change.
+   */
+  .vide-panel-enter {
+    animation: vide-panel-enter var(--duration-base) var(--ease-out) both;
+  }
+
+  .vide-drawer-enter {
+    animation: vide-drawer-enter var(--duration-base) var(--ease-out) both;
+  }
+}
+
+/*
+ * One curve and one duration for every Base UI popup in the app.
+ *
+ * Base UI stamps data-open / data-closed on menus, popovers, tooltips, selects,
+ * and dialogs, and already ships the scale/opacity keyframes via
+ * data-starting-style and data-ending-style. What it does not do is agree on
+ * timing, so each surface settled at its own rate. Binding the shared scale here
+ * tunes all of them from one place instead of per component.
+ */
+:root:root [data-open],
+:root:root [data-closed],
+:root:root [data-starting-style],
+:root:root [data-ending-style] {
+  transition-duration: var(--duration-fast);
+  transition-timing-function: var(--ease-out);
+}
+
+/*
+ * Panels and drawers, animated through attributes the components already set,
+ * so the motion lives here rather than being sprinkled across large files.
+ *
+ * Both mount on open and unmount on close, so these are entrances only. Adding
+ * matching exits means keeping the element alive past the state change — worth
+ * doing, but a structural change rather than a styling one.
+ */
+:root:root [data-preview-panel-mode="inline"] {
+  animation: vide-panel-enter var(--duration-base) var(--ease-out) both;
+}
+
+:root:root [data-terminal-owner="drawer"] {
+  animation: vide-drawer-enter var(--duration-base) var(--ease-out) both;
+}
+
+/* Side panel: arrives from its own edge, so the motion explains where it lives. */
+@keyframes vide-panel-enter {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Bottom drawer: rises from the edge it is docked to. */
+@keyframes vide-drawer-enter {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes vide-fade-in {
@@ -315,7 +385,21 @@
 @media (prefers-reduced-motion: reduce) {
   .vide-fade-in,
   .vide-slide-in-left,
-  .vide-slide-in-up {
+  .vide-slide-in-up,
+  .vide-panel-enter,
+  .vide-drawer-enter {
+    animation: none;
+  }
+
+  :root:root [data-open],
+  :root:root [data-closed],
+  :root:root [data-starting-style],
+  :root:root [data-ending-style] {
+    transition-duration: 0ms;
+  }
+
+  :root:root [data-preview-panel-mode="inline"],
+  :root:root [data-terminal-owner="drawer"] {
     animation: none;
   }
 
