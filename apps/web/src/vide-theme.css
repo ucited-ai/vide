@@ -83,6 +83,27 @@
    */
   --popup-content-enter-delay: 70ms;
   --popup-content-exit-duration: 90ms;
+
+  /*
+   * Type scale. Named by role rather than size so a component never has to pick
+   * a number: the transcript is read, the sidebar is scanned, and captions are
+   * glanced at, and each wants a different size.
+   */
+  --text-chat: 14.5px;
+  --text-ui: 13.5px;
+  --text-caption: 11.5px;
+  --text-title: 15px;
+
+  /*
+   * Popup geometry. Upstream's menus are narrow and tight, which is most of why
+   * they read as cramped next to a native menu. One set of numbers here keeps
+   * every popup in the app on the same rhythm.
+   */
+  --popup-min-width: 15rem;
+  --popup-padding: 0.375rem;
+  --popup-item-height: 32px;
+  --popup-item-padding-inline: 0.625rem;
+  --popup-item-gap: 0.625rem;
 }
 
 .dark.dark.dark {
