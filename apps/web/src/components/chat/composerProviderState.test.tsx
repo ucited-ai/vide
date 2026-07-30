@@ -268,9 +268,12 @@ describe("provider traits render guards", () => {
     const boolean = withTarget([booleanDescriptor("thinking")]);
     const none = withTarget([]);
 
-    // Degrades to a bare model name when the model exposes nothing.
+    // The qualifier is the effort and nothing else, so only the scale produces
+    // one. A model whose sole trait is a toggle, and a model with no traits at
+    // all, both degrade to a bare model name — the toggle still shows in the
+    // picker's second step, where the rest of the traits live.
     expect(getProviderTraitsQualifier(scale)).toBe("High");
-    expect(getProviderTraitsQualifier(boolean)).toBe("thinking Off");
+    expect(getProviderTraitsQualifier(boolean)).toBeNull();
     expect(getProviderTraitsQualifier(none)).toBeNull();
   });
 });

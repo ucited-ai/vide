@@ -665,31 +665,36 @@ export function buildTraitsTriggerDisplay(input: {
   ultrathinkPromptControlled: boolean;
   fastModeEnabled: boolean;
 }): { label: string; showFastModeIcon: boolean } {
-  let hasFastMode = false;
-  const labels: Array<string> = [];
-  for (const descriptor of input.descriptors) {
-    if (descriptor.id === "fastMode" && descriptor.type === "boolean") {
-      hasFastMode = true;
-      continue;
-    }
-    const label =
-      input.ultrathinkPromptControlled && descriptor.id === input.primarySelectDescriptorId
-        ? "Ultrathink"
-        : descriptor.type === "boolean"
-          ? `${descriptor.label} ${descriptor.currentValue === true ? "On" : "Off"}`
-          : getProviderOptionCurrentLabel(descriptor);
-    if (typeof label === "string" && label.length > 0) {
-      labels.push(label);
-    }
-  }
+  /*
+   * The trigger says the model and its effort, nothing else.
+   *
+   * It used to join every descriptor with a separator, so a Claude model read
+   * "High · 1M" and, in the width the trigger actually gets, "High · ..." — an
+   * ellipsis standing in for information the user cannot see anyway. Context
+   * window, service tier and the boolean traits all live one click away in the
+   * picker's second step, which is where they belong; the trigger is a label,
+   * not a summary.
+   */
+  const hasFastMode = input.descriptors.some(
+    (descriptor) => descriptor.id === "fastMode" && descriptor.type === "boolean",
+  );
+  const primary =
+    input.primarySelectDescriptorId === null
+      ? undefined
+      : input.descriptors.find((descriptor) => descriptor.id === input.primarySelectDescriptorId);
 
-  // Only fall back to text when fast mode is genuinely the sole trait. Keying
-  // off an empty label list alone would also catch descriptors that resolved to
-  // no label at all, printing a bogus "Normal" for a model without fast mode.
-  if (labels.length === 0 && hasFastMode) {
+  const label = input.ultrathinkPromptControlled
+    ? "Ultrathink"
+    : primary === undefined
+      ? ""
+      : (getProviderOptionCurrentLabel(primary) ?? "");
+
+  // Fast mode is a label only when it is the model's sole trait; otherwise it
+  // stays an icon, and a model with no effort scale shows no qualifier at all.
+  if (label.length === 0 && hasFastMode) {
     return { label: input.fastModeEnabled ? "Fast" : "Normal", showFastModeIcon: false };
   }
-  return { label: labels.join(" · "), showFastModeIcon: input.fastModeEnabled };
+  return { label, showFastModeIcon: input.fastModeEnabled };
 }
 
 /**

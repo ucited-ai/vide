@@ -43,21 +43,21 @@ function display(descriptors: ReadonlyArray<ProviderOptionDescriptor>, fastModeE
 }
 
 describe("buildTraitsTriggerDisplay", () => {
-  it("omits fast mode from the label entirely when it is off", () => {
+  it("labels the effort alone, leaving the other traits to the picker", () => {
     expect(display([EFFORT, fastModeDescriptor(false), CONTEXT_WINDOW], false)).toEqual({
-      label: "High · 1M",
+      label: "High",
       showFastModeIcon: false,
     });
   });
 
   it("shows the bolt instead of a text label when fast mode is on", () => {
     expect(display([EFFORT, fastModeDescriptor(true), CONTEXT_WINDOW], true)).toEqual({
-      label: "High · 1M",
+      label: "High",
       showFastModeIcon: true,
     });
   });
 
-  it("keeps non-fastMode booleans as text labels", () => {
+  it("keeps booleans out of the trigger, fast mode or not", () => {
     const thinking: Extract<ProviderOptionDescriptor, { type: "boolean" }> = {
       id: "thinking",
       label: "Thinking",
@@ -65,7 +65,7 @@ describe("buildTraitsTriggerDisplay", () => {
       currentValue: true,
     };
     expect(display([EFFORT, thinking], false)).toEqual({
-      label: "High · Thinking On",
+      label: "High",
       showFastModeIcon: false,
     });
   });
