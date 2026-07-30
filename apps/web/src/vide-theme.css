@@ -8,8 +8,8 @@
  * It is imported at the top of index.css, because CSS `@import` is only valid
  * there. Upstream then declares `:root`, `.dark`, and the sidebar-version blocks
  * further down at equal specificity and would win on source order, so the blocks
- * below double their selector (`:root:root`, `.dark.dark`) to outrank it without
- * reaching for !important.
+ * below triple their selector (`:root:root:root`, `.dark.dark.dark`) to outrank it
+ * without reaching for !important.
  *
  * The organising idea is a surface ladder. Upstream builds dark mode from
  * neutral-950 and then paints the sidebar pure #000, so chrome sits *below* the
@@ -51,8 +51,6 @@
   --wash-active: rgb(0 0 0 / 7%);
   --wash-selected: rgb(0 0 0 / 6%);
 
-  --hairline: 0.5px;
-
   /* macOS control radii. */
   --radius: 0.5rem;
 
@@ -72,7 +70,6 @@
   --duration-fast: 120ms;
   --duration-base: 220ms;
   --duration-popup: 150ms;
-  --duration-slow: 340ms;
 
   /*
    * Type scale. Named by role rather than size so a component never has to pick
@@ -247,6 +244,21 @@
   backdrop-filter: none;
 }
 
+/*
+ * Popups are opaque, like every other surface in the ladder.
+ *
+ * `.dropdown-glass` in index.css paints them at ~84% over a 16px backdrop blur,
+ * which dissolved --surface-raised-1 the moment it was mapped to --popover. The
+ * composer's glass was neutralised when the ladder went in; this one was missed,
+ * so the theme claimed nothing was transparent while every menu still was.
+ */
+:root:root:root .dropdown-glass {
+  background: var(--popover);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  border-color: var(--edge);
+}
+
 :root:root:root .chat-composer-glass-shell {
   --chat-composer-glass-surface: var(--surface-chrome);
 }
@@ -254,57 +266,12 @@
 /* ---------------------------------------------------------------- utilities */
 
 @layer components {
-  /* An opaque surface one step above its parent, with a hairline edge. */
-  .vide-surface {
-    background: var(--surface-raised-1);
-    border: var(--hairline) solid var(--edge);
-  }
-
-  .vide-hairline-b {
-    border-bottom: var(--hairline) solid var(--edge);
-  }
-
-  .vide-hairline-t {
-    border-top: var(--hairline) solid var(--edge);
-  }
-
-  .vide-hairline-r {
-    border-right: var(--hairline) solid var(--edge);
-  }
-
   /*
    * Shared motion primitives. Components opt in by class so a single change to
    * the curve or duration retunes the whole app at once.
    */
   .vide-fade-in {
     animation: vide-fade-in var(--duration-base) var(--ease-out) both;
-  }
-
-  .vide-slide-in-left {
-    animation: vide-slide-in-left var(--duration-base) var(--ease-out) both;
-  }
-
-  .vide-slide-in-up {
-    animation: vide-slide-in-up var(--duration-base) var(--ease-out) both;
-  }
-
-  /* Anything that opens, closes, expands, or collapses. */
-  .vide-transition {
-    transition-duration: var(--duration-base);
-    transition-timing-function: var(--ease-out);
-  }
-
-  /*
-   * Panels that mount when opened. Because they are conditionally rendered they
-   * unmount on close, so only the entrance can be expressed in CSS — an exit
-   * would need the element to outlive the state change.
-   */
-  .vide-panel-enter {
-    animation: vide-panel-enter var(--duration-base) var(--ease-out) both;
-  }
-
-  .vide-drawer-enter {
-    animation: vide-drawer-enter var(--duration-base) var(--ease-out) both;
   }
 }
 
@@ -355,44 +322,13 @@
 }
 
 /*
- * Panels and drawers, animated through attributes the components already set,
- * so the motion lives here rather than being sprinkled across large files.
- *
- * Both mount on open and unmount on close, so these are entrances only. Adding
- * matching exits means keeping the element alive past the state change — worth
- * doing, but a structural change rather than a styling one.
+ * The right panel and the terminal drawer used to carry keyframe entrances here.
+ * They no longer can: both now stay mounted and collapse instead of unmounting,
+ * so a keyframe bound to a static attribute fires once — the first time the
+ * element enters the tree — and never again on a toggle. The width transition in
+ * PreviewPanelShell and the grid-row transition in ChatView are what animate
+ * them now, and unlike a keyframe those run in both directions.
  */
-:root:root:root [data-preview-panel-mode="inline"] {
-  animation: vide-panel-enter var(--duration-base) var(--ease-out) both;
-}
-
-:root:root:root [data-terminal-owner="drawer"] {
-  animation: vide-drawer-enter var(--duration-base) var(--ease-out) both;
-}
-
-/* Side panel: arrives from its own edge, so the motion explains where it lives. */
-@keyframes vide-panel-enter {
-  from {
-    opacity: 0;
-    transform: translateX(12px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-/* Bottom drawer: rises from the edge it is docked to. */
-@keyframes vide-drawer-enter {
-  from {
-    opacity: 0;
-    transform: translateY(14px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
 
 @keyframes vide-fade-in {
   from {
@@ -400,28 +336,6 @@
   }
   to {
     opacity: 1;
-  }
-}
-
-@keyframes vide-slide-in-left {
-  from {
-    opacity: 0;
-    transform: translateX(-8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-@keyframes vide-slide-in-up {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
   }
 }
 
@@ -489,11 +403,6 @@
   .vide-fade-in,
   .vide-slide-in-left,
   .vide-slide-in-up,
-  .vide-panel-enter,
-  .vide-drawer-enter {
-    animation: none;
-  }
-
   :root:root:root [data-popup-surface] {
     transition-duration: 0ms;
   }
