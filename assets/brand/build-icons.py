@@ -46,70 +46,95 @@ SVG_TEMPLATE = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024
     <path id="squircle" d="{squircle}" />
     <clipPath id="clip"><use href="#squircle" /></clipPath>
 
-    <linearGradient id="field" x1="0.12" y1="0" x2="0.72" y2="1">
+    <linearGradient id="field" x1="0.15" y1="0" x2="0.7" y2="1">
       <stop offset="0%" stop-color="{c_top}" />
-      <stop offset="48%" stop-color="{c_mid}" />
+      <stop offset="52%" stop-color="{c_mid}" />
       <stop offset="100%" stop-color="{c_bottom}" />
     </linearGradient>
 
-    <!-- Specular sweep: what separates glass from flat plastic -->
-    <linearGradient id="specular" x1="0.1" y1="0" x2="0.32" y2="0.92">
-      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.34" />
-      <stop offset="38%" stop-color="#FFFFFF" stop-opacity="0.05" />
-      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0" />
-    </linearGradient>
-
-    <radialGradient id="bloom" cx="0.26" cy="0.10" r="0.78">
-      <stop offset="0%" stop-color="{c_bloom}" stop-opacity="0.42" />
-      <stop offset="60%" stop-color="{c_bloom}" stop-opacity="0" />
+    <!-- Light falling from the top-left, the way it does on a physical object -->
+    <radialGradient id="sheen" cx="0.3" cy="0.08" r="0.85">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.10" />
+      <stop offset="60%" stop-color="#ffffff" stop-opacity="0" />
     </radialGradient>
 
-    <!-- One stroke, one gradient: the light shifts across the vertex instead of
-         two arms overlapping and bruising the join. -->
-    <linearGradient id="markFill" x1="0" y1="0.1" x2="1" y2="0.9">
-      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="1" />
-      <stop offset="46%" stop-color="#FFFFFF" stop-opacity="0.97" />
-      <stop offset="54%" stop-color="#FFFFFF" stop-opacity="0.80" />
-      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0.66" />
+    <!--
+      The mark is machined, not printed: a bright rim catches the light and the
+      face inside it stays dark. Two strokes of the same path do this more
+      cleanly than a bevel filter, and they survive being scaled to 16px.
+    -->
+    <linearGradient id="rim" x1="0.1" y1="0" x2="0.75" y2="1">
+      <stop offset="0%" stop-color="#f2f2f2" />
+      <stop offset="45%" stop-color="#9a9a9a" />
+      <stop offset="100%" stop-color="#4a4a4a" />
     </linearGradient>
 
-    <linearGradient id="rim" x1="0" y1="0" x2="0.25" y2="1">
-      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.50" />
-      <stop offset="40%" stop-color="#FFFFFF" stop-opacity="0.08" />
-      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0.14" />
+    <linearGradient id="face" x1="0.2" y1="0" x2="0.8" y2="1">
+      <stop offset="0%" stop-color="{c_face_top}" />
+      <stop offset="100%" stop-color="{c_face_bottom}" />
     </linearGradient>
 
-    <filter id="markShadow" x="-25%" y="-25%" width="150%" height="150%">
-      <feDropShadow dx="0" dy="8" stdDeviation="14" flood-color="{c_shadow}" flood-opacity="0.30" />
+    <linearGradient id="edge" x1="0" y1="0" x2="0.3" y2="1">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.22" />
+      <stop offset="45%" stop-color="#ffffff" stop-opacity="0.04" />
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.09" />
+    </linearGradient>
+
+    <!--
+      Grain. Renders in any browser, but cairosvg ignores feTurbulence, so
+      build-icons.py adds a matching grain to the raster exports instead. Both
+      paths are covered; neither is the only one.
+    -->
+    <filter id="grain" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="4" seed="7" />
+      <feColorMatrix type="saturate" values="0" />
     </filter>
   </defs>
 
   <g clip-path="url(#clip)">
     <use href="#squircle" fill="url(#field)" />
-    <use href="#squircle" fill="url(#bloom)" />
-    <use href="#squircle" fill="url(#specular)" />
+    <use href="#squircle" fill="url(#sheen)" />
+    <rect width="1024" height="1024" filter="url(#grain)" opacity="{grain_opacity}"
+          style="mix-blend-mode:overlay" />
   </g>
 
-  <!-- The V is an angle bracket turned a quarter turn: Vide reads as a letter,
-       a chevron, and a code delimiter at the same time. -->
-  <path d="M 349 379 L 512 645 L 675 379"
-        fill="none" stroke="url(#markFill)" stroke-width="96"
-        stroke-linecap="round" stroke-linejoin="round"
-        filter="url(#markShadow)" />
+  <!--
+    The V is an angle bracket turned a quarter turn, so it reads as a letter and
+    as a code delimiter at once. The rules beside it are lines of code sitting in
+    the space the letter opens up.
+  -->
+  <g clip-path="url(#clip)">
+    <path d="M 349 379 L 512 645 L 675 379" fill="none" stroke="url(#rim)"
+          stroke-width="106" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M 349 379 L 512 645 L 675 379" fill="none" stroke="url(#face)"
+          stroke-width="88" stroke-linecap="round" stroke-linejoin="round" />
 
-  <!-- Apple draws a hairline separator around every glass surface -->
-  <use href="#squircle" fill="none" stroke="url(#rim)" stroke-width="2.5" />
+    <g fill="url(#rim)">
+      <rect x="516" y="416" width="72" height="17" rx="8.5" />
+      <rect x="516" y="453" width="52" height="17" rx="8.5" />
+      <rect x="516" y="490" width="32" height="17" rx="8.5" />
+    </g>
+  </g>
+
+  <!-- Apple draws a hairline separator around every icon of this kind -->
+  <use href="#squircle" fill="none" stroke="url(#edge)" stroke-width="2.5" />
 </svg>
 """
 
+# Monochrome throughout — the app's own palette has no hue in it, and an icon
+# that introduces one would be the loudest thing on the dock. The three channels
+# separate by luminance instead, which still tells them apart at 16px.
 VARIANTS = {
-    "prod": dict(c_top="#8B7BFF", c_mid="#5A46E8", c_bottom="#291A78",
-                 c_bloom="#D4CCFF", c_shadow="#150C4A"),
-    "dev": dict(c_top="#5AC8F5", c_mid="#1E82D8", c_bottom="#0B3A78",
-                c_bloom="#C4E8FF", c_shadow="#062544"),
-    "nightly": dict(c_top="#4A4A55", c_mid="#26262E", c_bottom="#0A0A0C",
-                    c_bloom="#B9B9CC", c_shadow="#000000"),
+    "prod": dict(c_top="#2b2b2b", c_mid="#1c1c1c", c_bottom="#101010",
+                 c_face_top="#5a5a5a", c_face_bottom="#232323", grain_opacity="0.14"),
+    "dev": dict(c_top="#484848", c_mid="#343434", c_bottom="#222222",
+                c_face_top="#767676", c_face_bottom="#3a3a3a", grain_opacity="0.16"),
+    "nightly": dict(c_top="#141414", c_mid="#0b0b0b", c_bottom="#000000",
+                    c_face_top="#3e3e3e", c_face_bottom="#141414", grain_opacity="0.12"),
 }
+
+# Grain strength per channel, matched to the SVG's own filter opacity above.
+GRAIN_BY_VARIANT = {"prod": 0.14, "dev": 0.16, "nightly": 0.12}
 
 
 def render_svg(variant: str) -> str:
@@ -119,16 +144,64 @@ def render_svg(variant: str) -> str:
     )
 
 
-def png_bytes(svg: str, size: int) -> bytes:
-    return cairosvg.svg2png(bytestring=svg.encode(), output_width=size, output_height=size)
+def png_bytes(svg: str, size: int, grain: float = 0.0) -> bytes:
+    """Rasterise, adding the grain the SVG filter describes.
+
+    cairosvg silently ignores feTurbulence, so an icon exported through it would
+    come out perfectly flat while the same SVG in a browser is textured. The noise
+    is therefore reapplied here, deterministically, so both paths agree.
+
+    Below 64px it is skipped: at that size grain is indistinguishable from
+    compression artefacts and only makes the silhouette read as dirty.
+    """
+    raw = cairosvg.svg2png(bytestring=svg.encode(), output_width=size, output_height=size)
+    if grain <= 0 or size < 64:
+        return raw
+
+    import io
+
+    import numpy as np
+    from PIL import Image
+
+    image = Image.open(io.BytesIO(raw)).convert("RGBA")
+    pixels = np.asarray(image, dtype=np.int16)
+
+    # Grain is generated on a fixed grid and resampled, so a speck covers the same
+    # fraction of the icon at every export size. Per-pixel noise instead gets
+    # finer as the icon grows, which made 128px look sandblasted next to 1024px.
+    #
+    # Amplitude also tapers with size: at dock scale grain reads as dirt rather
+    # than texture, and the silhouette matters more than the surface.
+    grid = 256
+    amplitude = 255.0 * grain * 0.22 * min(1.0, max(0.35, size / 512))
+    # Seeded, so a rebuild produces byte-identical icons rather than churn.
+    field = np.random.default_rng(7).normal(0.0, amplitude, (grid, grid))
+    if size != grid:
+        field = np.asarray(
+            Image.fromarray(field.astype(np.float32), mode="F").resize(
+                (size, size), Image.BILINEAR
+            ),
+            dtype=np.float64,
+        )
+    noise = field[:, :, None]
+    alpha = pixels[:, :, 3]
+    # Only inside the silhouette. Transparent pixels still carry RGB that survives
+    # scaling and compositing, so noising them speckles the corners.
+    inside = (alpha > 0)[:, :, None]
+    rgb = np.where(inside, np.clip(pixels[:, :, :3] + noise, 0, 255), pixels[:, :, :3])
+    # Alpha is never touched, so the squircle keeps a clean edge.
+    out = np.dstack([rgb.astype(np.uint8), alpha.astype(np.uint8)])
+    buffer = io.BytesIO()
+    Image.fromarray(out, mode="RGBA").save(buffer, format="PNG")
+    return buffer.getvalue()
 
 
 # --- .ico ------------------------------------------------------------------
 ICO_SIZES = [16, 24, 32, 48, 64, 128, 256]
 
 
-def write_ico(svg: str, dest: Path) -> None:
-    images = [(s, png_bytes(svg, s)) for s in ICO_SIZES]
+def write_ico(svg: str, dest: Path, grain: float = 0.0) -> None:
+    images = [(s, png_bytes(svg, s, grain)) for s in ICO_SIZES]
     header = struct.pack("<HHH", 0, 1, len(images))
     entries, blobs = b"", b""
     offset = len(header) + 16 * len(images)
@@ -146,11 +219,11 @@ ICNS_SET = [(16, "16x16"), (32, "16x16@2x"), (32, "32x32"), (64, "32x32@2x"),
             (512, "256x256@2x"), (512, "512x512"), (1024, "512x512@2x")]
 
 
-def write_icns(svg: str, dest: Path, workdir: Path) -> None:
+def write_icns(svg: str, dest: Path, workdir: Path, grain: float = 0.0) -> None:
     iconset = workdir / "vide.iconset"
     iconset.mkdir(parents=True, exist_ok=True)
     for size, name in ICNS_SET:
-        (iconset / f"icon_{name}.png").write_bytes(png_bytes(svg, size))
+        (iconset / f"icon_{name}.png").write_bytes(png_bytes(svg, size, grain))
     subprocess.run(["iconutil", "-c", "icns", str(iconset), "-o", str(dest)], check=True)
 
 
@@ -164,7 +237,7 @@ def main() -> None:
 
     if preview_only:
         for size in (1024, 128, 32):
-            (scratch / f"preview-{size}.png").write_bytes(png_bytes(prod_svg, size))
+            (scratch / f"preview-{size}.png").write_bytes(png_bytes(prod_svg, size, GRAIN_BY_VARIANT["prod"]))
         print("preview written")
         return
 
@@ -196,28 +269,29 @@ def main() -> None:
         svg = render_svg(variant)
         outdir = ROOT / "assets" / variant
         outdir.mkdir(parents=True, exist_ok=True)
+        grain = GRAIN_BY_VARIANT[variant]
         for name, size in files:
-            (outdir / name).write_bytes(png_bytes(svg, size))
+            (outdir / name).write_bytes(png_bytes(svg, size, grain))
             written.append(f"assets/{variant}/{name}")
         for name in ico_targets[variant]:
-            write_ico(svg, outdir / name)
+            write_ico(svg, outdir / name, grain)
             written.append(f"assets/{variant}/{name}")
 
     # Electron packaging resources
     resources = ROOT / "apps" / "desktop" / "resources"
-    (resources / "icon.png").write_bytes(png_bytes(prod_svg, 1024))
-    write_ico(prod_svg, resources / "icon.ico")
-    write_icns(prod_svg, resources / "icon.icns", scratch)
+    (resources / "icon.png").write_bytes(png_bytes(prod_svg, 1024, GRAIN_BY_VARIANT["prod"]))
+    write_ico(prod_svg, resources / "icon.ico", GRAIN_BY_VARIANT["prod"])
+    write_icns(prod_svg, resources / "icon.icns", scratch, GRAIN_BY_VARIANT["prod"])
     written += ["apps/desktop/resources/icon.png", "apps/desktop/resources/icon.ico",
                 "apps/desktop/resources/icon.icns"]
 
     # Web favicons served by apps/web
     web_public = ROOT / "apps" / "web" / "public"
     if web_public.is_dir():
-        (web_public / "favicon-16x16.png").write_bytes(png_bytes(prod_svg, 16))
-        (web_public / "favicon-32x32.png").write_bytes(png_bytes(prod_svg, 32))
-        (web_public / "apple-touch-icon.png").write_bytes(png_bytes(prod_svg, 180))
-        write_ico(prod_svg, web_public / "favicon.ico")
+        (web_public / "favicon-16x16.png").write_bytes(png_bytes(prod_svg, 16, GRAIN_BY_VARIANT["prod"]))
+        (web_public / "favicon-32x32.png").write_bytes(png_bytes(prod_svg, 32, GRAIN_BY_VARIANT["prod"]))
+        (web_public / "apple-touch-icon.png").write_bytes(png_bytes(prod_svg, 180, GRAIN_BY_VARIANT["prod"]))
+        write_ico(prod_svg, web_public / "favicon.ico", GRAIN_BY_VARIANT["prod"])
         written += [f"apps/web/public/{n}" for n in
                     ("favicon-16x16.png", "favicon-32x32.png", "apple-touch-icon.png", "favicon.ico")]
 
