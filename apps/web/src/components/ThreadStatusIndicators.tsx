@@ -1,8 +1,4 @@
-import {
-  scopeProjectRef,
-  scopedThreadKey,
-  scopeThreadRef,
-} from "@vide/client-runtime/environment";
+import { scopeProjectRef, scopedThreadKey, scopeThreadRef } from "@vide/client-runtime/environment";
 import type { VcsStatusResult } from "@vide/contracts";
 import { CloudIcon, FolderGit2Icon, GitPullRequestIcon, TerminalIcon } from "lucide-react";
 import { useMemo } from "react";

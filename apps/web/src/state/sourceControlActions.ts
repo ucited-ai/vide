@@ -4,10 +4,7 @@ import type {
   AtomCommandResult,
   AtomCommandSuccess,
 } from "@vide/client-runtime/state/runtime";
-import {
-  VcsActionUnavailableError,
-  type VcsActionOperation,
-} from "@vide/client-runtime/state/vcs";
+import { VcsActionUnavailableError, type VcsActionOperation } from "@vide/client-runtime/state/vcs";
 import type {
   EnvironmentId,
   GitActionProgressEvent,

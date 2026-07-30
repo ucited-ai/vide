@@ -781,7 +781,9 @@ describe("DesktopBackendConfiguration", () => {
             ),
           ),
         ),
-        Layer.provideMerge(makeEnvironmentLayer("/tmp/vide-wsl-isavailable", { platform: "win32" })),
+        Layer.provideMerge(
+          makeEnvironmentLayer("/tmp/vide-wsl-isavailable", { platform: "win32" }),
+        ),
         Layer.provide(NodeServices.layer),
       ),
     );

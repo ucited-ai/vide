@@ -1,8 +1,5 @@
 import type { DiscoveredLocalServer, ScopedThreadRef } from "@vide/contracts";
-import {
-  mapAtomCommandResult,
-  type AtomCommandResult,
-} from "@vide/client-runtime/state/runtime";
+import { mapAtomCommandResult, type AtomCommandResult } from "@vide/client-runtime/state/runtime";
 
 import { resolveDiscoveredServerUrl } from "~/browser/browserTargetResolver";
 import type { OpenPreviewMutation } from "~/browser/openFileInPreview";

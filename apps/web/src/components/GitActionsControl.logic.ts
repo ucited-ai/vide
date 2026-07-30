@@ -1,8 +1,4 @@
-import type {
-  GitRunStackedActionResult,
-  GitStackedAction,
-  VcsStatusResult,
-} from "@vide/contracts";
+import type { GitRunStackedActionResult, GitStackedAction, VcsStatusResult } from "@vide/contracts";
 import { isTemporaryWorktreeBranch } from "@vide/shared/git";
 import {
   DEFAULT_CHANGE_REQUEST_TERMINOLOGY,

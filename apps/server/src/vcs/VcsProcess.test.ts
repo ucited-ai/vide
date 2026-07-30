@@ -6,11 +6,7 @@ import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import { TestClock } from "effect/testing";
 
-import {
-  VcsProcessExitError,
-  VcsProcessSpawnError,
-  VcsProcessTimeoutError,
-} from "@vide/contracts";
+import { VcsProcessExitError, VcsProcessSpawnError, VcsProcessTimeoutError } from "@vide/contracts";
 import * as ProcessRunner from "../processRunner.ts";
 import * as VcsProcess from "./VcsProcess.ts";
 

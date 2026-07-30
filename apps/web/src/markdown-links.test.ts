@@ -94,8 +94,7 @@ describe("resolveMarkdownFileLinkTarget", () => {
         "C:/Users/mike/dev-stuff/vide",
       ),
     ).toMatchObject({
-      displayPath:
-        "vide/apps/web/src/components/chat/MessagesTimeline.virtualization.browser.tsx",
+      displayPath: "vide/apps/web/src/components/chat/MessagesTimeline.virtualization.browser.tsx",
       workspaceRelativePath:
         "apps/web/src/components/chat/MessagesTimeline.virtualization.browser.tsx",
     });

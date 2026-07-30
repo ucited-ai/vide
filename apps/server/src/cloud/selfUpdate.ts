@@ -257,7 +257,9 @@ export const make = Effect.fn("cloud.server_self_update.make")(function* (option
         path,
         runner,
       }).pipe(
-        Effect.mapError((error) => failWith("Could not install the requested vide version.", error)),
+        Effect.mapError((error) =>
+          failWith("Could not install the requested vide version.", error),
+        ),
       );
 
       // A broken artifact (failed native build, incompatible node) must be

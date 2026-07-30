@@ -20,7 +20,10 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "../ui/sidebar";
-import { VideConnectSidebarAvatar, VideConnectSidebarSignIn } from "../clerk/VideConnectSidebarSignIn";
+import {
+  VideConnectSidebarAvatar,
+  VideConnectSidebarSignIn,
+} from "../clerk/VideConnectSidebarSignIn";
 
 export type SettingsSectionPath =
   | "/settings/general"

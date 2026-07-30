@@ -2,10 +2,7 @@ import type {
   RelayClientEnvironmentRecord,
   RelayEnvironmentStatusResponse,
 } from "@vide/contracts/relay";
-import {
-  RelayEnvironmentConnectScope,
-  RelayEnvironmentStatusScope,
-} from "@vide/contracts/relay";
+import { RelayEnvironmentConnectScope, RelayEnvironmentStatusScope } from "@vide/contracts/relay";
 import { decodeRelayJwt } from "@vide/shared/relayJwt";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";

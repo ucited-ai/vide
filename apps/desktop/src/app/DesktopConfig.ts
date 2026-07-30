@@ -44,9 +44,7 @@ export const DesktopConfig = Config.all({
   desktopLanHostOverride: trimmedString("VIDE_DESKTOP_LAN_HOST"),
   desktopHttpsEndpointUrls: commaSeparatedStrings("VIDE_DESKTOP_HTTPS_ENDPOINTS"),
   otlpTracesUrl: trimmedString("VIDE_OTLP_TRACES_URL"),
-  otlpExportIntervalMs: Config.int("VIDE_OTLP_EXPORT_INTERVAL_MS").pipe(
-    Config.withDefault(10_000),
-  ),
+  otlpExportIntervalMs: Config.int("VIDE_OTLP_EXPORT_INTERVAL_MS").pipe(Config.withDefault(10_000)),
   appImagePath: trimmedString("APPIMAGE"),
   disableAutoUpdate: optionalBoolean("VIDE_DISABLE_AUTO_UPDATE"),
   mockUpdates: optionalBoolean("VIDE_DESKTOP_MOCK_UPDATES"),

@@ -5,10 +5,7 @@ import {
   managedRelaySessionAtom,
   readManagedRelaySnapshotState,
 } from "@vide/client-runtime/relay";
-import type {
-  RelayClientDeviceRecord,
-  RelayClientEnvironmentRecord,
-} from "@vide/contracts/relay";
+import type { RelayClientDeviceRecord, RelayClientEnvironmentRecord } from "@vide/contracts/relay";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";

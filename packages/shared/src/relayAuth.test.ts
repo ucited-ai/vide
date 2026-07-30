@@ -21,9 +21,9 @@ const captureError = (run: () => unknown): unknown => {
 
 describe("Clerk relay auth", () => {
   it("derives a custom Frontend API hostname from a Clerk publishable key", () => {
-    expect(clerkFrontendApiHostnameFromPublishableKey(clerkPublishableKey("clerk.vide.local"))).toBe(
-      "clerk.vide.local",
-    );
+    expect(
+      clerkFrontendApiHostnameFromPublishableKey(clerkPublishableKey("clerk.vide.local")),
+    ).toBe("clerk.vide.local");
     expect(clerkFrontendApiUrlFromPublishableKey(clerkPublishableKey("clerk.vide.local"))).toBe(
       "https://clerk.vide.local",
     );

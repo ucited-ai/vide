@@ -51,7 +51,8 @@ export function useCloudLinkController() {
   const [operationError, setOperationError] = useState<string | null>(null);
 
   const reportUpdateFailure = (cause: unknown) => {
-    const message = cause instanceof Error ? cause.message : "Could not update Vide Connect access.";
+    const message =
+      cause instanceof Error ? cause.message : "Could not update Vide Connect access.";
     const traceId = findErrorTraceId(cause);
     console.error("[vide-connect] Could not update Vide Connect", { message, traceId, cause });
     setOperationError(traceId ? `${message} Trace ID: ${traceId}` : message);

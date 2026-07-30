@@ -37,6 +37,11 @@ import { PierreEntryIcon } from "./chat/PierreEntryIcon";
 interface RightPanelTabsProps {
   mode: PreviewPanelMode;
   maximized?: boolean;
+  /**
+   * Forwarded to the shell, which stays mounted and collapses to zero width when
+   * false so the panel can animate shut. See PreviewPanelShell.
+   */
+  open?: boolean;
   layoutControls?: ReactNode;
   surfaces: readonly RightPanelSurface[];
   activeSurfaceId: string | null;
@@ -373,6 +378,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
     <PreviewPanelShell
       mode={props.mode}
       {...(props.maximized !== undefined ? { maximized: props.maximized } : {})}
+      {...(props.open !== undefined ? { open: props.open } : {})}
     >
       <div
         className={cn(

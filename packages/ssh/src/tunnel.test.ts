@@ -180,7 +180,10 @@ describe("ssh tunnel scripts", () => {
     );
     assert.include(buildRemotePairingScript(target), 'PAIRING_BASE_DIR="$DEFAULT_SERVER_HOME"');
     assert.notInclude(buildRemotePairingScript(target), "server-home");
-    assert.include(buildRemotePairingScript(target, { packageSpec: "vide@nightly" }), "vide@nightly");
+    assert.include(
+      buildRemotePairingScript(target, { packageSpec: "vide@nightly" }),
+      "vide@nightly",
+    );
     assert.include(
       buildRemoteStopScript(target),
       'if [ "$REMOTE_MANAGED" != "external" ] && [ -n "$REMOTE_PID" ]',

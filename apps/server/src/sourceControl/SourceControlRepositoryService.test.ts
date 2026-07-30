@@ -81,7 +81,9 @@ function makeLayer(input: {
     Layer.provide(
       ServerConfig.layerTest(
         process.cwd(),
-        input.fileSystem ? "/tmp/vide-source-control-repos" : { prefix: "vide-source-control-repos-" },
+        input.fileSystem
+          ? "/tmp/vide-source-control-repos"
+          : { prefix: "vide-source-control-repos-" },
       ),
     ),
   );

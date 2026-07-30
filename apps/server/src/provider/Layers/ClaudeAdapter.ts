@@ -3547,7 +3547,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         ...(mcpSession
           ? {
               mcpServers: {
-                "vide": {
+                vide: {
                   type: "http",
                   url: mcpSession.endpoint,
                   headers: {

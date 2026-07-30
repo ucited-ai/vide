@@ -84,8 +84,7 @@ describe("brand-assets", () => {
   });
 
   it("keeps development, nightly, and production icon families separate", () => {
-    expect([
-    ]).toEqual([
+    expect([]).toEqual([
       "assets/dev/app-icon.icon",
       "assets/nightly/app-icon.icon",
       "assets/prod/app-icon.icon",

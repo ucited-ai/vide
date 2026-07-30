@@ -26,8 +26,17 @@ export function getPreviewPanelMaxWidth(viewportWidth: number): number {
 export function PreviewPanelShell(props: {
   mode: PreviewPanelMode;
   maximized?: boolean;
+  /**
+   * Whether the panel is showing. In inline mode it stays MOUNTED when false and
+   * collapses to zero width instead, which is the only way it can animate shut:
+   * an unmounted element has nothing left to transition. The left sidebar has
+   * always worked this way, which is why that one felt right and this one did
+   * not. Sheet mode ignores this — the sheet primitive owns its own presence.
+   */
+  open?: boolean;
   children: ReactNode;
 }) {
+  const isOpen = props.open ?? true;
   const useDragRegion = isElectron && props.mode !== "sheet" && props.mode !== "embedded";
   const isInline = props.mode === "inline";
   const maxWidth = useViewportClampedMaxWidth();
@@ -63,19 +72,30 @@ export function PreviewPanelShell(props: {
   return (
     <div
       className={cn(
-        "relative flex h-full min-h-0 min-w-0 flex-col self-stretch bg-background",
+        "relative flex h-full min-h-0 min-w-0 flex-col self-stretch overflow-hidden bg-background",
         isInline
-          ? props.maximized
+          ? props.maximized && isOpen
             ? "flex-1 border-l border-border"
-            : "shrink-0 border-l border-border"
+            : "shrink-0"
           : "w-full",
+        // The edge only exists while there is a panel to edge. Kept at zero
+        // width it would read as a stray hairline down the side of the chat.
+        isInline && isOpen && !props.maximized && "border-l border-border",
         isInline && !resizing && "transition-[width] duration-(--duration-base) ease-(--ease-soft)",
       )}
-      style={isInline && !props.maximized ? { width: `${width}px` } : undefined}
+      style={
+        isInline && !(props.maximized && isOpen) ? { width: isOpen ? `${width}px` : 0 } : undefined
+      }
+      // Collapsed but mounted, it must not be reachable: without this, Tab walks
+      // into a panel nobody can see.
+      {...(isInline && !isOpen ? { inert: true } : {})}
       data-preview-panel-mode={props.mode}
+      data-preview-panel-open={isOpen ? "true" : "false"}
       data-preview-panel-maximized={props.maximized ? "true" : "false"}
     >
-      {isInline && !props.maximized ? <RightPanelResizeHandle handlers={resizeHandlers} /> : null}
+      {isInline && isOpen && !props.maximized ? (
+        <RightPanelResizeHandle handlers={resizeHandlers} />
+      ) : null}
       {useDragRegion ? <div className="electron-drag-region h-0 w-full" aria-hidden /> : null}
       {props.children}
     </div>

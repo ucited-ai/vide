@@ -1248,7 +1248,9 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
-      const staticDir = yield* fileSystem.makeTempDirectoryScoped({ prefix: "vide-router-static-" });
+      const staticDir = yield* fileSystem.makeTempDirectoryScoped({
+        prefix: "vide-router-static-",
+      });
       const indexPath = path.join(staticDir, "index.html");
       yield* fileSystem.writeFileString(indexPath, "<html>router-static-ok</html>");
 

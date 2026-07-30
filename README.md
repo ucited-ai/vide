@@ -2,7 +2,7 @@
 
 A native-feeling macOS GUI for coding agents — Claude Code, Codex, Cursor, and OpenCode.
 
-*Vibe coding + IDE.* Personal build, maintained for one machine.
+_Vibe coding + IDE._ Personal build, maintained for one machine.
 
 ---
 
@@ -13,13 +13,13 @@ single goal: an app that feels like it belongs on macOS rather than a web page i
 
 Everything mobile, marketing, and vendored-reference has been stripped out. What remains:
 
-| Path | What it does |
-|---|---|
-| `apps/web` | The UI — React 19, Tailwind v4, TanStack Router, Base UI |
-| `apps/desktop` | The Electron shell that turns it into `Vide.app` |
-| `apps/server` | Backend + the `vide` CLI; talks to the agent providers |
-| `packages/*` | Shared contracts, runtime, SSH, Tailscale |
-| `assets/brand` | `vide-mark.svg` — the single source for every icon |
+| Path           | What it does                                             |
+| -------------- | -------------------------------------------------------- |
+| `apps/web`     | The UI — React 19, Tailwind v4, TanStack Router, Base UI |
+| `apps/desktop` | The Electron shell that turns it into `Vide.app`         |
+| `apps/server`  | Backend + the `vide` CLI; talks to the agent providers   |
+| `packages/*`   | Shared contracts, runtime, SSH, Tailscale                |
+| `assets/brand` | `vide-mark.svg` — the single source for every icon       |
 
 ## Requirements
 
@@ -65,7 +65,7 @@ git fetch upstream
 git merge upstream/main
 ```
 
-Conflicts appear only in files this fork has touched. Customizations therefore prefer *new*
+Conflicts appear only in files this fork has touched. Customizations therefore prefer _new_
 files (own components, own theme layer) over edits to upstream files wherever that is possible.
 
 Deleted directories (`apps/mobile`, `apps/marketing`, `.repos`, `.github/workflows`) will show

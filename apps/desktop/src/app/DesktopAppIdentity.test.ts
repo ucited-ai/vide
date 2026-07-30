@@ -125,9 +125,7 @@ const withIdentity = <A, E, R>(
             exists: (path) =>
               input.legacyPathProbeError
                 ? Effect.fail(input.legacyPathProbeError)
-                : Effect.succeed(
-                    input.legacyPathExists === true && path.includes("Vide (Alpha)"),
-                  ),
+                : Effect.succeed(input.legacyPathExists === true && path.includes("Vide (Alpha)")),
             readFileString: () =>
               Effect.succeed(input.packageJson ?? '{"videCommitHash":"abcdef1234567890"}'),
           }),

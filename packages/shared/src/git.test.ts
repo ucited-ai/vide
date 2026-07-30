@@ -12,15 +12,9 @@ import {
 
 describe("normalizeGitRemoteUrl", () => {
   it("canonicalizes equivalent GitHub remotes across protocol variants", () => {
-    expect(normalizeGitRemoteUrl("git@github.com:Vide/Vide.git")).toBe(
-      "github.com/vide/vide",
-    );
-    expect(normalizeGitRemoteUrl("https://github.com/Vide/Vide.git")).toBe(
-      "github.com/vide/vide",
-    );
-    expect(normalizeGitRemoteUrl("ssh://git@github.com/Vide/Vide")).toBe(
-      "github.com/vide/vide",
-    );
+    expect(normalizeGitRemoteUrl("git@github.com:Vide/Vide.git")).toBe("github.com/vide/vide");
+    expect(normalizeGitRemoteUrl("https://github.com/Vide/Vide.git")).toBe("github.com/vide/vide");
+    expect(normalizeGitRemoteUrl("ssh://git@github.com/Vide/Vide")).toBe("github.com/vide/vide");
   });
 
   it("preserves nested group paths for providers like GitLab", () => {
@@ -44,9 +38,9 @@ describe("normalizeGitRemoteUrl", () => {
 
 describe("parseGitHubRepositoryNameWithOwnerFromRemoteUrl", () => {
   it("extracts the owner and repository from common GitHub remote shapes", () => {
-    expect(
-      parseGitHubRepositoryNameWithOwnerFromRemoteUrl("git@github.com:Vide/Vide.git"),
-    ).toBe("Vide/Vide");
+    expect(parseGitHubRepositoryNameWithOwnerFromRemoteUrl("git@github.com:Vide/Vide.git")).toBe(
+      "Vide/Vide",
+    );
     expect(
       parseGitHubRepositoryNameWithOwnerFromRemoteUrl("https://github.com/Vide/Vide.git"),
     ).toBe("Vide/Vide");

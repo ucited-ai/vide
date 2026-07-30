@@ -1,7 +1,4 @@
-import {
-  mapAtomCommandResult,
-  type AtomCommandResult,
-} from "@vide/client-runtime/state/runtime";
+import { mapAtomCommandResult, type AtomCommandResult } from "@vide/client-runtime/state/runtime";
 import type { ScopedThreadRef } from "@vide/contracts";
 
 import type { OpenPreviewMutation } from "~/browser/openFileInPreview";

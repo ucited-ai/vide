@@ -473,9 +473,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       assert.equal(config.appId, "com.vide.app");
       assert.equal(mac.entitlements, "/tmp/entitlements.mac.plist");
       assert.equal(mac.provisioningProfile, "/tmp/vide.provisionprofile");
-      assert.deepStrictEqual(mac.protocols, [
-        { name: "Vide", schemes: ["vide", "vide-dev"] },
-      ]);
+      assert.deepStrictEqual(mac.protocols, [{ name: "Vide", schemes: ["vide", "vide-dev"] }]);
     }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),
   );
 

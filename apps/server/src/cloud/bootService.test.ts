@@ -158,7 +158,9 @@ it("flags package-manager cache entry points as ephemeral", () => {
   assert.isTrue(
     BootService.isEphemeralCacheEntry("/home/theo/.bun/install/cache/vide@0.0.27/dist/bin.mjs"),
   );
-  assert.isFalse(BootService.isEphemeralCacheEntry("/usr/local/lib/node_modules/vide/dist/bin.mjs"));
+  assert.isFalse(
+    BootService.isEphemeralCacheEntry("/usr/local/lib/node_modules/vide/dist/bin.mjs"),
+  );
   assert.isFalse(
     BootService.isEphemeralCacheEntry(
       "/home/theo/dev/pnpm/dlx-tools/vide/node_modules/vide/dist/bin.mjs",

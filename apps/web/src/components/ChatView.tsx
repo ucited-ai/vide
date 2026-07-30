@@ -939,36 +939,50 @@ const PersistentThreadTerminalDrawer = memo(function PersistentThreadTerminalDra
   }
 
   return (
-    <div className={visible ? undefined : "hidden"}>
-      <ThreadTerminalDrawer
-        threadRef={threadRef}
-        threadId={threadId}
-        cwd={cwd}
-        worktreePath={effectiveWorktreePath}
-        runtimeEnv={runtimeEnv}
-        visible={visible}
-        height={terminalUiState.terminalHeight}
-        // Known-session order is MRU and changes on focus; persisted store order keeps sidebar labels stable.
-        terminalIds={terminalUiState.terminalIds}
-        activeTerminalId={terminalUiState.activeTerminalId}
-        terminalGroups={terminalUiState.terminalGroups}
-        activeTerminalGroupId={terminalUiState.activeTerminalGroupId}
-        focusRequestId={focusRequestId + localFocusRequestId + (visible ? 1 : 0)}
-        onSplitTerminal={splitTerminal}
-        onSplitTerminalVertical={splitTerminalVertical}
-        onNewTerminal={createNewTerminal}
-        splitShortcutLabel={visible ? splitShortcutLabel : undefined}
-        splitVerticalShortcutLabel={visible ? splitVerticalShortcutLabel : undefined}
-        newShortcutLabel={visible ? newShortcutLabel : undefined}
-        closeShortcutLabel={visible ? closeShortcutLabel : undefined}
-        keybindings={keybindings}
-        onActiveTerminalChange={activateTerminal}
-        onCloseTerminal={closeTerminal}
-        onHeightChange={setTerminalHeight}
-        onAddTerminalContext={handleAddTerminalContext}
-        terminalLabelsById={terminalLabelsById}
-        terminalLaunchLocationsById={terminalLaunchLocationsById}
-      />
+    /*
+     * `hidden` is display:none, which no transition can touch — so the drawer
+     * used to appear and vanish in a single frame while the left sidebar glided.
+     * A grid row easing between 0fr and 1fr rolls it instead, and needs no pixel
+     * height: the drawer keeps owning its own, and the row simply reveals it.
+     * Collapsed it is inert, so Tab cannot walk into a terminal nobody can see.
+     */
+    <div
+      className="grid transition-[grid-template-rows] duration-(--duration-base) ease-(--ease-soft) motion-reduce:transition-none"
+      style={{ gridTemplateRows: visible ? "1fr" : "0fr" }}
+      data-terminal-drawer-open={visible ? "true" : "false"}
+      {...(visible ? {} : { inert: true })}
+    >
+      <div className="min-h-0 overflow-hidden">
+        <ThreadTerminalDrawer
+          threadRef={threadRef}
+          threadId={threadId}
+          cwd={cwd}
+          worktreePath={effectiveWorktreePath}
+          runtimeEnv={runtimeEnv}
+          visible={visible}
+          height={terminalUiState.terminalHeight}
+          // Known-session order is MRU and changes on focus; persisted store order keeps sidebar labels stable.
+          terminalIds={terminalUiState.terminalIds}
+          activeTerminalId={terminalUiState.activeTerminalId}
+          terminalGroups={terminalUiState.terminalGroups}
+          activeTerminalGroupId={terminalUiState.activeTerminalGroupId}
+          focusRequestId={focusRequestId + localFocusRequestId + (visible ? 1 : 0)}
+          onSplitTerminal={splitTerminal}
+          onSplitTerminalVertical={splitTerminalVertical}
+          onNewTerminal={createNewTerminal}
+          splitShortcutLabel={visible ? splitShortcutLabel : undefined}
+          splitVerticalShortcutLabel={visible ? splitVerticalShortcutLabel : undefined}
+          newShortcutLabel={visible ? newShortcutLabel : undefined}
+          closeShortcutLabel={visible ? closeShortcutLabel : undefined}
+          keybindings={keybindings}
+          onActiveTerminalChange={activateTerminal}
+          onCloseTerminal={closeTerminal}
+          onHeightChange={setTerminalHeight}
+          onAddTerminalContext={handleAddTerminalContext}
+          terminalLabelsById={terminalLabelsById}
+          terminalLaunchLocationsById={terminalLaunchLocationsById}
+        />
+      </div>
     </div>
   );
 });
@@ -5671,6 +5685,10 @@ function ChatViewContent(props: ChatViewProps) {
       <div
         className={cn(
           "flex min-h-0 min-w-0 flex-col overflow-x-hidden",
+          // Maximising eases the panel open on one side; without a matching
+          // transition here the chat column collapsed in a single frame, so half
+          // the movement glided and half of it snapped.
+          "transition-[flex-grow,width] duration-(--duration-base) ease-(--ease-soft)",
           rightPanelMaximized ? "w-0 flex-none" : "flex-1",
         )}
         data-chat-column-maximized-away={rightPanelMaximized ? "true" : "false"}
@@ -6025,9 +6043,16 @@ function ChatViewContent(props: ChatViewProps) {
         ))}
       </div>
 
-      {!shouldUsePlanSidebarSheet && rightPanelOpen && activeThreadRef ? (
+      {/*
+        Rendered whenever an inline panel is possible, not only while it is open.
+        Unmounting on close is what made this panel snap shut while the left
+        sidebar glided: there was nothing left to animate. The shell keeps its
+        width transition and collapses to zero instead.
+      */}
+      {!shouldUsePlanSidebarSheet && activeThreadRef ? (
         <RightPanelTabs
           mode="inline"
+          open={rightPanelOpen}
           maximized={rightPanelMaximized}
           surfaces={rightPanelState.surfaces}
           activeSurfaceId={activeRightPanelSurface?.id ?? null}

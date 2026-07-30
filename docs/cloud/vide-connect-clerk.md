@@ -109,9 +109,9 @@ stored PKCE token model.
 
 In **Clerk Dashboard > JWT templates**, create a template with:
 
-| Setting | Value                        |
-| ------- | ---------------------------- |
-| Name    | `vide-relay`                   |
+| Setting | Value                     |
+| ------- | ------------------------- |
+| Name    | `vide-relay`              |
 | Claims  | `{ "aud": "vide-relay" }` |
 
 Set `VIDE_CLERK_JWT_TEMPLATE=vide-relay` in the repository-root `.env`, and set

@@ -79,9 +79,7 @@ const serviceInstallCommand = Command.make("install", projectLocationFlags).pipe
       Effect.gen(function* () {
         const result = yield* reconcileService();
         if (!result.changed) {
-          yield* Console.log(
-            `Vide service is already installed with vide@${packageJson.version}.`,
-          );
+          yield* Console.log(`Vide service is already installed with vide@${packageJson.version}.`);
           return;
         }
         yield* Console.log(

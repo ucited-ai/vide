@@ -1,7 +1,4 @@
-import type {
-  DesktopSshEnvironmentBootstrap,
-  DesktopSshEnvironmentTarget,
-} from "@vide/contracts";
+import type { DesktopSshEnvironmentBootstrap, DesktopSshEnvironmentTarget } from "@vide/contracts";
 import {
   describeReadinessCause,
   waitForHttpReady as waitForHttpReadyShared,

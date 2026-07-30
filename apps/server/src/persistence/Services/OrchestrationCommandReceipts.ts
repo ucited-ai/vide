@@ -68,4 +68,6 @@ export interface OrchestrationCommandReceiptRepositoryShape {
 export class OrchestrationCommandReceiptRepository extends Context.Service<
   OrchestrationCommandReceiptRepository,
   OrchestrationCommandReceiptRepositoryShape
->()("vide/persistence/Services/OrchestrationCommandReceipts/OrchestrationCommandReceiptRepository") {}
+>()(
+  "vide/persistence/Services/OrchestrationCommandReceipts/OrchestrationCommandReceiptRepository",
+) {}

@@ -5,12 +5,7 @@ import baseConfig from "../../vite.config.ts";
 import { loadRepoEnv } from "../../scripts/lib/public-config.ts";
 import packageJson from "./package.json" with { type: "json" };
 
-const bundledPackagePrefixes = [
-  "@pierre/diffs",
-  "@vide/",
-  "effect-acp",
-  "effect-codex-app-server",
-];
+const bundledPackagePrefixes = ["@pierre/diffs", "@vide/", "effect-acp", "effect-codex-app-server"];
 
 export function shouldBundleCliDependency(id: string): boolean {
   return bundledPackagePrefixes.some((prefix) => id.startsWith(prefix));

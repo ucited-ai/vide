@@ -94,9 +94,7 @@ const EnvServerConfig = Config.all({
     Config.option,
     Config.map(Option.getOrUndefined),
   ),
-  otlpExportIntervalMs: Config.int("VIDE_OTLP_EXPORT_INTERVAL_MS").pipe(
-    Config.withDefault(10_000),
-  ),
+  otlpExportIntervalMs: Config.int("VIDE_OTLP_EXPORT_INTERVAL_MS").pipe(Config.withDefault(10_000)),
   otlpServiceName: Config.string("VIDE_OTLP_SERVICE_NAME").pipe(Config.withDefault("vide-server")),
   mode: Config.schema(ServerConfig.RuntimeMode, "VIDE_MODE").pipe(
     Config.option,

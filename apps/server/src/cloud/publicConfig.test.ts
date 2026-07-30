@@ -57,9 +57,7 @@ it.effect("normalizes the hosted app URL to an absolute origin", () =>
       "https://nightly.app.vide.local",
     );
     assert.equal(
-      yield* hostedAppUrlConfig.pipe(
-        provideEnv({ VIDE_HOSTED_APP_URL: "http://localhost:5733" }),
-      ),
+      yield* hostedAppUrlConfig.pipe(provideEnv({ VIDE_HOSTED_APP_URL: "http://localhost:5733" })),
       "http://localhost:5733",
     );
   }),
