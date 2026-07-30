@@ -358,8 +358,8 @@
       "since": "2026-08-01",
       "count": 1
     },
-    "raw-color:apps/web/src/lib/stashImageCompression.ts:#ffffff": {
-      "since": "2026-08-01",
+    "raw-color:apps/web/src/lib/imageCompression.ts:#ffffff": {
+      "since": "2026-08-04",
       "count": 1
     },
     "raw-color:apps/web/src/pierre-icons.ts:#007acc": {
