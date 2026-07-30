@@ -310,23 +310,6 @@
 }
 
 /*
- * One curve and one duration for every Base UI popup in the app.
- *
- * Base UI stamps data-open / data-closed on menus, popovers, tooltips, selects,
- * and dialogs, and already ships the scale/opacity keyframes via
- * data-starting-style and data-ending-style. What it does not do is agree on
- * timing, so each surface settled at its own rate. Binding the shared scale here
- * tunes all of them from one place instead of per component.
- */
-:root:root:root [data-open],
-:root:root:root [data-closed],
-:root:root:root [data-starting-style],
-:root:root:root [data-ending-style] {
-  transition-duration: var(--duration-drop);
-  transition-timing-function: var(--ease-drop);
-}
-
-/*
  * Popups unfold from the edge they are anchored to.
  *
  * An earlier revision scaled the whole surface from 0.97/0.92 and cross-faded
@@ -476,10 +459,7 @@
     animation: none;
   }
 
-  :root:root:root [data-open],
-  :root:root:root [data-closed],
-  :root:root:root [data-starting-style],
-  :root:root:root [data-ending-style] {
+  :root:root:root [data-popup-surface] {
     transition-duration: 0ms;
   }
 
