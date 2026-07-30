@@ -411,13 +411,20 @@
    * The right panel animates its own width the same way the sidebar does
    * (see PreviewPanelShell), and reflows its tab labels and empty-state cards
    * across that transition for the same reason — squeezed at the start,
-   * unwrapping as the width arrives. Same fix, same asymmetric timing, keyed
-   * off data-preview-panel-open (set on the shell's root) instead of
-   * data-state.
+   * unwrapping as the width arrives. Same fix, same asymmetric idea, but the
+   * delay can't just copy the sidebar's 130ms: the sidebar's reflowing content
+   * is short row labels that stop wrapping well before the width animation
+   * finishes, so revealing at 130ms of a 220ms transition was already safe for
+   * it. The empty-state cards here (icon + label + description in a row) need
+   * close to the *final* width before they stop wrapping, so fading them in
+   * at 130ms just made the wrap visible at partial opacity instead of none —
+   * still the bug, just softer. Delaying the full width-transition duration
+   * means the reveal can only start once the width transition has actually
+   * finished, whatever its curve.
    */
   [data-preview-panel-open="true"] [data-slot="preview-panel-inner"] {
     opacity: 1;
-    transition: opacity var(--duration-fast) var(--ease-out) 130ms;
+    transition: opacity var(--duration-fast) var(--ease-out) var(--duration-base);
   }
 
   [data-preview-panel-open="false"] [data-slot="preview-panel-inner"] {
@@ -428,15 +435,15 @@
 
 @media (prefers-reduced-motion: reduce) {
   .vide-fade-in,
-  .vide-slide-in-left,
-  .vide-slide-in-up,
   :root:root:root [data-popup-surface] {
     transition-duration: 0ms;
   }
 
+  /* The panels animate by transitioning width and grid rows now, not by
+     keyframes, so this is what actually has to be silenced. */
   :root:root:root [data-preview-panel-mode="inline"],
-  :root:root:root [data-terminal-owner="drawer"] {
-    animation: none;
+  :root:root:root [data-terminal-drawer-open] {
+    transition-duration: 0ms;
   }
 
   :root:root:root [data-slot="sidebar-inner"],
