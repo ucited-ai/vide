@@ -221,6 +221,38 @@
   color: var(--ink-tertiary);
 }
 
+/* -------------------------------------------------------- the transcript */
+
+/*
+ * The transcript ends where the composer starts.
+ *
+ * The composer is an overlay: its own box is opaque, but the strip to either
+ * side of it is not, so scrolling text used to keep painting through that gap
+ * and slide behind the input. Masking the viewport cuts the content off at the
+ * composer's top edge instead.
+ *
+ * A short fade rather than a hard cut, so a line leaving the viewport dissolves
+ * instead of being sliced through the middle of its letterforms. The inset is
+ * the composer's measured height, set as a variable by MessagesTimeline, so the
+ * cut follows the input as it grows.
+ */
+:root:root:root .chat-timeline-viewport {
+  --chat-timeline-fade: 1.5rem;
+
+  mask-image: linear-gradient(
+    to bottom,
+    #000 0,
+    #000 calc(100% - var(--chat-timeline-end-inset, 0px) - var(--chat-timeline-fade)),
+    transparent calc(100% - var(--chat-timeline-end-inset, 0px))
+  );
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    #000 0,
+    #000 calc(100% - var(--chat-timeline-end-inset, 0px) - var(--chat-timeline-fade)),
+    transparent calc(100% - var(--chat-timeline-end-inset, 0px))
+  );
+}
+
 /* ------------------------------------------------------------- the composer */
 
 /*

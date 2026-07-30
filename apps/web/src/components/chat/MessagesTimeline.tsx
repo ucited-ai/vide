@@ -22,6 +22,7 @@ import {
   type ReactNode,
 } from "react";
 import { flushSync } from "react-dom";
+import type { CSSProperties } from "react";
 import { LegendList, type LegendListRef } from "@legendapp/list/react";
 import { FileDiff } from "@pierre/diffs/react";
 import {
@@ -484,7 +485,18 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   return (
     <TimelineRowCtx value={sharedState}>
       <TimelineRowActivityCtx value={activityState}>
-        <div ref={setTimelineViewportElement} className="relative h-full min-h-0">
+        {/*
+          The transcript is clipped where the composer begins. Without this it
+          keeps painting underneath it: the composer's own box is opaque, but the
+          strip either side of it is not, so scrolling text slid through the gap.
+          `contentInsetEndAdjustment` is the composer's measured height, so the
+          mask tracks it as the input grows.
+        */}
+        <div
+          ref={setTimelineViewportElement}
+          className="chat-timeline-viewport relative h-full min-h-0"
+          style={{ "--chat-timeline-end-inset": `${contentInsetEndAdjustment}px` } as CSSProperties}
+        >
           <LegendList<MessagesTimelineRow>
             ref={listRef}
             data={rows}
