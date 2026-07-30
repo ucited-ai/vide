@@ -67,12 +67,11 @@
    */
   --ease-out: cubic-bezier(0.22, 0.61, 0.36, 1); /* small state changes */
   --ease-soft: cubic-bezier(0.16, 1, 0.3, 1); /* panels, sidebar, drawers */
-  --ease-drop: cubic-bezier(0.19, 1, 0.22, 1); /* popups: softest settle */
   --ease-in-out: cubic-bezier(0.45, 0, 0.25, 1);
 
   --duration-fast: 120ms;
   --duration-base: 220ms;
-  --duration-drop: 260ms;
+  --duration-popup: 150ms;
   --duration-slow: 340ms;
 
   /*
@@ -310,40 +309,39 @@
 }
 
 /*
- * Popups unfold from the edge they are anchored to.
+ * Popups grow out of the edge they are anchored to.
  *
- * An earlier revision scaled the whole surface from 0.97/0.92 and cross-faded
- * its content on a delay. Both were wrong. Scaling a rectangle down and back up
- * is a zoom, not an unfold — at 3% it barely reads, and the eye registers only
- * the abrupt appearance. And fading the content separately meant the text
- * arrived after the box, which looks like lag rather than polish.
+ * Two earlier attempts overshot in opposite directions. A 3% scale of the whole
+ * surface was invisible, so all the eye caught was the sudden appearance. Then a
+ * 45% scale on one axis was far too much: at that depth the text inside stretches
+ * and springs back, which reads as a wobble rather than a panel opening.
  *
- * Instead the surface grows along ONE axis from its anchor, at full opacity
- * from the first frame, and its content simply comes with it. Base UI sets
- * --transform-origin to the anchored edge, so scaleY against that origin reads
- * as the panel unrolling out of its trigger. There is no fade at all.
+ * A small scale against the anchored edge is enough. Base UI puts
+ * --transform-origin on that edge, so even 6% reads as growth from the trigger
+ * rather than a zoom, and nothing inside visibly deforms. Short, because a menu
+ * is a response to a click and any wait at all feels like lag.
+ *
+ * No fade: the surface is fully opaque from the first frame.
  */
 :root:root:root [data-popup-surface] {
   transform-origin: var(--transform-origin, center);
   transition-property: transform;
-  transition-duration: var(--duration-drop);
-  transition-timing-function: var(--ease-drop);
+  transition-duration: var(--duration-popup);
+  transition-timing-function: var(--ease-out);
 }
 
 :root:root:root [data-popup-surface][data-starting-style],
 :root:root:root [data-popup-surface][data-ending-style] {
-  transform: scaleY(0.55);
+  transform: scaleY(0.94);
 }
 
-/*
- * Side-anchored surfaces unroll horizontally instead. A submenu that grew
- * vertically would contradict the direction it just travelled in.
- */
+/* Side-anchored surfaces grow sideways: a submenu that expanded vertically
+   would contradict the direction it just came from. */
 :root:root:root [data-popup-surface][data-side="left"][data-starting-style],
 :root:root:root [data-popup-surface][data-side="left"][data-ending-style],
 :root:root:root [data-popup-surface][data-side="right"][data-starting-style],
 :root:root:root [data-popup-surface][data-side="right"][data-ending-style] {
-  transform: scaleX(0.55);
+  transform: scaleX(0.94);
 }
 
 /*

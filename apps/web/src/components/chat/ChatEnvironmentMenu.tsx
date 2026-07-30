@@ -3,7 +3,6 @@ import type { EnvironmentId, ThreadId, VcsRef } from "@vide/contracts";
 import {
   BoxIcon,
   CheckIcon,
-  ChevronDownIcon,
   CloudUploadIcon,
   FileDiffIcon,
   FolderGit2Icon,
@@ -162,18 +161,27 @@ function EnvironmentBranchSubmenu({
     );
   }
 
-  return refs.map((refName) => (
-    <MenuItem key={refName.name} onClick={() => onSelectBranch(refName)}>
-      <span className="min-w-0 flex-1 truncate">{refName.name}</span>
-      {refName.name === activeBranch ? (
-        <CheckIcon aria-hidden className="ms-auto size-3.5 shrink-0" />
-      ) : refName.isRemote || refName.isDefault ? (
-        <span className="ms-auto shrink-0 text-(length:--text-caption) text-muted-foreground">
-          {refName.isRemote ? "remote" : "default"}
-        </span>
-      ) : null}
-    </MenuItem>
-  ));
+  /*
+   * Ten rows, then scroll. Rendering every ref made this submenu taller than the
+   * window on any repo with real history, which is the one shape a menu must
+   * never take. The branch picker above the composer caps the same way.
+   */
+  return (
+    <div className="max-h-[calc(10*var(--popup-item-height))] overflow-y-auto overscroll-contain">
+      {refs.map((refName) => (
+        <MenuItem key={refName.name} onClick={() => onSelectBranch(refName)}>
+          <span className="min-w-0 flex-1 truncate">{refName.name}</span>
+          {refName.name === activeBranch ? (
+            <CheckIcon aria-hidden className="ms-auto size-3.5 shrink-0" />
+          ) : refName.isRemote || refName.isDefault ? (
+            <span className="ms-auto shrink-0 text-(length:--text-caption) text-muted-foreground">
+              {refName.isRemote ? "remote" : "default"}
+            </span>
+          ) : null}
+        </MenuItem>
+      ))}
+    </div>
+  );
 }
 
 /**
@@ -247,12 +255,16 @@ export const ChatEnvironmentMenu = memo(function ChatEnvironmentMenu({
           }
         }}
       >
-        <MenuTrigger render={<Button aria-label="Environment" size="xs" variant="outline" />}>
-          <BoxIcon aria-hidden="true" className="size-3.5" />
-          <span className="sr-only @3xl/header-actions:not-sr-only @3xl/header-actions:ml-0.5">
-            Environment
-          </span>
-          <ChevronDownIcon aria-hidden="true" className="size-3.5 opacity-60" />
+        {/*
+          Icon only. The label spelled out what the icon already says, and the
+          chevron restated what opening the menu demonstrates — two words and a
+          glyph of chrome for a control that needs none. The accessible name
+          carries the meaning instead.
+        */}
+        <MenuTrigger
+          render={<Button aria-label="Environment overview" size="icon-sm" variant="ghost" />}
+        >
+          <BoxIcon aria-hidden="true" className="size-4" />
         </MenuTrigger>
         <MenuPopup align="end" className="w-72">
           <MenuGroup>
