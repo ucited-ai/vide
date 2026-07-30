@@ -14,9 +14,9 @@ import {
   getProviderOptionDescriptors,
   isClaudeUltrathinkPrompt,
 } from "@vide/shared/model";
-import { memo, useCallback, useState } from "react";
+import { memo, type ReactNode, useCallback, useState } from "react";
 import type { VariantProps } from "class-variance-authority";
-import { ChevronDownIcon, ZapIcon } from "lucide-react";
+import { CheckIcon, ChevronDownIcon, ZapIcon } from "lucide-react";
 import { Button, buttonVariants } from "../ui/button";
 import {
   Menu,
@@ -46,6 +46,9 @@ type TraitsPersistence =
     };
 
 const ULTRATHINK_PROMPT_PREFIX = "Ultrathink:\n";
+
+const ULTRATHINK_BODY_TEXT_HINT =
+  'Your prompt contains "ultrathink" in the text. Remove it to change this option.';
 
 function DefaultBadge() {
   return (
@@ -220,7 +223,19 @@ export interface TraitsMenuContentProps {
   triggerClassName?: string;
 }
 
-export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
+export type TraitsControlProps = TraitsMenuContentProps & TraitsPersistence;
+
+/**
+ * Everything a traits control *does*, with nothing about how it looks: which
+ * descriptors are visible, what each one currently reads, and what choosing a
+ * value writes back.
+ *
+ * Split out from the menu so the same behaviour can render two ways. The menu
+ * variant needs a Base UI `Menu` ancestor, and nesting one inside the model
+ * picker's popover made selecting an effort tear that popover down — so the
+ * picker gets the inline variant, which is plain buttons and closes nothing.
+ */
+function useTraitsControl({
   provider,
   instanceId,
   models,
@@ -230,7 +245,7 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
   modelOptions,
   allowPromptInjectedEffort = true,
   ...persistence
-}: TraitsMenuContentProps & TraitsPersistence) {
+}: TraitsControlProps) {
   const setProviderModelOptions = useComposerDraftStore((store) => store.setProviderModelOptions);
   const updateModelOptions = useCallback(
     (nextOptions: ProviderOptions | undefined) => {
@@ -270,6 +285,21 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
     updateModelOptions(buildProviderOptionSelectionsFromDescriptors(nextDescriptors));
   };
 
+  /**
+   * The prompt owns this descriptor for as long as "ultrathink" sits in the
+   * body text, so the control shows the state but refuses to write it.
+   */
+  const isSelectLocked = (
+    descriptor: Extract<ProviderOptionDescriptor, { type: "select" }>,
+  ): boolean => ultrathinkInBodyText && descriptor.id === primarySelectDescriptor?.id;
+
+  const getSelectValue = (
+    descriptor: Extract<ProviderOptionDescriptor, { type: "select" }>,
+  ): string =>
+    ultrathinkPromptControlled && descriptor.id === primarySelectDescriptor?.id
+      ? "ultrathink"
+      : (getDescriptorStringValue(descriptor) ?? "");
+
   const handleSelectChange = (
     descriptor: Extract<ProviderOptionDescriptor, { type: "select" }>,
     value: string,
@@ -291,6 +321,35 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
     updateDescriptors(replaceDescriptorCurrentValue(descriptors, descriptor.id, value));
   };
 
+  const handleBooleanChange = (
+    descriptor: Extract<ProviderOptionDescriptor, { type: "boolean" }>,
+    enabled: boolean,
+  ) => {
+    updateDescriptors(replaceDescriptorCurrentValue(descriptors, descriptor.id, enabled));
+  };
+
+  return {
+    hasAnyControls,
+    selectDescriptors,
+    booleanDescriptors,
+    getSelectValue,
+    isSelectLocked,
+    handleSelectChange,
+    handleBooleanChange,
+  };
+}
+
+export const TraitsMenuContent = memo(function TraitsMenuContentImpl(props: TraitsControlProps) {
+  const {
+    hasAnyControls,
+    selectDescriptors,
+    booleanDescriptors,
+    getSelectValue,
+    isSelectLocked,
+    handleSelectChange,
+    handleBooleanChange,
+  } = useTraitsControl(props);
+
   if (!hasAnyControls) {
     return null;
   }
@@ -298,10 +357,8 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
   return (
     <>
       {selectDescriptors.map((descriptor, index) => {
-        const selectedValue =
-          ultrathinkPromptControlled && descriptor.id === primarySelectDescriptor?.id
-            ? "ultrathink"
-            : (getDescriptorStringValue(descriptor) ?? "");
+        const isLocked = isSelectLocked(descriptor);
+        const selectedValue = getSelectValue(descriptor);
 
         return (
           <div key={descriptor.id}>
@@ -310,10 +367,9 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
               <div className="px-2 pt-1.5 pb-1 font-medium text-muted-foreground text-xs">
                 {descriptor.label}
               </div>
-              {ultrathinkInBodyText && descriptor.id === primarySelectDescriptor?.id ? (
+              {isLocked ? (
                 <div className="px-2 pb-1.5 text-muted-foreground/80 text-xs">
-                  Your prompt contains &quot;ultrathink&quot; in the text. Remove it to change this
-                  option.
+                  {ULTRATHINK_BODY_TEXT_HINT}
                 </div>
               ) : null}
               <MenuRadioGroup
@@ -325,7 +381,7 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
                     key={option.id}
                     value={option.id}
                     hideIndicator
-                    disabled={ultrathinkInBodyText && descriptor.id === primarySelectDescriptor?.id}
+                    disabled={isLocked}
                   >
                     <span className="flex w-full min-w-0 items-center justify-between gap-3">
                       <span className="min-w-0 truncate">
@@ -357,11 +413,7 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
               </div>
               <MenuRadioGroup
                 value={selectedValue}
-                onValueChange={(value) => {
-                  updateDescriptors(
-                    replaceDescriptorCurrentValue(descriptors, descriptor.id, value === "on"),
-                  );
-                }}
+                onValueChange={(value) => handleBooleanChange(descriptor, value === "on")}
               >
                 {(["on", "off"] as const).map((value) => (
                   <MenuRadioItem key={value} value={value} hideIndicator>
@@ -376,6 +428,138 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
         );
       })}
     </>
+  );
+});
+
+/** One descriptor: its name, then its choices, wrapping when they run out of room. */
+function TraitsInlineRow(props: { label: string; hint?: string | null; children: ReactNode }) {
+  return (
+    <div className="flex w-full min-w-0 flex-col gap-0.5">
+      <div className="flex w-full min-w-0 items-center gap-(--popup-item-gap)">
+        <span className="shrink-0 font-medium text-(length:--text-caption) text-muted-foreground">
+          {props.label}
+        </span>
+        <div
+          role="group"
+          aria-label={props.label}
+          className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-0.5"
+        >
+          {props.children}
+        </div>
+      </div>
+      {props.hint ? (
+        <span className="text-(length:--text-caption) text-muted-foreground/80">{props.hint}</span>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * One choice. The check slot is always present so picking a different value
+ * moves the wash rather than reflowing the row.
+ */
+function TraitsInlineOption(props: {
+  label: string;
+  isSelected: boolean;
+  isDefault?: boolean;
+  isDisabled?: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={props.isSelected}
+      disabled={props.isDisabled ?? false}
+      {...(props.isDefault ? { title: `${props.label} (default)` } : {})}
+      // The popup's keyboard navigation lives in its search field. Keeping the
+      // press from moving focus leaves the model list arrow-navigable while the
+      // trait is being changed.
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={props.onSelect}
+      className={cn(
+        "inline-flex h-(--popup-item-height) min-w-0 cursor-default items-center gap-1.5 rounded-sm px-(--popup-item-padding-inline) text-(length:--text-ui) outline-none transition-colors",
+        props.isSelected
+          ? "bg-(--wash-selected) text-foreground"
+          : "text-muted-foreground hover:bg-(--wash-hover) hover:text-foreground",
+        props.isDisabled ? "pointer-events-none opacity-64" : "",
+      )}
+    >
+      <span className="min-w-0 truncate">{props.label}</span>
+      <CheckIcon
+        aria-hidden="true"
+        className={cn("size-3 shrink-0", props.isSelected ? "opacity-100" : "opacity-0")}
+      />
+    </button>
+  );
+}
+
+/**
+ * The traits controls as plain rows, for docking inside another popup.
+ *
+ * Same behaviour as {@link TraitsMenuContent}, no Base UI menu primitives —
+ * which is the whole point: a menu nested in a popover dismisses that popover
+ * the moment a value is chosen, and effort is meant to be adjustable without
+ * losing the model list.
+ */
+export const TraitsInlineContent = memo(function TraitsInlineContentImpl(
+  props: TraitsControlProps,
+) {
+  const {
+    hasAnyControls,
+    selectDescriptors,
+    booleanDescriptors,
+    getSelectValue,
+    isSelectLocked,
+    handleSelectChange,
+    handleBooleanChange,
+  } = useTraitsControl(props);
+
+  if (!hasAnyControls) {
+    return null;
+  }
+
+  return (
+    <div className="flex w-full min-w-0 flex-col gap-1">
+      {selectDescriptors.map((descriptor) => {
+        const isLocked = isSelectLocked(descriptor);
+        const selectedValue = getSelectValue(descriptor);
+
+        return (
+          <TraitsInlineRow
+            key={descriptor.id}
+            label={descriptor.label}
+            hint={isLocked ? ULTRATHINK_BODY_TEXT_HINT : null}
+          >
+            {descriptor.options.map((option) => (
+              <TraitsInlineOption
+                key={option.id}
+                label={option.label}
+                isSelected={option.id === selectedValue}
+                isDefault={option.isDefault === true}
+                isDisabled={isLocked}
+                onSelect={() => handleSelectChange(descriptor, option.id)}
+              />
+            ))}
+          </TraitsInlineRow>
+        );
+      })}
+      {booleanDescriptors.map((descriptor) => {
+        const selectedValue = descriptor.currentValue === true ? "on" : "off";
+
+        return (
+          <TraitsInlineRow key={descriptor.id} label={descriptor.label}>
+            {(["on", "off"] as const).map((value) => (
+              <TraitsInlineOption
+                key={value}
+                label={value === "on" ? "On" : "Off"}
+                isSelected={selectedValue === value}
+                onSelect={() => handleBooleanChange(descriptor, value === "on")}
+              />
+            ))}
+          </TraitsInlineRow>
+        );
+      })}
+    </div>
   );
 });
 

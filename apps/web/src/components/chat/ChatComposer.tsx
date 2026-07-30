@@ -100,7 +100,7 @@ import {
   getComposerPromptInjectionState,
   getComposerProviderState,
   getProviderTraitsQualifier,
-  renderProviderTraitsPicker,
+  renderProviderTraitsInlineContent,
 } from "./composerProviderState";
 import { ContextWindowMeter } from "./ContextWindowMeter";
 import { buildExpandedImagePreview, type ExpandedImagePreview } from "./ExpandedImagePreview";
@@ -1236,7 +1236,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     prompt,
     onPromptChange: setPromptFromTraits,
   };
-  const providerTraitsPicker = renderProviderTraitsPicker(providerTraitsInput);
+  const providerTraitsControls = renderProviderTraitsInlineContent(providerTraitsInput);
   const providerTraitsQualifier = getProviderTraitsQualifier(providerTraitsInput);
   const pendingPrimaryAction = useMemo(
     () =>
@@ -3150,7 +3150,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     terminalOpen={terminalOpen}
                     triggerClassName={COMPOSER_MODEL_TRIGGER_CLASS_NAME}
                     qualifier={providerTraitsQualifier}
-                    {...(providerTraitsPicker ? { optionsFooter: providerTraitsPicker } : {})}
+                    {...(providerTraitsControls ? { optionsFooter: providerTraitsControls } : {})}
                     popupSide="top"
                     open={isComposerModelPickerOpen}
                     {...(composerProviderState.modelPickerIconClassName

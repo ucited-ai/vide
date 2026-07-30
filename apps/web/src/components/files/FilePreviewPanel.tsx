@@ -20,6 +20,7 @@ import { isBrowserPreviewFile, openFileInPreview } from "~/browser/openFileInPre
 import { useAssetUrlState } from "~/assets/assetUrls";
 import ChatMarkdown from "~/components/ChatMarkdown";
 import { OpenInPicker } from "~/components/chat/OpenInPicker";
+import { QUALIFIER_CLASS_NAME } from "~/components/chat/QualifiedLabel";
 import { useClientSettings } from "~/hooks/useSettings";
 import { useTheme } from "~/hooks/useTheme";
 import { getLocalStorageItem, setLocalStorageItem } from "~/hooks/useLocalStorage";
@@ -81,7 +82,35 @@ interface FilePreviewPanelProps {
 const FILE_EXPLORER_STORAGE_KEY = "vide.fileExplorerOpen";
 const FILE_SAVE_DEBOUNCE_MS = 500;
 const FILE_LINK_REVEAL_ATTRIBUTE = "data-file-link-reveal";
-const FILE_LINK_REVEAL_UNSAFE_CSS = `
+
+/*
+ * The scrolling viewport, in three parts, because Pierre's virtualizer wraps
+ * whatever it is given in a bare div of its own. That wrapper is the
+ * containing block a percentage height inside it resolves against, and it is
+ * sized by its content — so a file told to fill the pane filled nothing at
+ * all, and the surface ended wherever the code ended. Stretching the wrapper
+ * first is what lets the file grow into the space below the last line.
+ */
+const FILE_VIEWPORT_CLASS = "file-preview-virtualizer min-h-0 flex-1 overflow-auto";
+const FILE_VIEWPORT_CONTENT_CLASS = "flex min-h-full flex-col";
+const FILE_VIEWPORT_CONFIG = { overscrollSize: 600, intersectionObserverMargin: 1200 };
+
+/** Anything that occupies the pane on its own: a spinner, an error, a message. */
+const FILE_PANE_NOTICE_CLASS = "flex min-h-0 flex-1 items-center justify-center";
+
+const FILE_UNSAFE_CSS = `
+  /*
+   * Pierre paints the code surface from the syntax theme, which is #0a0a0a in
+   * dark and #ffffff in light — off the app's ladder in both modes, and the
+   * darkest thing in the window by some margin. Repainting the host puts the
+   * code on the same floor as the pane around it, which is also what closes
+   * the seam under a file that ends short of the fold.
+   */
+  :host {
+    --diffs-bg: var(--surface-content);
+    background-color: var(--surface-content);
+  }
+
   [${FILE_LINK_REVEAL_ATTRIBUTE}][data-line] {
     background-color: light-dark(
       color-mix(
@@ -130,14 +159,19 @@ function WorkspaceImagePreview(props: {
 
   if (assetUrl._tag === "Failure" || (assetUrl._tag === "Success" && failedUrl === assetUrl.url)) {
     return (
-      <div className="flex min-h-0 flex-1 items-center justify-center px-6 text-center text-xs leading-relaxed text-destructive">
+      <div
+        className={cn(
+          FILE_PANE_NOTICE_CLASS,
+          "px-6 text-center text-(length:--text-ui) leading-relaxed text-destructive",
+        )}
+      >
         Unable to load workspace image.
       </div>
     );
   }
 
   return assetUrl._tag === "Success" ? (
-    <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto p-4">
+    <div className={cn(FILE_PANE_NOTICE_CLASS, "overflow-auto p-4")}>
       <img
         className="max-h-full max-w-full object-contain"
         src={assetUrl.url}
@@ -146,7 +180,7 @@ function WorkspaceImagePreview(props: {
       />
     </div>
   ) : (
-    <div className="flex min-h-0 flex-1 items-center justify-center text-muted-foreground">
+    <div className={cn(FILE_PANE_NOTICE_CLASS, "text-muted-foreground")}>
       <LoaderCircle className="size-5 animate-spin" />
     </div>
   );
@@ -539,11 +573,9 @@ function EditableFileSurface({
     <EditorProvider editor={editor}>
       <div ref={surfaceRef} className="flex min-h-0 flex-1">
         <Virtualizer
-          className="file-preview-virtualizer min-h-0 flex-1 overflow-auto"
-          config={{
-            overscrollSize: 600,
-            intersectionObserverMargin: 1200,
-          }}
+          className={FILE_VIEWPORT_CLASS}
+          contentClassName={FILE_VIEWPORT_CONTENT_CLASS}
+          config={FILE_VIEWPORT_CONFIG}
         >
           <File<FileCommentAnnotationGroup>
             file={{
@@ -561,7 +593,7 @@ function EditableFileSurface({
               overflow: wordWrap ? "wrap" : "scroll",
               theme: resolveDiffThemeName(resolvedTheme),
               themeType: resolvedTheme,
-              unsafeCSS: FILE_LINK_REVEAL_UNSAFE_CSS,
+              unsafeCSS: FILE_UNSAFE_CSS,
               onPostRender: handlePostRender,
             }}
             selectedLines={selectedRange}
@@ -581,7 +613,7 @@ function EditableFileSurface({
                 ))}
               </div>
             )}
-            className="min-h-full"
+            className="flex-auto"
             contentEditable
           />
         </Virtualizer>
@@ -745,7 +777,7 @@ export default function FilePreviewPanel({
             className="min-w-0 flex-1 rounded-none"
             data-file-breadcrumbs
           >
-            <div className="flex h-full w-max min-w-full items-center text-xs">
+            <div className="flex h-full w-max min-w-full items-center text-(length:--text-ui)">
               {breadcrumbs.map((crumb, index) => (
                 <div
                   key={crumb.path || "project"}
@@ -753,14 +785,14 @@ export default function FilePreviewPanel({
                   data-current-file-crumb={crumb.kind === "file"}
                 >
                   {index > 0 ? (
-                    <ChevronRight className="mx-1 size-3.5 shrink-0 text-muted-foreground/60" />
+                    <ChevronRight className={cn("mx-1 size-3.5 shrink-0", QUALIFIER_CLASS_NAME)} />
                   ) : null}
+                  {/* The trail only locates the file, so it recedes at the same
+                      step QualifiedLabel uses and the name alone carries ink. */}
                   <span
                     className={cn(
                       "max-w-40 truncate",
-                      crumb.kind === "file"
-                        ? "font-medium text-foreground"
-                        : "text-muted-foreground",
+                      crumb.kind === "file" ? "font-medium text-foreground" : QUALIFIER_CLASS_NAME,
                     )}
                     title={crumb.path || projectName}
                   >
@@ -847,7 +879,7 @@ export default function FilePreviewPanel({
         </div>
       ) : null}
       {relativePath && file.data?.truncated ? (
-        <div className="shrink-0 border-b border-amber-500/20 bg-amber-500/8 px-3 py-1.5 text-[11px] text-amber-700 dark:text-amber-300">
+        <div className="shrink-0 border-b border-border bg-(--wash-hover) px-3 py-1.5 text-(length:--text-caption) text-muted-foreground">
           Preview limited to the first 1 MB of a {file.data.byteLength.toLocaleString()} byte file.
         </div>
       ) : null}
@@ -867,11 +899,16 @@ export default function FilePreviewPanel({
               alt={relativePath}
             />
           ) : relativePath && file.error && file.data === null ? (
-            <div className="flex min-h-0 flex-1 items-center justify-center px-6 text-center text-xs leading-relaxed text-destructive">
+            <div
+              className={cn(
+                FILE_PANE_NOTICE_CLASS,
+                "px-6 text-center text-(length:--text-ui) leading-relaxed text-destructive",
+              )}
+            >
               {file.error}
             </div>
           ) : relativePath && file.data === null ? (
-            <div className="flex min-h-0 flex-1 items-center justify-center text-muted-foreground">
+            <div className={cn(FILE_PANE_NOTICE_CLASS, "text-muted-foreground")}>
               <LoaderCircle className="size-5 animate-spin" />
             </div>
           ) : relativePath && file.data ? (
@@ -887,11 +924,9 @@ export default function FilePreviewPanel({
             ) : file.data.truncated ? (
               <Virtualizer
                 key={`${relativePath}:${resolvedTheme}:${file.data.byteLength}`}
-                className="file-preview-virtualizer min-h-0 flex-1 overflow-auto"
-                config={{
-                  overscrollSize: 600,
-                  intersectionObserverMargin: 1200,
-                }}
+                className={FILE_VIEWPORT_CLASS}
+                contentClassName={FILE_VIEWPORT_CONTENT_CLASS}
+                config={FILE_VIEWPORT_CONFIG}
               >
                 <File
                   file={{
@@ -904,10 +939,10 @@ export default function FilePreviewPanel({
                     overflow: wordWrap ? "wrap" : "scroll",
                     theme: resolveDiffThemeName(resolvedTheme),
                     themeType: resolvedTheme,
-                    unsafeCSS: FILE_LINK_REVEAL_UNSAFE_CSS,
+                    unsafeCSS: FILE_UNSAFE_CSS,
                     onPostRender: onFilePostRender,
                   }}
-                  className="min-h-full"
+                  className="flex-auto"
                 />
               </Virtualizer>
             ) : (
@@ -928,12 +963,13 @@ export default function FilePreviewPanel({
           ) : null}
         </div>
         {explorerOpen || relativePath === null ? (
+          // The explorer is chrome sitting on the content floor rather than a
+          // second pane butted against it, so it gets a gutter instead of a
+          // divider and the pane's surface runs behind its rounded corners.
           <aside
             className={cn(
-              "flex min-h-0 shrink-0 bg-background",
-              relativePath
-                ? "w-[min(22rem,46%)] min-w-64 border-l border-border/60"
-                : "min-w-0 flex-1",
+              "flex min-h-0 shrink-0 p-1.5",
+              relativePath ? "w-[min(22rem,46%)] min-w-64" : "min-w-0 flex-1",
             )}
           >
             <FileBrowserPanel

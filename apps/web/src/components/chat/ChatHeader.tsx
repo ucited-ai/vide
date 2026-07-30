@@ -5,9 +5,8 @@ import {
   type ResolvedKeybindingsConfig,
   type ThreadId,
 } from "@vide/contracts";
-import { scopeThreadRef } from "@vide/client-runtime/environment";
 import { memo } from "react";
-import GitActionsControl from "../GitActionsControl";
+import { ChatEnvironmentMenu } from "./ChatEnvironmentMenu";
 import { type DraftId } from "~/composerDraftStore";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import ProjectScriptsControl, {
@@ -161,9 +160,10 @@ export const ChatHeader = memo(function ChatHeader({
           />
         )}
         {activeProjectName && (
-          <GitActionsControl
+          <ChatEnvironmentMenu
+            environmentId={activeThreadEnvironmentId}
+            threadId={activeThreadId}
             gitCwd={gitCwd}
-            activeThreadRef={scopeThreadRef(activeThreadEnvironmentId, activeThreadId)}
             {...(draftId ? { draftId } : {})}
           />
         )}

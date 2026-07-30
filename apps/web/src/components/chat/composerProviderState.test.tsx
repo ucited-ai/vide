@@ -8,9 +8,11 @@ import {
 import {
   getComposerPromptInjectionState,
   getComposerProviderState,
+  getProviderTraitsQualifier,
+  renderProviderTraitsInlineContent,
   renderProviderTraitsMenuContent,
-  renderProviderTraitsPicker,
 } from "./composerProviderState";
+import { DraftId } from "../../composerDraftStore";
 
 // Everything in composerProviderState is now data-driven by the model's
 // optionDescriptors, so these tests use a single synthetic provider/model and
@@ -241,8 +243,41 @@ describe("provider traits render guards", () => {
       prompt: "",
       onPromptChange: () => {},
     };
-
-    expect(renderProviderTraitsPicker(args)).toBeNull();
     expect(renderProviderTraitsMenuContent(args)).toBeNull();
+    expect(renderProviderTraitsInlineContent(args)).toBeNull();
+  });
+
+  // Effort is provider driven: a scale, a boolean, or nothing at all. The
+  // inline variant that the merged picker docks has to cover the same three
+  // shapes the menu variant does, with no per-provider branch.
+  it("renders the inline variant for every descriptor shape a model can declare", () => {
+    const withTarget = (descriptors: ReadonlyArray<ProviderOptionDescriptor>) => ({
+      provider: PROVIDER,
+      draftId: DraftId.make("draft-traits"),
+      model: MODEL,
+      models: modelWith(descriptors),
+      modelOptions: undefined,
+      prompt: "",
+      onPromptChange: () => {},
+    });
+
+    const scale = withTarget([
+      selectDescriptor("effort", [
+        { id: "high", label: "High", isDefault: true },
+        { id: "xhigh", label: "Extra High" },
+      ]),
+    ]);
+    const boolean = withTarget([booleanDescriptor("thinking")]);
+    const none = withTarget([]);
+
+    expect(renderProviderTraitsInlineContent(scale)).not.toBeNull();
+    expect(renderProviderTraitsInlineContent(boolean)).not.toBeNull();
+    expect(renderProviderTraitsInlineContent(none)).toBeNull();
+
+    // The trigger qualifier follows the same three shapes, and degrades to a
+    // bare model name when the model exposes nothing.
+    expect(getProviderTraitsQualifier(scale)).toBe("High");
+    expect(getProviderTraitsQualifier(boolean)).toBe("thinking Off");
+    expect(getProviderTraitsQualifier(none)).toBeNull();
   });
 });

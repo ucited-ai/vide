@@ -8,6 +8,7 @@ import { serializeComposerFileLink } from "@vide/shared/composerTrigger";
 import { RefreshCw, Search } from "lucide-react";
 import { useEffect, useMemo, useRef } from "react";
 
+import { QualifiedLabel } from "~/components/chat/QualifiedLabel";
 import { toastManager } from "~/components/ui/toast";
 import { useComposerHandleContext } from "~/composerHandleContext";
 import { writeTextToClipboard } from "~/hooks/useCopyToClipboard";
@@ -26,17 +27,68 @@ interface FileBrowserPanelProps {
   onOpenFile: (relativePath: string) => void;
 }
 
+/*
+ * The tree renders its rows in shadow DOM, so its surface, ink, spacing, and
+ * motion are only reachable through Pierre's override variables. Custom
+ * properties cross the shadow boundary, so every value below is a theme token
+ * rather than a colour of its own.
+ *
+ * Two of these names carry more than they look. Pierre calls the hover wash
+ * `--trees-bg-muted`, not `--trees-hover-bg`, so the hover override this file
+ * used to set named nothing and rows fell back to Pierre's default — a wash
+ * mixed from its blue accent. Overriding the accent itself then retires the
+ * remaining blue in one line, because the focus ring and the selected row's
+ * border both derive from it.
+ */
 const TREE_UNSAFE_CSS = `
   :host {
+    --trees-accent-override: var(--ink-tertiary);
+
     --trees-bg-override: transparent;
-    --trees-selected-bg-override: color-mix(in srgb, currentColor 12%, transparent);
-    --trees-hover-bg-override: color-mix(in srgb, currentColor 7%, transparent);
-    --trees-border-color-override: color-mix(in srgb, currentColor 14%, transparent);
+    --trees-bg-muted-override: var(--wash-hover);
+    --trees-selected-bg-override: var(--wash-selected);
+    --trees-selected-fg-override: var(--ink);
+    --trees-search-bg-override: var(--surface-raised-1);
+    --trees-search-fg-override: var(--ink);
+
+    --trees-fg-override: var(--ink);
+    --trees-fg-muted-override: var(--ink-tertiary);
+
+    --trees-border-color-override: var(--edge);
+    --trees-indent-guide-bg-override: var(--edge);
+    --trees-scrollbar-thumb-override: var(--edge-strong);
+
     --trees-font-family-override: var(--font-sans);
-    --trees-font-size-override: 12px;
+    --trees-font-size-override: var(--text-ui);
+    --trees-border-radius-override: var(--radius);
+
+    --trees-padding-inline-override: 0.5rem;
+    --trees-level-gap-override: 0.75rem;
   }
-  button[data-type='item'] { border-radius: 5px; }
+
+  /* A directory only locates the file beneath it, so it recedes and the file
+     name keeps primary ink — the same split QualifiedLabel makes in the
+     transcript, expressed where these rows actually live. Selecting a folder
+     brings it forward, because a selected row that stays muted reads as
+     disabled. */
+  [data-item-type='folder'] [data-item-section='content'] {
+    color: var(--ink-secondary);
+  }
+
+  [data-item-type='folder'][data-item-selected='true'] [data-item-section='content'] {
+    color: var(--trees-selected-fg);
+  }
+
+  [data-type='item'] {
+    transition:
+      background-color var(--duration-fast) var(--ease-out),
+      color var(--duration-fast) var(--ease-out);
+  }
 `;
+
+/** Header affordances read as chrome, so they only take ink and a wash on hover. */
+const HEADER_BUTTON_CLASS =
+  "shrink-0 rounded-(--radius) p-1.5 text-muted-foreground transition-colors duration-(--duration-fast) ease-(--ease-out) hover:bg-(--wash-hover) hover:text-foreground";
 
 function treePath(entry: ProjectEntry): string {
   return entry.kind === "directory" ? `${entry.path}/` : entry.path;
@@ -158,7 +210,9 @@ export default function FileBrowserPanel({
     // Rows only need to be draggable so entries can be dropped into the chat
     // composer; rearranging files inside the tree stays off.
     dragAndDrop: { canDrop: () => false },
-    density: "compact",
+    // 30px rows, the same height the sidebar gives its menu buttons. The tree
+    // is an index like the sidebar is, and both are scanned rather than read.
+    density: "default",
     fileTreeSearchMode: "hide-non-matches",
     flattenEmptyDirectories: true,
     initialExpansion: 1,
@@ -191,6 +245,12 @@ export default function FileBrowserPanel({
     () => entries.reduce((count, entry) => count + (entry.kind === "file" ? 1 : 0), 0),
     [entries],
   );
+  // What the project name is qualified by: how much of it there is, or that we
+  // are still counting.
+  const indexLabel =
+    entriesQuery.isPending && entriesQuery.data === null
+      ? "Indexing…"
+      : `${fileCount.toLocaleString()} files${entriesQuery.data?.truncated ? " · partial" : ""}`;
 
   // Tag tree drags with the composer mention payload. The row is read from
   // the composed event path (the tree's shadow root is open), so this does
@@ -220,22 +280,16 @@ export default function FileBrowserPanel({
   return (
     <div
       ref={panelRef}
-      className="flex min-h-0 flex-1 flex-col bg-background"
+      className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-(--radius) bg-(--surface-chrome)"
       data-file-browser-panel={`${environmentId}:${cwd}`}
     >
-      <div className="flex h-9 shrink-0 items-center gap-2 border-b border-border/60 px-3">
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-xs font-medium text-foreground">{projectName}</div>
-          <div className="truncate text-[10px] leading-none text-muted-foreground">
-            {entriesQuery.isPending && entriesQuery.data === null
-              ? "Indexing…"
-              : `${fileCount.toLocaleString()} files`}
-            {entriesQuery.data?.truncated ? " · partial" : ""}
-          </div>
+      <div className="surface-subheader gap-2 border-border bg-(--surface-chrome) px-3">
+        <div className="min-w-0 flex-1 truncate text-(length:--text-ui)">
+          <QualifiedLabel name={projectName} trail={indexLabel} separator=" · " />
         </div>
         <button
           type="button"
-          className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+          className={HEADER_BUTTON_CLASS}
           aria-label="Search workspace files"
           onClick={() => model.openSearch()}
         >
@@ -243,7 +297,7 @@ export default function FileBrowserPanel({
         </button>
         <button
           type="button"
-          className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+          className={HEADER_BUTTON_CLASS}
           aria-label="Refresh workspace files"
           onClick={entriesQuery.refresh}
         >
@@ -251,16 +305,15 @@ export default function FileBrowserPanel({
         </button>
       </div>
       {entriesQuery.error && entriesQuery.data === null ? (
-        <div className="p-4 text-xs leading-relaxed text-destructive">{entriesQuery.error}</div>
+        <div className="p-4 text-(length:--text-ui) leading-relaxed text-destructive">
+          {entriesQuery.error}
+        </div>
       ) : (
         <FileTree
           model={model}
           aria-label={`${projectName} files`}
           className="min-h-0 flex-1 overflow-hidden"
-          style={{
-            colorScheme: resolvedTheme,
-            ["--trees-fg-override" as string]: "var(--foreground)",
-          }}
+          style={{ colorScheme: resolvedTheme }}
         />
       )}
     </div>

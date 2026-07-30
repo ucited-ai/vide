@@ -18,6 +18,7 @@ import { getProviderModelCapabilities } from "../../providerModels";
 import {
   getTraitsTriggerLabel,
   shouldRenderTraitsControls,
+  TraitsInlineContent,
   TraitsMenuContent,
   TraitsPicker,
 } from "./TraitsPicker";
@@ -86,7 +87,7 @@ export function getComposerProviderState(input: ComposerProviderStateInput): Com
 }
 
 function renderTraitsControl(
-  Component: typeof TraitsMenuContent | typeof TraitsPicker,
+  Component: typeof TraitsInlineContent | typeof TraitsMenuContent | typeof TraitsPicker,
   input: TraitsRenderInput,
 ): ReactNode {
   const {
@@ -126,8 +127,13 @@ export function renderProviderTraitsMenuContent(input: TraitsRenderInput): React
   return renderTraitsControl(TraitsMenuContent, input);
 }
 
-export function renderProviderTraitsPicker(input: TraitsRenderInput): ReactNode {
-  return renderTraitsControl(TraitsPicker, input);
+/**
+ * The traits controls for the merged model picker, which docks them under its
+ * own list. Menu primitives can't be used there — a menu nested inside the
+ * picker's popover closes it on select — so this variant renders plain rows.
+ */
+export function renderProviderTraitsInlineContent(input: TraitsRenderInput): ReactNode {
+  return renderTraitsControl(TraitsInlineContent, input);
 }
 
 /**

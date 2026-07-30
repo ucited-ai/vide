@@ -17,7 +17,7 @@ import {
 import { cn } from "~/lib/utils";
 import { DiffStatLabel, hasNonZeroStat } from "./DiffStatLabel";
 import { PierreEntryIcon } from "./PierreEntryIcon";
-import { QualifiedLabel } from "./QualifiedLabel";
+import { QUALIFIER_CLASS_NAME, QualifiedLabel } from "./QualifiedLabel";
 import { Button } from "../ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import {
@@ -27,6 +27,27 @@ import {
 } from "./changedFilesPresentation";
 
 const EMPTY_DIRECTORY_OVERRIDES: Record<string, boolean> = {};
+
+/**
+ * The card is chrome laid on the transcript's floor, so it is opaque in both
+ * modes and its sticky header can reuse the same surface to occlude the rows
+ * passing under it.
+ */
+const CARD_SURFACE_CLASS = "bg-(--surface-chrome)";
+
+/**
+ * One row, whether it names a directory or a file: the same height, the same
+ * radius, and one wash on hover so a long list reads as an even column.
+ */
+const TREE_ROW_CLASS =
+  "group flex w-full items-center gap-1.5 rounded-(--radius) py-1 pr-3 text-left text-(length:--text-ui) transition-colors duration-(--duration-fast) ease-(--ease-out) hover:bg-(--wash-hover) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+
+/** Counts stay monospaced and tabular so the column of stats does not jitter. */
+const TREE_ROW_STAT_CLASS = "ml-auto shrink-0 font-mono text-(length:--text-caption) tabular-nums";
+
+/** The row's own inset, then one even step per level of nesting. */
+const TREE_ROW_INSET_PX = 8;
+const TREE_ROW_INDENT_PX = 12;
 
 export const ChangedFilesCard = memo(function ChangedFilesCard(props: {
   turnId: TurnId;
@@ -57,46 +78,45 @@ export const ChangedFilesCard = memo(function ChangedFilesCard(props: {
 
   return (
     <div
-      className="mt-4 rounded-2xl border border-border/70 bg-secondary p-2 dark:border-transparent dark:bg-input/32"
+      className={cn("mt-4 rounded-2xl border border-border p-2", CARD_SURFACE_CLASS)}
       data-changed-files-state={
         expanded ? "expanded" : compactPreviewVisible ? "preview" : "collapsed"
       }
     >
       <div
         className={cn(
-          "flex items-center justify-between gap-2 rounded-xl px-1",
-          expanded &&
-            "sticky top-2 z-10 mb-2 bg-secondary dark:bg-[color-mix(in_srgb,var(--foreground)_2.5%,var(--background))]",
+          "flex items-center justify-between gap-2 rounded-(--radius) px-1",
+          expanded && `sticky top-2 z-10 mb-2 ${CARD_SURFACE_CLASS}`,
         )}
       >
         <button
           type="button"
           aria-expanded={expanded}
           data-scroll-anchor-ignore
-          className="group flex min-w-0 flex-1 items-center gap-1.5 rounded-lg px-1 py-1.5 text-left transition-colors hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="group flex min-w-0 flex-1 items-center gap-1.5 rounded-(--radius) px-1 py-1.5 text-left transition-colors duration-(--duration-fast) ease-(--ease-out) hover:bg-(--wash-hover) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           onClick={() => onExpandedChange(!expanded)}
         >
           <ChevronRightIcon
             aria-hidden="true"
             className={cn(
-              "size-3.5 shrink-0 text-muted-foreground transition-transform",
+              "size-3.5 shrink-0 text-muted-foreground transition-transform duration-(--duration-fast) ease-(--ease-out)",
               expanded && "rotate-90",
             )}
           />
-          <span className="flex min-w-0 items-center gap-1 whitespace-nowrap font-medium text-foreground text-xs leading-4">
+          <span className="flex min-w-0 items-center gap-1 whitespace-nowrap font-medium text-foreground text-(length:--text-ui)">
             <span>
               {files.length} changed file{files.length === 1 ? "" : "s"}
             </span>
             {hasNonZeroStat(summaryStat) && (
               <DiffStatLabel
                 additions={summaryStat.additions}
-                className="text-xs leading-4"
+                className="text-(length:--text-ui)"
                 deletions={summaryStat.deletions}
                 layout="inline"
               />
             )}
           </span>
-          <span className="ml-1 hidden truncate text-[11px] text-muted-foreground group-hover:text-foreground/80 sm:inline">
+          <span className="ml-1 hidden truncate text-(length:--text-caption) text-muted-foreground sm:inline">
             {expanded ? "Hide files" : "Show files"}
           </span>
         </button>
@@ -159,14 +179,14 @@ export const ChangedFilesCard = memo(function ChangedFilesCard(props: {
         />
       ) : compactPreviewVisible ? (
         <div className="px-2 pb-1.5 pt-1">
-          <p className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] text-muted-foreground">
+          <p className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-(length:--text-caption) text-muted-foreground">
             {scopeSummary.map((scope, index) => (
               <span key={scope.label} className="inline-flex items-center gap-1">
                 {index > 0 ? <span aria-hidden="true">·</span> : null}
-                <span className="font-mono text-foreground/75">{scope.label}</span>
-                <span>
-                  {scope.fileCount} file{scope.fileCount === 1 ? "" : "s"}
-                </span>
+                <QualifiedLabel
+                  name={scope.label}
+                  trail={`${scope.fileCount} file${scope.fileCount === 1 ? "" : "s"}`}
+                />
               </span>
             ))}
           </p>
@@ -176,21 +196,21 @@ export const ChangedFilesCard = memo(function ChangedFilesCard(props: {
                 key={file.path}
                 type="button"
                 title={file.path}
-                className="inline-flex max-w-48 items-center gap-1 rounded-md border border-border/70 bg-background/45 px-1.5 py-1 font-mono text-[10px] text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="inline-flex max-w-48 items-center gap-1 rounded-(--radius) border border-border bg-(--wash-hover) px-1.5 py-1 text-(length:--text-caption) text-muted-foreground transition-colors duration-(--duration-fast) ease-(--ease-out) hover:bg-(--wash-active) hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 onClick={() => onOpenTurnDiff(turnId, file.path)}
               >
                 <PierreEntryIcon
                   pathValue={file.path}
                   kind="file"
                   theme={resolvedTheme}
-                  className="size-3 shrink-0 text-muted-foreground/70"
+                  className="size-3 shrink-0 text-muted-foreground"
                 />
                 <span className="truncate">{changedFileName(file.path)}</span>
               </button>
             ))}
             <button
               type="button"
-              className="rounded-md px-1.5 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="rounded-(--radius) px-1.5 py-1 text-(length:--text-caption) font-medium text-muted-foreground transition-colors duration-(--duration-fast) ease-(--ease-out) hover:bg-(--wash-hover) hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               onClick={() => onExpandedChange(true)}
             >
               Show all {files.length} files
@@ -246,7 +266,7 @@ export const ChangedFilesTree = memo(function ChangedFilesTree(props: {
   );
 
   const renderTreeNode = (node: TurnDiffTreeNode, depth: number) => {
-    const leftPadding = 8 + depth * 14;
+    const leftPadding = TREE_ROW_INSET_PX + depth * TREE_ROW_INDENT_PX;
     if (node.kind === "directory") {
       const isExpanded = expandedDirectories[node.path] ?? allDirectoriesExpanded;
       return (
@@ -254,27 +274,27 @@ export const ChangedFilesTree = memo(function ChangedFilesTree(props: {
           <button
             type="button"
             data-scroll-anchor-ignore
-            className="group flex w-full items-center gap-1.5 rounded-xl py-1 pr-3 text-left transition-colors hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background"
+            className={TREE_ROW_CLASS}
             style={{ paddingLeft: `${leftPadding}px` }}
             onClick={() => toggleDirectory(node.path)}
           >
             <ChevronRightIcon
               aria-hidden="true"
               className={cn(
-                "size-3.5 shrink-0 text-muted-foreground/70 transition-transform group-hover:text-foreground/80",
+                "size-3.5 shrink-0 text-muted-foreground transition-transform duration-(--duration-fast) ease-(--ease-out)",
                 isExpanded && "rotate-90",
               )}
             />
             {isExpanded ? (
-              <FolderIcon className="size-3.5 shrink-0 text-muted-foreground/75" />
+              <FolderIcon className="size-3.5 shrink-0 text-muted-foreground" />
             ) : (
-              <FolderClosedIcon className="size-3.5 shrink-0 text-muted-foreground/75" />
+              <FolderClosedIcon className="size-3.5 shrink-0 text-muted-foreground" />
             )}
-            <span className="truncate font-mono text-[11px] text-muted-foreground/90 group-hover:text-foreground/90">
-              {node.name}
-            </span>
+            {/* A directory only locates the files under it, so it recedes and
+                the file rows below it keep the only primary ink in the tree. */}
+            <span className={cn("truncate", QUALIFIER_CLASS_NAME)}>{node.name}</span>
             {hasNonZeroStat(node.stat) && (
-              <span className="ml-auto shrink-0 font-mono text-[10px] tabular-nums">
+              <span className={TREE_ROW_STAT_CLASS}>
                 <DiffStatLabel additions={node.stat.additions} deletions={node.stat.deletions} />
               </span>
             )}
@@ -292,7 +312,7 @@ export const ChangedFilesTree = memo(function ChangedFilesTree(props: {
       <button
         key={`file:${node.path}`}
         type="button"
-        className="group flex w-full items-center gap-1.5 rounded-xl py-1 pr-3 text-left transition-colors hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background"
+        className={TREE_ROW_CLASS}
         style={{ paddingLeft: `${leftPadding}px` }}
         onClick={() => onOpenTurnDiff(turnId, node.path)}
       >
@@ -303,13 +323,13 @@ export const ChangedFilesTree = memo(function ChangedFilesTree(props: {
           pathValue={node.path}
           kind="file"
           theme={resolvedTheme}
-          className="size-3.5 text-muted-foreground/70"
+          className="size-3.5 text-muted-foreground"
         />
-        <span className="truncate font-mono text-[11px]">
+        <span className="truncate">
           <QualifiedLabel name={node.name} />
         </span>
         {node.stat && (
-          <span className="ml-auto shrink-0 font-mono text-[10px] tabular-nums">
+          <span className={TREE_ROW_STAT_CLASS}>
             <DiffStatLabel additions={node.stat.additions} deletions={node.stat.deletions} />
           </span>
         )}

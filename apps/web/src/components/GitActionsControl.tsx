@@ -24,7 +24,6 @@ import {
   ChevronDownIcon,
   CloudUploadIcon,
   ExternalLinkIcon,
-  GitBranchPlusIcon,
   GitCommitIcon,
   InfoIcon,
   LockIcon,
@@ -61,10 +60,7 @@ import {
   DialogPopup,
   DialogTitle,
 } from "~/components/ui/dialog";
-import { Group, GroupSeparator } from "~/components/ui/group";
 import { Input } from "~/components/ui/input";
-import { Menu, MenuItem, MenuPopup, MenuTrigger } from "~/components/ui/menu";
-import { Popover, PopoverPopup, PopoverTrigger } from "~/components/ui/popover";
 import { ScrollArea } from "~/components/ui/scroll-area";
 import { Textarea } from "~/components/ui/textarea";
 import { stackedThreadToast, toastManager, type ThreadToastData } from "~/components/ui/toast";
@@ -91,7 +87,7 @@ import { readLocalApi } from "~/localApi";
 import { getSourceControlPresentation } from "~/sourceControlPresentation";
 import { openPullRequestLink } from "~/lib/openPullRequestLink";
 
-interface GitActionsControlProps {
+interface GitActionsInput {
   gitCwd: string | null;
   activeThreadRef: ScopedThreadRef | null;
   draftId?: DraftId;
@@ -330,7 +326,7 @@ const COMMIT_DIALOG_TITLE = "Commit changes";
 const COMMIT_DIALOG_DESCRIPTION =
   "Review and confirm your commit. Leave the message blank to auto-generate one.";
 
-function GitActionItemIcon({
+export function GitActionItemIcon({
   icon,
   SourceControlIcon,
 }: {
@@ -342,26 +338,26 @@ function GitActionItemIcon({
   return <SourceControlIcon />;
 }
 
-function GitQuickActionIcon({
+export function GitQuickActionIcon({
   quickAction,
   SourceControlIcon,
 }: {
   quickAction: GitQuickAction;
   SourceControlIcon: ReturnType<typeof getSourceControlPresentation>["Icon"];
 }) {
-  const iconClassName = "size-3.5";
-  if (quickAction.kind === "open_pr") return <SourceControlIcon className={iconClassName} />;
-  if (quickAction.kind === "open_publish") return <CloudUploadIcon className={iconClassName} />;
-  if (quickAction.kind === "run_pull") return <InfoIcon className={iconClassName} />;
+  // Sized by whatever renders it, so the icon matches the row it sits in.
+  if (quickAction.kind === "open_pr") return <SourceControlIcon />;
+  if (quickAction.kind === "open_publish") return <CloudUploadIcon />;
+  if (quickAction.kind === "run_pull") return <InfoIcon />;
   if (quickAction.kind === "run_action") {
-    if (quickAction.action === "commit") return <GitCommitIcon className={iconClassName} />;
+    if (quickAction.action === "commit") return <GitCommitIcon />;
     if (quickAction.action === "push" || quickAction.action === "commit_push") {
-      return <CloudUploadIcon className={iconClassName} />;
+      return <CloudUploadIcon />;
     }
-    return <SourceControlIcon className={iconClassName} />;
+    return <SourceControlIcon />;
   }
-  if (quickAction.label === "Commit") return <GitCommitIcon className={iconClassName} />;
-  return <InfoIcon className={iconClassName} />;
+  if (quickAction.label === "Commit") return <GitCommitIcon />;
+  return <InfoIcon />;
 }
 
 interface PublishRepositoryDialogProps {
@@ -967,11 +963,12 @@ function PublishRepositoryDialog(props: PublishRepositoryDialogProps) {
   );
 }
 
-export default function GitActionsControl({
-  gitCwd,
-  activeThreadRef,
-  draftId,
-}: GitActionsControlProps) {
+/**
+ * Every git action a thread can take, plus the dialogs they open. The surface
+ * that offers them — today the environment menu in the chat header — supplies
+ * only the rows; the state, the guards, and the toasts stay here.
+ */
+export function useGitActions({ gitCwd, activeThreadRef, draftId }: GitActionsInput) {
   const updateThreadMetadata = useAtomCommand(
     threadEnvironment.updateMetadata,
     "thread branch metadata update",
@@ -1095,7 +1092,6 @@ export default function GitActionsControl({
     [gitStatus?.sourceControlProvider],
   );
   const changeRequestTerminology = sourceControlPresentation.terminology;
-  const SourceControlIcon = sourceControlPresentation.Icon;
   // Default to true while loading so we don't flash init controls.
   const isRepo = gitStatus?.isRepo ?? true;
   const hasPrimaryRemote = gitStatus?.hasPrimaryRemote ?? false;
@@ -1587,6 +1583,12 @@ export default function GitActionsControl({
     }
   };
 
+  const openCommitDialog = () => {
+    setExcludedFiles(new Set());
+    setIsEditingFiles(false);
+    setIsCommitDialogOpen(true);
+  };
+
   const openDialogForMenuItem = (item: GitActionMenuItem) => {
     if (item.disabled) return;
     if (item.kind === "open_pr") {
@@ -1601,9 +1603,7 @@ export default function GitActionsControl({
       void runGitActionWithToast({ action: "create_pr" });
       return;
     }
-    setExcludedFiles(new Set());
-    setIsEditingFiles(false);
-    setIsCommitDialogOpen(true);
+    openCommitDialog();
   };
 
   const runDialogAction = () => {
@@ -1652,386 +1652,277 @@ export default function GitActionsControl({
 
   const canPublishRepository = isRepo && gitStatusForActions !== null && !hasPrimaryRemote;
 
-  if (!gitCwd) return null;
+  const initRepository = () => {
+    void (async () => {
+      const result = await initAction.run();
+      if (result._tag === "Success" || isAtomCommandInterrupted(result)) {
+        return;
+      }
+      const error = squashAtomCommandFailure(result);
+      toastManager.add(
+        stackedThreadToast({
+          type: "error",
+          title: "Git initialization failed",
+          description: error instanceof Error ? error.message : "An error occurred.",
+          ...(threadToastData !== undefined ? { data: threadToastData } : {}),
+        }),
+      );
+    })();
+  };
 
-  return (
-    <>
-      {!isRepo ? (
-        <Button
-          variant="outline"
-          size="xs"
-          disabled={initAction.isPending}
-          onClick={() => {
-            void (async () => {
-              const result = await initAction.run();
-              if (result._tag === "Success" || isAtomCommandInterrupted(result)) {
-                return;
-              }
-              const error = squashAtomCommandFailure(result);
-              toastManager.add(
-                stackedThreadToast({
-                  type: "error",
-                  title: "Git initialization failed",
-                  description: error instanceof Error ? error.message : "An error occurred.",
-                  ...(threadToastData !== undefined ? { data: threadToastData } : {}),
-                }),
-              );
-            })();
+  const dialogs =
+    gitCwd === null ? null : (
+      <>
+        <Dialog
+          open={isCommitDialogOpen}
+          onOpenChange={(open) => {
+            if (!open) {
+              setIsCommitDialogOpen(false);
+              setDialogCommitMessage("");
+              setExcludedFiles(new Set());
+              setIsEditingFiles(false);
+            }
           }}
         >
-          <GitBranchPlusIcon className="size-3.5" aria-hidden />
-          <span className="ml-0.5">
-            {initAction.isPending ? "Initializing..." : "Initialize Git"}
-          </span>
-        </Button>
-      ) : (
-        <Group aria-label="Git actions" className="shrink-0">
-          {quickActionDisabledReason ? (
-            <Popover>
-              <PopoverTrigger
-                openOnHover
-                render={
-                  <Button
-                    aria-disabled="true"
-                    className="cursor-not-allowed rounded-e-none border-e-0 opacity-64 before:rounded-e-none"
-                    size="xs"
-                    variant="outline"
-                  />
-                }
-              >
-                <GitQuickActionIcon
-                  quickAction={quickAction}
-                  SourceControlIcon={SourceControlIcon}
-                />
-                <span className="sr-only @3xl/header-actions:not-sr-only @3xl/header-actions:ml-0.5">
-                  {quickAction.label}
-                </span>
-              </PopoverTrigger>
-              <PopoverPopup tooltipStyle side="bottom" align="start">
-                {quickActionDisabledReason}
-              </PopoverPopup>
-            </Popover>
-          ) : (
-            <Button
-              variant="outline"
-              size="xs"
-              disabled={isGitActionRunning || quickAction.disabled}
-              onClick={runQuickAction}
-            >
-              <GitQuickActionIcon quickAction={quickAction} SourceControlIcon={SourceControlIcon} />
-              <span className="sr-only @3xl/header-actions:not-sr-only @3xl/header-actions:ml-0.5">
-                {quickAction.label}
-              </span>
-            </Button>
-          )}
-          <GroupSeparator className="hidden @3xl/header-actions:block" />
-          <Menu
-            onOpenChange={(open) => {
-              if (open) {
-                requestVcsStatusRefresh(refreshVcsStatus, activeEnvironmentId, gitCwd);
-              }
-            }}
-          >
-            <MenuTrigger
-              render={<Button aria-label="Git action options" size="icon-xs" variant="outline" />}
-              disabled={isGitActionRunning}
-            >
-              <ChevronDownIcon aria-hidden="true" className="size-4" />
-            </MenuTrigger>
-            <MenuPopup align="end" className="w-full">
-              {gitActionMenuItems.map((item) => {
-                const disabledReason = getMenuActionDisabledReason({
-                  item,
-                  gitStatus: gitStatusForActions,
-                  isBusy: isGitActionRunning,
-                  hasPrimaryRemote,
-                });
-                if (item.disabled && disabledReason) {
-                  return (
-                    <Popover key={`${item.id}-${item.label}`}>
-                      <PopoverTrigger
-                        openOnHover
-                        nativeButton={false}
-                        render={<span className="block w-max cursor-not-allowed" />}
-                      >
-                        <MenuItem className="w-full" disabled>
-                          <GitActionItemIcon
-                            icon={item.icon}
-                            SourceControlIcon={SourceControlIcon}
-                          />
-                          {item.label}
-                        </MenuItem>
-                      </PopoverTrigger>
-                      <PopoverPopup tooltipStyle side="left" align="center">
-                        {disabledReason}
-                      </PopoverPopup>
-                    </Popover>
-                  );
-                }
-
-                return (
-                  <MenuItem
-                    key={`${item.id}-${item.label}`}
-                    disabled={item.disabled}
-                    onClick={() => {
-                      openDialogForMenuItem(item);
-                    }}
-                  >
-                    <GitActionItemIcon icon={item.icon} SourceControlIcon={SourceControlIcon} />
-                    {item.label}
-                  </MenuItem>
-                );
-              })}
-              {canPublishRepository ? (
-                <MenuItem
-                  disabled={isGitActionRunning}
-                  onClick={() => {
-                    setIsPublishDialogOpen(true);
-                  }}
-                >
-                  <CloudUploadIcon />
-                  Publish repository...
-                </MenuItem>
-              ) : null}
-              {gitStatusForActions?.refName === null && (
-                <p className="px-2 py-1.5 text-xs text-warning">
-                  Detached HEAD: create and checkout a refName to enable push and pull request
-                  actions.
-                </p>
-              )}
-              {gitStatusForActions &&
-                gitStatusForActions.refName !== null &&
-                !gitStatusForActions.hasWorkingTreeChanges &&
-                gitStatusForActions.behindCount > 0 &&
-                gitStatusForActions.aheadCount === 0 && (
-                  <p className="px-2 py-1.5 text-xs text-warning">
-                    Behind upstream. Pull/rebase first.
-                  </p>
-                )}
-              {gitStatusError && (
-                <p className="px-2 py-1.5 text-xs text-destructive">{gitStatusError}</p>
-              )}
-            </MenuPopup>
-          </Menu>
-        </Group>
-      )}
-
-      <Dialog
-        open={isCommitDialogOpen}
-        onOpenChange={(open) => {
-          if (!open) {
-            setIsCommitDialogOpen(false);
-            setDialogCommitMessage("");
-            setExcludedFiles(new Set());
-            setIsEditingFiles(false);
-          }
-        }}
-      >
-        <DialogPopup>
-          <DialogHeader>
-            <DialogTitle>{COMMIT_DIALOG_TITLE}</DialogTitle>
-            <DialogDescription>{COMMIT_DIALOG_DESCRIPTION}</DialogDescription>
-          </DialogHeader>
-          <DialogPanel className="space-y-4">
-            <div className="space-y-3 rounded-xl bg-zinc-25 p-3 text-sm ring-1 ring-black/5 dark:bg-white/[0.035] dark:ring-white/5">
-              <div className="grid grid-cols-[auto_1fr] items-center gap-x-2 gap-y-1">
-                <span className="text-muted-foreground">Branch</span>
-                <span className="flex items-center justify-between gap-2">
-                  <span className="font-medium">
-                    {gitStatusForActions?.refName ?? "(detached HEAD)"}
-                  </span>
-                  {isDefaultRef && (
-                    <span className="text-right text-warning">Warning: default refName</span>
-                  )}
-                </span>
-              </div>
-              <div className="space-y-1">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    {isEditingFiles && allFiles.length > 0 && (
-                      <Checkbox
-                        checked={allSelected}
-                        indeterminate={!allSelected && !noneSelected}
-                        onCheckedChange={() => {
-                          setExcludedFiles(
-                            allSelected ? new Set(allFiles.map((f) => f.path)) : new Set(),
-                          );
-                        }}
-                      />
+          <DialogPopup>
+            <DialogHeader>
+              <DialogTitle>{COMMIT_DIALOG_TITLE}</DialogTitle>
+              <DialogDescription>{COMMIT_DIALOG_DESCRIPTION}</DialogDescription>
+            </DialogHeader>
+            <DialogPanel className="space-y-4">
+              <div className="space-y-3 rounded-xl bg-zinc-25 p-3 text-sm ring-1 ring-black/5 dark:bg-white/[0.035] dark:ring-white/5">
+                <div className="grid grid-cols-[auto_1fr] items-center gap-x-2 gap-y-1">
+                  <span className="text-muted-foreground">Branch</span>
+                  <span className="flex items-center justify-between gap-2">
+                    <span className="font-medium">
+                      {gitStatusForActions?.refName ?? "(detached HEAD)"}
+                    </span>
+                    {isDefaultRef && (
+                      <span className="text-right text-warning">Warning: default refName</span>
                     )}
-                    <span className="text-muted-foreground">Files</span>
-                    {!allSelected && !isEditingFiles && (
-                      <span className="text-muted-foreground">
-                        ({selectedFiles.length} of {allFiles.length})
-                      </span>
+                  </span>
+                </div>
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      {isEditingFiles && allFiles.length > 0 && (
+                        <Checkbox
+                          checked={allSelected}
+                          indeterminate={!allSelected && !noneSelected}
+                          onCheckedChange={() => {
+                            setExcludedFiles(
+                              allSelected ? new Set(allFiles.map((f) => f.path)) : new Set(),
+                            );
+                          }}
+                        />
+                      )}
+                      <span className="text-muted-foreground">Files</span>
+                      {!allSelected && !isEditingFiles && (
+                        <span className="text-muted-foreground">
+                          ({selectedFiles.length} of {allFiles.length})
+                        </span>
+                      )}
+                    </div>
+                    {allFiles.length > 0 && (
+                      <Button
+                        variant="ghost"
+                        size="xs"
+                        onClick={() => setIsEditingFiles((prev) => !prev)}
+                      >
+                        {isEditingFiles ? "Done" : "Edit"}
+                      </Button>
                     )}
                   </div>
-                  {allFiles.length > 0 && (
-                    <Button
-                      variant="ghost"
-                      size="xs"
-                      onClick={() => setIsEditingFiles((prev) => !prev)}
-                    >
-                      {isEditingFiles ? "Done" : "Edit"}
-                    </Button>
+                  {!gitStatusForActions || allFiles.length === 0 ? (
+                    <p className="font-medium">none</p>
+                  ) : (
+                    <div className="space-y-2">
+                      <ScrollArea className="h-44 rounded-lg bg-card ring-1 ring-black/5 dark:bg-white/[0.025] dark:ring-white/5">
+                        <div className="space-y-1 p-1">
+                          {allFiles.map((file) => {
+                            const isExcluded = excludedFiles.has(file.path);
+                            return (
+                              <div
+                                key={file.path}
+                                className="flex w-full items-center gap-2 rounded-md px-2 py-1 font-mono hover:bg-accent/50"
+                              >
+                                {isEditingFiles && (
+                                  <Checkbox
+                                    checked={!excludedFiles.has(file.path)}
+                                    onCheckedChange={() => {
+                                      setExcludedFiles((prev) => {
+                                        const next = new Set(prev);
+                                        if (next.has(file.path)) {
+                                          next.delete(file.path);
+                                        } else {
+                                          next.add(file.path);
+                                        }
+                                        return next;
+                                      });
+                                    }}
+                                  />
+                                )}
+                                <button
+                                  type="button"
+                                  className="flex flex-1 items-center justify-between gap-3 text-left truncate"
+                                  onClick={() => openChangedFileInEditor(file.path)}
+                                >
+                                  <span
+                                    className={`truncate${isExcluded ? " text-muted-foreground" : ""}`}
+                                  >
+                                    {file.path}
+                                  </span>
+                                  <span className="shrink-0">
+                                    {isExcluded ? (
+                                      <span className="text-muted-foreground">Excluded</span>
+                                    ) : (
+                                      <>
+                                        <span className="text-success">+{file.insertions}</span>
+                                        <span className="text-muted-foreground"> / </span>
+                                        <span className="text-destructive">-{file.deletions}</span>
+                                      </>
+                                    )}
+                                  </span>
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </ScrollArea>
+                      <div className="flex justify-end font-mono">
+                        <span className="text-success">
+                          +{selectedFiles.reduce((sum, f) => sum + f.insertions, 0)}
+                        </span>
+                        <span className="text-muted-foreground"> / </span>
+                        <span className="text-destructive">
+                          -{selectedFiles.reduce((sum, f) => sum + f.deletions, 0)}
+                        </span>
+                      </div>
+                    </div>
                   )}
                 </div>
-                {!gitStatusForActions || allFiles.length === 0 ? (
-                  <p className="font-medium">none</p>
-                ) : (
-                  <div className="space-y-2">
-                    <ScrollArea className="h-44 rounded-lg bg-card ring-1 ring-black/5 dark:bg-white/[0.025] dark:ring-white/5">
-                      <div className="space-y-1 p-1">
-                        {allFiles.map((file) => {
-                          const isExcluded = excludedFiles.has(file.path);
-                          return (
-                            <div
-                              key={file.path}
-                              className="flex w-full items-center gap-2 rounded-md px-2 py-1 font-mono hover:bg-accent/50"
-                            >
-                              {isEditingFiles && (
-                                <Checkbox
-                                  checked={!excludedFiles.has(file.path)}
-                                  onCheckedChange={() => {
-                                    setExcludedFiles((prev) => {
-                                      const next = new Set(prev);
-                                      if (next.has(file.path)) {
-                                        next.delete(file.path);
-                                      } else {
-                                        next.add(file.path);
-                                      }
-                                      return next;
-                                    });
-                                  }}
-                                />
-                              )}
-                              <button
-                                type="button"
-                                className="flex flex-1 items-center justify-between gap-3 text-left truncate"
-                                onClick={() => openChangedFileInEditor(file.path)}
-                              >
-                                <span
-                                  className={`truncate${isExcluded ? " text-muted-foreground" : ""}`}
-                                >
-                                  {file.path}
-                                </span>
-                                <span className="shrink-0">
-                                  {isExcluded ? (
-                                    <span className="text-muted-foreground">Excluded</span>
-                                  ) : (
-                                    <>
-                                      <span className="text-success">+{file.insertions}</span>
-                                      <span className="text-muted-foreground"> / </span>
-                                      <span className="text-destructive">-{file.deletions}</span>
-                                    </>
-                                  )}
-                                </span>
-                              </button>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </ScrollArea>
-                    <div className="flex justify-end font-mono">
-                      <span className="text-success">
-                        +{selectedFiles.reduce((sum, f) => sum + f.insertions, 0)}
-                      </span>
-                      <span className="text-muted-foreground"> / </span>
-                      <span className="text-destructive">
-                        -{selectedFiles.reduce((sum, f) => sum + f.deletions, 0)}
-                      </span>
-                    </div>
-                  </div>
-                )}
               </div>
-            </div>
-            <div className="space-y-1">
-              <p className="text-sm font-medium">Commit message (optional)</p>
-              <Textarea
-                value={dialogCommitMessage}
-                onChange={(event) => setDialogCommitMessage(event.target.value)}
-                placeholder="Leave empty to auto-generate"
+              <div className="space-y-1">
+                <p className="text-sm font-medium">Commit message (optional)</p>
+                <Textarea
+                  value={dialogCommitMessage}
+                  onChange={(event) => setDialogCommitMessage(event.target.value)}
+                  placeholder="Leave empty to auto-generate"
+                  size="sm"
+                />
+              </div>
+            </DialogPanel>
+            <DialogFooter variant="bare">
+              <Button
+                variant="outline"
                 size="sm"
-              />
-            </div>
-          </DialogPanel>
-          <DialogFooter variant="bare">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setIsCommitDialogOpen(false);
-                setDialogCommitMessage("");
-                setExcludedFiles(new Set());
-                setIsEditingFiles(false);
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={noneSelected}
-              onClick={runDialogActionOnNewBranch}
-            >
-              Commit on new refName
-            </Button>
-            <Button size="sm" disabled={noneSelected} onClick={runDialogAction}>
-              Commit
-            </Button>
-          </DialogFooter>
-        </DialogPopup>
-      </Dialog>
+                onClick={() => {
+                  setIsCommitDialogOpen(false);
+                  setDialogCommitMessage("");
+                  setExcludedFiles(new Set());
+                  setIsEditingFiles(false);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={noneSelected}
+                onClick={runDialogActionOnNewBranch}
+              >
+                Commit on new refName
+              </Button>
+              <Button size="sm" disabled={noneSelected} onClick={runDialogAction}>
+                Commit
+              </Button>
+            </DialogFooter>
+          </DialogPopup>
+        </Dialog>
 
-      <PublishRepositoryDialog
-        open={isPublishDialogOpen}
-        onOpenChange={setIsPublishDialogOpen}
-        environmentId={activeEnvironmentId}
-        gitCwd={gitCwd}
-      />
+        <PublishRepositoryDialog
+          open={isPublishDialogOpen}
+          onOpenChange={setIsPublishDialogOpen}
+          environmentId={activeEnvironmentId}
+          gitCwd={gitCwd}
+        />
 
-      <Dialog
-        open={pendingDefaultBranchAction !== null}
-        onOpenChange={(open) => {
-          if (!open) {
-            setPendingDefaultBranchAction(null);
-          }
-        }}
-      >
-        <DialogPopup className="max-w-xl">
-          <DialogHeader>
-            <DialogTitle>
-              {pendingDefaultBranchActionCopy?.title ?? "Run action on default refName?"}
-            </DialogTitle>
-            <DialogDescription>{pendingDefaultBranchActionCopy?.description}</DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="dark:border-transparent dark:bg-transparent sm:flex-wrap sm:items-center">
-            <Button
-              className="w-full sm:mr-auto sm:w-auto"
-              variant="outline"
-              size="sm"
-              onClick={() => setPendingDefaultBranchAction(null)}
-            >
-              Abort
-            </Button>
-            <Button
-              className="min-h-8 w-full max-w-full whitespace-normal py-1.5 leading-snug sm:min-h-7 sm:w-auto"
-              variant="outline"
-              size="sm"
-              onClick={continuePendingDefaultBranchAction}
-            >
-              {pendingDefaultBranchActionCopy?.continueLabel ?? "Continue"}
-            </Button>
-            <Button
-              className="min-h-8 w-full max-w-full whitespace-normal py-1.5 leading-snug sm:min-h-7 sm:w-auto"
-              size="sm"
-              onClick={checkoutFeatureBranchAndContinuePendingAction}
-            >
-              Checkout feature branch & continue
-            </Button>
-          </DialogFooter>
-        </DialogPopup>
-      </Dialog>
-    </>
-  );
+        <Dialog
+          open={pendingDefaultBranchAction !== null}
+          onOpenChange={(open) => {
+            if (!open) {
+              setPendingDefaultBranchAction(null);
+            }
+          }}
+        >
+          <DialogPopup className="max-w-xl">
+            <DialogHeader>
+              <DialogTitle>
+                {pendingDefaultBranchActionCopy?.title ?? "Run action on default refName?"}
+              </DialogTitle>
+              <DialogDescription>{pendingDefaultBranchActionCopy?.description}</DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="dark:border-transparent dark:bg-transparent sm:flex-wrap sm:items-center">
+              <Button
+                className="w-full sm:mr-auto sm:w-auto"
+                variant="outline"
+                size="sm"
+                onClick={() => setPendingDefaultBranchAction(null)}
+              >
+                Abort
+              </Button>
+              <Button
+                className="min-h-8 w-full max-w-full whitespace-normal py-1.5 leading-snug sm:min-h-7 sm:w-auto"
+                variant="outline"
+                size="sm"
+                onClick={continuePendingDefaultBranchAction}
+              >
+                {pendingDefaultBranchActionCopy?.continueLabel ?? "Continue"}
+              </Button>
+              <Button
+                className="min-h-8 w-full max-w-full whitespace-normal py-1.5 leading-snug sm:min-h-7 sm:w-auto"
+                size="sm"
+                onClick={checkoutFeatureBranchAndContinuePendingAction}
+              >
+                Checkout feature branch & continue
+              </Button>
+            </DialogFooter>
+          </DialogPopup>
+        </Dialog>
+      </>
+    );
+
+  return {
+    /** Working tree entries the commit dialog would list. */
+    changedFileCount: allFiles.length,
+    canPublishRepository,
+    /** Render outside any popup: dialogs must outlive the menu that opened them. */
+    dialogs,
+    gitStatus: gitStatusForActions,
+    gitStatusError,
+    initRepository,
+    isBusy: isGitActionRunning,
+    isInitPending: initAction.isPending,
+    isRepo,
+    menuItemDisabledReason: (item: GitActionMenuItem) =>
+      getMenuActionDisabledReason({
+        item,
+        gitStatus: gitStatusForActions,
+        isBusy: isGitActionRunning,
+        hasPrimaryRemote,
+      }),
+    menuItems: gitActionMenuItems,
+    openCommitDialog,
+    openPublishDialog: () => {
+      setIsPublishDialogOpen(true);
+    },
+    quickAction,
+    quickActionDisabledReason,
+    refreshStatus: () => {
+      requestVcsStatusRefresh(refreshVcsStatus, activeEnvironmentId, gitCwd);
+    },
+    runMenuItem: openDialogForMenuItem,
+    runQuickAction,
+    sourceControlPresentation,
+  };
 }
