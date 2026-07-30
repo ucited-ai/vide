@@ -1349,7 +1349,10 @@ export default function ThreadTerminalDrawer({
             />
             {isSplitView ? (
               <div
-                className="grid h-full w-full min-w-0 gap-0 overflow-hidden"
+                // Clears the floating action buttons above. They are absolutely
+                // positioned in the wrapper, so padding here moves the panes down
+                // without moving them.
+                className="grid h-full w-full min-w-0 gap-0 overflow-hidden pt-9"
                 style={
                   splitDirection === "vertical"
                     ? {
@@ -1409,7 +1412,7 @@ export default function ThreadTerminalDrawer({
                 })}
               </div>
             ) : (
-              <div className="h-full p-1">
+              <div className="h-full px-1 pb-1 pt-9">
                 <TerminalViewport
                   key={resolvedActiveTerminalId}
                   threadRef={threadRef}

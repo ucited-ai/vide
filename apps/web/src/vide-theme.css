@@ -330,18 +330,28 @@
   transition-timing-function: var(--ease-out);
 }
 
-:root:root:root [data-popup-surface][data-starting-style],
-:root:root:root [data-popup-surface][data-ending-style] {
+:root:root:root [data-popup-surface][data-starting-style] {
   transform: scaleY(0.94);
 }
 
 /* Side-anchored surfaces grow sideways: a submenu that expanded vertically
    would contradict the direction it just came from. */
 :root:root:root [data-popup-surface][data-side="left"][data-starting-style],
-:root:root:root [data-popup-surface][data-side="left"][data-ending-style],
-:root:root:root [data-popup-surface][data-side="right"][data-starting-style],
-:root:root:root [data-popup-surface][data-side="right"][data-ending-style] {
+:root:root:root [data-popup-surface][data-side="right"][data-starting-style] {
   transform: scaleX(0.94);
+}
+
+/*
+ * Closing is instant.
+ *
+ * Base UI holds a popup in the DOM until its exit transition finishes, so any
+ * closing animation is time between the click and the menu being gone. Opening
+ * is a reveal and worth animating; closing is a dismissal, and the only thing an
+ * exit animation communicates is delay. Zeroing the duration lets Base UI
+ * unmount on the same frame as the click.
+ */
+:root:root:root [data-popup-surface][data-ending-style] {
+  transition-duration: 0s;
 }
 
 /*
@@ -446,6 +456,33 @@
     transition-duration: var(--duration-base) !important;
     transition-timing-function: var(--ease-out) !important;
   }
+
+  /*
+   * Fade the sidebar's contents across the width animation.
+   *
+   * Animating width means the text inside is laid out again on every frame: at
+   * the start there is almost no room, so labels wrap and truncate, and as space
+   * arrives they unwrap and settle. The result flickers, and reads as if the
+   * panel contained something else on the way in than it does at rest.
+   *
+   * Fading hides the reflow rather than trying to prevent it. The timings are
+   * deliberately asymmetric: on the way out the content leaves at once, before
+   * the squeeze can be seen; on the way in it waits until the width is most of
+   * the way there and only then appears, already at its final measurements.
+   *
+   * This is the case the earlier popup cross-fade was not. There, the surface
+   * did not reflow and the fade only delayed readable text. Here there is real
+   * churn to cover.
+   */
+  [data-slot="sidebar"][data-state="expanded"] [data-slot="sidebar-inner"] {
+    opacity: 1;
+    transition: opacity var(--duration-fast) var(--ease-out) 130ms;
+  }
+
+  [data-slot="sidebar"][data-state="collapsed"] [data-slot="sidebar-inner"] {
+    opacity: 0;
+    transition: opacity 80ms var(--ease-out);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -464,6 +501,11 @@
   :root:root:root [data-preview-panel-mode="inline"],
   :root:root:root [data-terminal-owner="drawer"] {
     animation: none;
+  }
+
+  :root:root:root [data-slot="sidebar-inner"] {
+    transition: none;
+    opacity: 1;
   }
 
   [data-slot="sidebar-container"],
