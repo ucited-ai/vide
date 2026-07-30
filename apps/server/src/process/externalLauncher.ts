@@ -21,6 +21,7 @@ import { HostProcessPlatform } from "@vide/shared/hostProcess";
 import { isCommandAvailable, resolveSpawnCommand } from "@vide/shared/shell";
 import * as Config from "effect/Config";
 import * as Context from "effect/Context";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Encoding from "effect/Encoding";
 import * as FileSystem from "effect/FileSystem";
@@ -29,6 +30,7 @@ import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as ChildProcess from "effect/unstable/process/ChildProcess";
 import * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawner";
+import * as ProcessRunner from "../processRunner.ts";
 
 // ==============================
 // Definitions
@@ -64,6 +66,15 @@ interface TargetPathAndPosition {
 }
 
 const TARGET_WITH_POSITION_PATTERN = /^(.*?):(\d+)(?::(\d+))?$/;
+const MAC_OPEN_COMMAND = "open";
+const MAC_APP_PROBE_COMMAND = "mdfind";
+const MAC_APP_BUNDLE_ID_ATTRIBUTE = "kMDItemCFBundleIdentifier";
+/** Matches one `<path>    kMDItemCFBundleIdentifier = <id>` line of `mdfind -attr` output. */
+const MAC_APP_BUNDLE_ID_PATTERN = new RegExp(`${MAC_APP_BUNDLE_ID_ATTRIBUTE}\\s*=\\s*(\\S+)\\s*$`);
+/** Well under the discovery timeout in ws.ts, which drops the whole result when it overruns. */
+const MAC_APP_PROBE_TIMEOUT = Duration.seconds(3);
+const MAC_APP_PROBE_MAX_OUTPUT_BYTES = 64 * 1024;
+const NO_INSTALLED_APP_BUNDLE_IDS: ReadonlySet<string> = new Set();
 const POWERSHELL_ARGUMENTS_PREFIX = [
   "-NoProfile",
   "-NonInteractive",
@@ -169,6 +180,63 @@ const resolveAvailableCommand = Effect.fn("externalLauncher.resolveAvailableComm
   return Option.none();
 });
 
+function editorAppBundleId(editor: (typeof EDITORS)[number]): string | undefined {
+  return "appBundleId" in editor ? editor.appBundleId : undefined;
+}
+
+function buildAppBundleIdQuery(bundleIds: ReadonlyArray<string>): string {
+  // Spotlight compares bundle identifiers case-sensitively unless the value
+  // carries the trailing `c` modifier, so a vendor re-casing its identifier
+  // would otherwise silently turn detection off.
+  return bundleIds.map((id) => `${MAC_APP_BUNDLE_ID_ATTRIBUTE} == '${id}'c`).join(" || ");
+}
+
+function parseAppBundleIds(stdout: string): ReadonlySet<string> {
+  const installed = new Set<string>();
+  for (const line of stdout.split("\n")) {
+    const bundleId = MAC_APP_BUNDLE_ID_PATTERN.exec(line)?.[1];
+    if (bundleId) {
+      installed.add(bundleId.toLowerCase());
+    }
+  }
+  return installed;
+}
+
+/**
+ * Reports which of `bundleIds` are installed as `.app` bundles on this Mac.
+ *
+ * Uses a single batched Spotlight query rather than one probe per editor: it
+ * finds bundles wherever they live (`/Applications`, `~/Applications`, a custom
+ * folder) instead of hardcoding install paths, costs one child process for the
+ * whole table, and — unlike `open -R` — never touches LaunchServices or Finder.
+ * A failing or slow probe degrades to "nothing installed", leaving the caller
+ * with the `PATH` result it would have had anyway.
+ */
+const resolveInstalledAppBundleIds = Effect.fn("externalLauncher.resolveInstalledAppBundleIds")(
+  function* (
+    platform: NodeJS.Platform,
+    bundleIds: ReadonlyArray<string>,
+  ): Effect.fn.Return<ReadonlySet<string>, never, ProcessRunner.ProcessRunner> {
+    if (platform !== "darwin" || bundleIds.length === 0) {
+      return NO_INSTALLED_APP_BUNDLE_IDS;
+    }
+
+    const processRunner = yield* ProcessRunner.ProcessRunner;
+    const result = yield* processRunner
+      .run({
+        command: MAC_APP_PROBE_COMMAND,
+        args: ["-attr", MAC_APP_BUNDLE_ID_ATTRIBUTE, buildAppBundleIdQuery(bundleIds)],
+        timeout: MAC_APP_PROBE_TIMEOUT,
+        timeoutBehavior: "timedOutResult",
+        maxOutputBytes: MAC_APP_PROBE_MAX_OUTPUT_BYTES,
+        outputMode: "truncate",
+      })
+      .pipe(Effect.orElseSucceed(() => null));
+
+    return result === null ? NO_INSTALLED_APP_BUNDLE_IDS : parseAppBundleIds(result.stdout);
+  },
+);
+
 function encodeUtf16LeBase64(input: string): string {
   const bytes = new Uint8Array(input.length * 2);
   for (let index = 0; index < input.length; index += 1) {
@@ -263,7 +331,18 @@ function buildBrowserLaunch(
 const buildAvailableEditors = Effect.fn("externalLauncher.buildAvailableEditors")(function* (
   platform: NodeJS.Platform,
   env: NodeJS.ProcessEnv,
-): Effect.fn.Return<ReadonlyArray<EditorId>, never, FileSystem.FileSystem | Path.Path> {
+): Effect.fn.Return<
+  ReadonlyArray<EditorId>,
+  never,
+  FileSystem.FileSystem | Path.Path | ProcessRunner.ProcessRunner
+> {
+  const installedBundleIds = yield* resolveInstalledAppBundleIds(
+    platform,
+    EDITORS.flatMap((editor) => {
+      const bundleId = editorAppBundleId(editor);
+      return bundleId ? [bundleId] : [];
+    }),
+  );
   const available: EditorId[] = [];
 
   for (const editor of EDITORS) {
@@ -277,6 +356,12 @@ const buildAvailableEditors = Effect.fn("externalLauncher.buildAvailableEditors"
 
     const command = yield* resolveAvailableCommand(editor.commands, env);
     if (Option.isSome(command)) {
+      available.push(editor.id);
+      continue;
+    }
+
+    const bundleId = editorAppBundleId(editor);
+    if (bundleId && installedBundleIds.has(bundleId.toLowerCase())) {
       available.push(editor.id);
     }
   }
@@ -320,9 +405,48 @@ export class ExternalLauncher extends Context.Service<
 // Implementations
 // ==============================
 
+/**
+ * Builds an `open -b` launch for editors that are installed as a `.app` but
+ * expose no CLI.
+ *
+ * `open` has no equivalent of `code --goto`, so any `:line:column` suffix is
+ * dropped and the plain path is handed to the editor: the file (or folder) is
+ * opened in a new window, but the caret is not moved to the requested position.
+ */
+const resolveAppBundleLaunch = Effect.fn("externalLauncher.resolveAppBundleLaunch")(function* (
+  editor: (typeof EDITORS)[number],
+  target: string,
+  platform: NodeJS.Platform,
+): Effect.fn.Return<Option.Option<EditorLaunch>, never, ProcessRunner.ProcessRunner> {
+  const bundleId = editorAppBundleId(editor);
+  if (platform !== "darwin" || !bundleId) {
+    return Option.none();
+  }
+
+  const installedBundleIds = yield* resolveInstalledAppBundleIds(platform, [bundleId]);
+  if (!installedBundleIds.has(bundleId.toLowerCase())) {
+    return Option.none();
+  }
+
+  const path = Option.match(parseTargetPathAndPosition(target), {
+    onNone: () => target,
+    onSome: (parsed) => parsed.path,
+  });
+  return Option.some({
+    editor: editor.id,
+    target,
+    command: MAC_OPEN_COMMAND,
+    args: ["-b", bundleId, path],
+  });
+});
+
 const resolveEditorLaunch = Effect.fn("resolveEditorLaunch")(function* (
   input: LaunchEditorInput,
-): Effect.fn.Return<EditorLaunch, ExternalLauncherError, FileSystem.FileSystem | Path.Path> {
+): Effect.fn.Return<
+  EditorLaunch,
+  ExternalLauncherError,
+  FileSystem.FileSystem | Path.Path | ProcessRunner.ProcessRunner
+> {
   const platform = yield* HostProcessPlatform;
   const env = yield* readCommandLookupEnv;
   yield* Effect.annotateCurrentSpan({
@@ -336,14 +460,25 @@ const resolveEditorLaunch = Effect.fn("resolveEditorLaunch")(function* (
   }
 
   if (editorDef.commands) {
-    const command = Option.getOrElse(
-      yield* resolveAvailableCommand(editorDef.commands, env),
-      () => editorDef.commands[0],
-    );
+    const command = yield* resolveAvailableCommand(editorDef.commands, env);
+    if (Option.isSome(command)) {
+      return {
+        editor: editorDef.id,
+        target: input.cwd,
+        command: command.value,
+        args: resolveEditorArgs(editorDef, input.cwd),
+      };
+    }
+
+    const bundleLaunch = yield* resolveAppBundleLaunch(editorDef, input.cwd, platform);
+    if (Option.isSome(bundleLaunch)) {
+      return bundleLaunch.value;
+    }
+
     return {
       editor: editorDef.id,
       target: input.cwd,
-      command,
+      command: editorDef.commands[0],
       args: resolveEditorArgs(editorDef, input.cwd),
     };
   }
@@ -434,13 +569,19 @@ export const make = Effect.gen(function* () {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
+  const processRunner = yield* ProcessRunner.make();
 
   const provideCommandResolutionServices = <A, E, R>(
-    effect: Effect.Effect<A, E, R | FileSystem.FileSystem | Path.Path>,
+    effect: Effect.Effect<
+      A,
+      E,
+      R | FileSystem.FileSystem | Path.Path | ProcessRunner.ProcessRunner
+    >,
   ) =>
     effect.pipe(
       Effect.provideService(FileSystem.FileSystem, fileSystem),
       Effect.provideService(Path.Path, path),
+      Effect.provideService(ProcessRunner.ProcessRunner, processRunner),
     );
 
   return ExternalLauncher.of({

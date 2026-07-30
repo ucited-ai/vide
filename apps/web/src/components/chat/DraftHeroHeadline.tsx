@@ -1,28 +1,9 @@
 import type { ScopedProjectRef } from "@vide/contracts";
-import { scopedProjectKey, scopeProjectRef } from "@vide/client-runtime/environment";
-import { FolderPlusIcon } from "lucide-react";
-import { useMemo } from "react";
 
-import { useNewThreadHandler } from "~/hooks/useHandleNewThread";
-import { useClientSettings } from "~/hooks/useSettings";
-import { selectProjectGroupingSettings } from "~/logicalProject";
-import {
-  buildSidebarProjectPickerEntries,
-  buildSidebarProjectSnapshots,
-} from "~/sidebarProjectGrouping";
-import { useProjects, useThreadShells } from "~/state/entities";
-import { useEnvironments, usePrimaryEnvironmentId } from "~/state/environments";
-import { sortLogicalProjectsForSidebar } from "../Sidebar.logic";
-import { AddProjectMenu, AddProjectSubmenu } from "../AddProjectMenu";
-import {
-  Menu,
-  MenuPopup,
-  MenuRadioGroup,
-  MenuRadioItem,
-  MenuSeparator,
-  MenuSubTrigger,
-  MenuTrigger,
-} from "../ui/menu";
+import { AddProjectMenu } from "../AddProjectMenu";
+import { MenuTrigger } from "../ui/menu";
+import { ProjectPickerMenu } from "./ProjectPickerMenu";
+import { useProjectPicker } from "./useProjectPicker";
 
 interface DraftHeroHeadlineProps {
   readonly activeProjectRef: ScopedProjectRef | null;
@@ -33,108 +14,25 @@ export function DraftHeroHeadline({
   activeProjectRef,
   activeProjectTitle,
 }: DraftHeroHeadlineProps) {
-  const projects = useProjects();
-  const threads = useThreadShells();
-  const { environments } = useEnvironments();
-  const primaryEnvironmentId = usePrimaryEnvironmentId();
-  const projectGroupingSettings = useClientSettings(selectProjectGroupingSettings);
-  const projectSortOrder = useClientSettings((settings) => settings.sidebarProjectSortOrder);
-  const handleNewThread = useNewThreadHandler();
-
-  const environmentLabelById = useMemo(
-    () =>
-      new Map(
-        environments.map((environment) => [environment.environmentId, environment.label] as const),
-      ),
-    [environments],
-  );
-  const projectGroups = useMemo(
-    () =>
-      sortLogicalProjectsForSidebar(
-        buildSidebarProjectSnapshots({
-          projects,
-          settings: projectGroupingSettings,
-          primaryEnvironmentId,
-          resolveEnvironmentLabel: (environmentId) =>
-            environmentLabelById.get(environmentId) ?? null,
-        }),
-        threads,
-        projectSortOrder,
-      ),
-    [
-      environmentLabelById,
-      primaryEnvironmentId,
-      projectGroupingSettings,
-      projectSortOrder,
-      projects,
-      threads,
-    ],
-  );
-  const projectPickerEntries = useMemo(
-    () =>
-      buildSidebarProjectPickerEntries({
-        groups: projectGroups,
-        preferredProjectRef: activeProjectRef,
-      }),
-    [activeProjectRef, projectGroups],
-  );
-  const projectEntryByKey = useMemo(
-    () => new Map(projectPickerEntries.map((entry) => [entry.group.projectKey, entry] as const)),
-    [projectPickerEntries],
-  );
-  const activeProjectGroup =
-    activeProjectRef === null
-      ? null
-      : (projectGroups.find((group) =>
-          group.memberProjectRefs.some(
-            (projectRef) => scopedProjectKey(projectRef) === scopedProjectKey(activeProjectRef),
-          ),
-        ) ?? null);
-  const activeProjectKey = activeProjectGroup?.projectKey ?? "";
-  const activeProjectDisplayName = activeProjectGroup?.displayName ?? activeProjectTitle;
+  // Switching from the headline swaps the draft it is standing in for, so the
+  // new thread replaces the route rather than stacking a second draft behind it.
+  const picker = useProjectPicker({
+    activeProjectRef,
+    activeProjectTitle,
+    replaceRoute: true,
+  });
   const hasResolvedProject = activeProjectTitle !== null;
-  const canChooseProject = projectPickerEntries.length > 0;
-  const shouldShowProjectMenu = canChooseProject;
+  const canChooseProject = picker.entries.length > 0;
 
-  const projectSelector = shouldShowProjectMenu ? (
-    <Menu>
+  const projectSelector = canChooseProject ? (
+    <ProjectPickerMenu picker={picker}>
       <MenuTrigger
         aria-label={hasResolvedProject ? "Change project" : "Choose a project"}
         className="pointer-events-auto inline cursor-pointer border-current border-b border-dotted text-foreground underline-offset-8 transition-opacity hover:opacity-75 focus-visible:rounded-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
       >
-        {activeProjectDisplayName ?? "Choose a project"}
+        {picker.activeProjectDisplayName ?? "Choose a project"}
       </MenuTrigger>
-      <MenuPopup align="center" className="max-h-80 w-64 overflow-y-auto">
-        <MenuRadioGroup
-          value={activeProjectKey}
-          onValueChange={(value) => {
-            const entry = projectEntryByKey.get(value as string);
-            if (!entry || value === activeProjectKey) {
-              return;
-            }
-            const project = entry.targetProject;
-            void handleNewThread(scopeProjectRef(project.environmentId, project.id), {
-              replace: true,
-            });
-          }}
-        >
-          {projectPickerEntries.map(({ group }) => {
-            return (
-              <MenuRadioItem key={group.projectKey} value={group.projectKey} closeOnClick>
-                <span className="min-w-0 truncate">{group.displayName}</span>
-              </MenuRadioItem>
-            );
-          })}
-        </MenuRadioGroup>
-        <MenuSeparator />
-        <AddProjectSubmenu>
-          <MenuSubTrigger>
-            <FolderPlusIcon />
-            New project
-          </MenuSubTrigger>
-        </AddProjectSubmenu>
-      </MenuPopup>
-    </Menu>
+    </ProjectPickerMenu>
   ) : (
     <AddProjectMenu>
       <MenuTrigger className="pointer-events-auto inline cursor-pointer border-current border-b border-dotted text-muted-foreground/60 underline-offset-8 transition-opacity hover:opacity-75 focus-visible:rounded-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">

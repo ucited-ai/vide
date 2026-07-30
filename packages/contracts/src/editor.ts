@@ -9,22 +9,57 @@ type EditorDefinition = {
   readonly label: string;
   readonly commands: readonly [string, ...string[]] | null;
   readonly baseArgs?: readonly string[];
+  /**
+   * macOS bundle identifier of the editor's `.app`, when it ships one.
+   *
+   * VS Code and its forks only put their CLI on `PATH` after the user opts in
+   * through "Shell Command: Install 'code' command in PATH", so `commands`
+   * alone misses an installed editor on most machines. The bundle identifier
+   * lets the editor be discovered — and launched through `open -b` — without
+   * a CLI.
+   */
+  readonly appBundleId?: string;
   readonly launchStyle: EditorLaunchStyle;
 };
 
 export const EDITORS = [
-  { id: "cursor", label: "Cursor", commands: ["cursor"], launchStyle: "goto" },
+  {
+    id: "cursor",
+    label: "Cursor",
+    commands: ["cursor"],
+    appBundleId: "com.todesktop.230313mzl4w4u92",
+    launchStyle: "goto",
+  },
   { id: "trae", label: "Trae", commands: ["trae"], launchStyle: "goto" },
   { id: "kiro", label: "Kiro", commands: ["kiro"], baseArgs: ["ide"], launchStyle: "goto" },
-  { id: "vscode", label: "VS Code", commands: ["code"], launchStyle: "goto" },
+  {
+    id: "vscode",
+    label: "VS Code",
+    commands: ["code"],
+    appBundleId: "com.microsoft.VSCode",
+    launchStyle: "goto",
+  },
   {
     id: "vscode-insiders",
     label: "VS Code Insiders",
     commands: ["code-insiders"],
+    appBundleId: "com.microsoft.VSCodeInsiders",
     launchStyle: "goto",
   },
-  { id: "vscodium", label: "VSCodium", commands: ["codium"], launchStyle: "goto" },
-  { id: "zed", label: "Zed", commands: ["zed", "zeditor"], launchStyle: "direct-path" },
+  {
+    id: "vscodium",
+    label: "VSCodium",
+    commands: ["codium"],
+    appBundleId: "com.vscodium",
+    launchStyle: "goto",
+  },
+  {
+    id: "zed",
+    label: "Zed",
+    commands: ["zed", "zeditor"],
+    appBundleId: "dev.zed.Zed",
+    launchStyle: "direct-path",
+  },
   { id: "antigravity", label: "Antigravity", commands: ["agy"], launchStyle: "goto" },
   { id: "idea", label: "IntelliJ IDEA", commands: ["idea"], launchStyle: "line-column" },
   { id: "aqua", label: "Aqua", commands: ["aqua"], launchStyle: "line-column" },

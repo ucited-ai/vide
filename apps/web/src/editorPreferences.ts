@@ -14,6 +14,39 @@ import { useAtomCommand } from "./state/use-atom-command";
 
 const LAST_EDITOR_KEY = "vide:last-editor";
 
+/**
+ * Editors that win the default before anything else, most preferred first.
+ *
+ * Stated here rather than inferred from the order of `EDITORS` so that
+ * reordering the contract table cannot silently change which editor the Open
+ * button opens on a machine that has never picked one.
+ */
+const PREFERRED_EDITOR_ORDER: ReadonlyArray<EditorId> = ["vscode", "cursor"];
+
+/** The file manager opens no code, so it only ever wins when nothing else is installed. */
+const LAST_RESORT_EDITOR: EditorId = "file-manager";
+
+/**
+ * Sort key for `availableEditors`: {@link PREFERRED_EDITOR_ORDER} first, then the
+ * remaining editors in contract order, with {@link LAST_RESORT_EDITOR} always last.
+ */
+export function editorPreferenceRank(editor: EditorId): number {
+  const preferredIndex = PREFERRED_EDITOR_ORDER.indexOf(editor);
+  if (preferredIndex !== -1) return preferredIndex;
+  if (editor === LAST_RESORT_EDITOR) return Number.MAX_SAFE_INTEGER;
+  return PREFERRED_EDITOR_ORDER.length + EDITORS.findIndex(({ id }) => id === editor);
+}
+
+function resolveDefaultEditor(availableEditors: ReadonlyArray<EditorId>): EditorId | null {
+  let preferred: EditorId | null = null;
+  for (const editor of availableEditors) {
+    if (preferred === null || editorPreferenceRank(editor) < editorPreferenceRank(preferred)) {
+      preferred = editor;
+    }
+  }
+  return preferred;
+}
+
 export class PreferredEditorEnvironmentRequiredError extends Schema.TaggedErrorClass<PreferredEditorEnvironmentRequiredError>()(
   "PreferredEditorEnvironmentRequiredError",
   {
@@ -43,7 +76,7 @@ export function usePreferredEditor(availableEditors: ReadonlyArray<EditorId>) {
 
   const effectiveEditor = useMemo(() => {
     if (lastEditor && availableEditors.includes(lastEditor)) return lastEditor;
-    return EDITORS.find((editor) => availableEditors.includes(editor.id))?.id ?? null;
+    return resolveDefaultEditor(availableEditors);
   }, [lastEditor, availableEditors]);
 
   return [effectiveEditor, setLastEditor] as const;
@@ -52,12 +85,11 @@ export function usePreferredEditor(availableEditors: ReadonlyArray<EditorId>) {
 export function resolveAndPersistPreferredEditor(
   availableEditors: readonly EditorId[],
 ): EditorId | null {
-  const availableEditorIds = new Set(availableEditors);
   const stored = getLocalStorageItem(LAST_EDITOR_KEY, EditorId);
-  if (stored && availableEditorIds.has(stored)) return stored;
-  const editor = EDITORS.find((editor) => availableEditorIds.has(editor.id))?.id ?? null;
+  if (stored && availableEditors.includes(stored)) return stored;
+  const editor = resolveDefaultEditor(availableEditors);
   if (editor) setLocalStorageItem(LAST_EDITOR_KEY, editor, EditorId);
-  return editor ?? null;
+  return editor;
 }
 
 export function useOpenInPreferredEditor(

@@ -11,6 +11,7 @@ import {
   MenuSeparator as MenuDivider,
   MenuTrigger,
 } from "../ui/menu";
+import { PINNED_POPUP_COLLISION_AVOIDANCE } from "./ProviderModelPicker";
 
 export const CompactComposerControlsMenu = memo(function CompactComposerControlsMenu(props: {
   activePlan: boolean;
@@ -34,7 +35,7 @@ export const CompactComposerControlsMenu = memo(function CompactComposerControls
       >
         <EllipsisIcon aria-hidden="true" className="size-4" />
       </MenuTrigger>
-      <MenuPopup align="start">
+      <MenuPopup align="start" side="top" collisionAvoidance={PINNED_POPUP_COLLISION_AVOIDANCE}>
         <div className="px-2 py-1.5 font-medium text-muted-foreground text-xs">Access</div>
         <MenuRadioGroup
           value={props.runtimeMode}

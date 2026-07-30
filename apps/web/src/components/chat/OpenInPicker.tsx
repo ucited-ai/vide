@@ -1,7 +1,7 @@
 import { EditorId, type EnvironmentId, type ResolvedKeybindingsConfig } from "@vide/contracts";
 import { memo, useCallback, useEffect, useMemo } from "react";
 import { isOpenFavoriteEditorShortcut, shortcutLabelForCommand } from "../../keybindings";
-import { usePreferredEditor } from "../../editorPreferences";
+import { editorPreferenceRank, usePreferredEditor } from "../../editorPreferences";
 import { ChevronDownIcon, FolderClosedIcon } from "lucide-react";
 import { Button } from "../ui/button";
 import { Group, GroupSeparator } from "../ui/group";
@@ -176,7 +176,9 @@ const resolveOptions = (platform: string, availableEditors: ReadonlyArray<Editor
     },
   ];
   const availableEditorSet = new Set(availableEditors);
-  return baseOptions.filter((option) => availableEditorSet.has(option.value));
+  return baseOptions
+    .filter((option) => availableEditorSet.has(option.value))
+    .sort((a, b) => editorPreferenceRank(a.value) - editorPreferenceRank(b.value));
 };
 
 function getOpenInIconClass(kind: OpenInOption["kind"]) {

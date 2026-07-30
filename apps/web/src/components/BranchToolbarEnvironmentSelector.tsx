@@ -3,6 +3,7 @@ import { CloudIcon, MonitorIcon } from "lucide-react";
 import { memo, useMemo } from "react";
 
 import type { EnvironmentOption } from "./BranchToolbar.logic";
+import { PINNED_POPUP_COLLISION_AVOIDANCE } from "./chat/ProviderModelPicker";
 import {
   Select,
   SelectGroup,
@@ -74,7 +75,14 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
         )}
         <SelectValue />
       </SelectTrigger>
-      <SelectPopup>
+      {/* Same trigger-anchoring fix as the workspace chip beside this one:
+          see the comment in BranchToolbarEnvModeSelector. */}
+      <SelectPopup
+        alignItemWithTrigger={false}
+        align="start"
+        side="top"
+        collisionAvoidance={PINNED_POPUP_COLLISION_AVOIDANCE}
+      >
         <SelectGroup>
           <SelectGroupLabel>Run on</SelectGroupLabel>
           {availableEnvironments.map((env) => (

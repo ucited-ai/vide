@@ -45,7 +45,7 @@ function PopoverPopup({
         align={align}
         alignOffset={alignOffset}
         anchor={anchor}
-        className="z-[60] h-(--positioner-height) w-(--positioner-width) max-w-(--available-width) transition-transform data-instant:transition-none"
+        className="z-[60] h-(--positioner-height) w-(--positioner-width) max-w-(--available-width)"
         data-slot="popover-positioner"
         side={side}
         sideOffset={sideOffset}

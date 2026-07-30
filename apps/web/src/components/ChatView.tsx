@@ -333,8 +333,14 @@ const COMPOSER_DOCK_CLASS_NAME =
  * read as one stack, so this is now more than three times the block's own
  * internal spacing, which is what finally separates them. It is also what lifts
  * the whole hero, since the composer no longer floats it off the bottom edge.
+ *
+ * The number is therefore doing two jobs, and the second one is why it grew
+ * again: at 112px the hero still sat low in the pane, reading as something
+ * stacked on the composer rather than the screen's own subject. At 176px the
+ * block rises 64px, which stands it about a quarter further off the bottom edge
+ * than before — and the composer, anchored to that edge, does not move.
  */
-const DRAFT_HERO_STACK_GAP_CLASS_NAME = "pb-28";
+const DRAFT_HERO_STACK_GAP_CLASS_NAME = "pb-44";
 function useDraftHeroLayoutTransition(isDraftHeroState: boolean) {
   const transitionGroupRef = useRef<HTMLDivElement | null>(null);
   const composerAnchorRef = useRef<HTMLDivElement | null>(null);

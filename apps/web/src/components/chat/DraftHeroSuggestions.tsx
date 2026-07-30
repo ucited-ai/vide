@@ -66,7 +66,7 @@ export function DraftHeroSuggestions() {
           key={label}
           type="button"
           onClick={() => applySuggestion(prompt)}
-          className="vide-material-thin group flex min-h-24 cursor-default flex-col items-start gap-2.5 rounded-xl border border-border/60 p-3 text-left transition-[transform,border-color,background-color] duration-150 ease-out hover:-translate-y-px hover:border-border focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none motion-reduce:hover:translate-y-0"
+          className="group flex min-h-24 cursor-default flex-col items-start gap-2.5 rounded-xl border border-border/60 bg-card p-3 text-left transition-[transform,border-color,background-color] duration-(--duration-fast) ease-(--ease-out) hover:-translate-y-px hover:border-border focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none motion-reduce:hover:translate-y-0"
         >
           <Icon className="size-4 shrink-0 text-muted-foreground/70 transition-colors group-hover:text-foreground/80" />
           <span className="text-[13px] leading-snug text-muted-foreground/85 tracking-[-0.006em] group-hover:text-foreground/90">

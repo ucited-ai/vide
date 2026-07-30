@@ -7,6 +7,7 @@ import {
   resolveLockedWorkspaceLabel,
   type EnvMode,
 } from "./BranchToolbar.logic";
+import { PINNED_POPUP_COLLISION_AVOIDANCE } from "./chat/ProviderModelPicker";
 import {
   Select,
   SelectGroup,
@@ -94,7 +95,21 @@ export const BranchToolbarEnvModeSelector = memo(function BranchToolbarEnvModeSe
         )}
         <SelectValue />
       </SelectTrigger>
-      <SelectPopup>
+      {/*
+       * This chip sits in the strip above the composer, hard against the
+       * bottom of the window. `alignItemWithTrigger` (Select's default)
+       * position the popup so the *selected* item overlaps the trigger,
+       * which reads as the popup opening centred in mid-air instead of off
+       * the chip. Turning it off and pinning side/align — same treatment as
+       * the permissions picker just below this in the composer — anchors
+       * the popup to the trigger's top edge instead.
+       */}
+      <SelectPopup
+        alignItemWithTrigger={false}
+        align="start"
+        side="top"
+        collisionAvoidance={PINNED_POPUP_COLLISION_AVOIDANCE}
+      >
         <SelectGroup>
           <SelectGroupLabel>Workspace</SelectGroupLabel>
           <SelectItem value="local">

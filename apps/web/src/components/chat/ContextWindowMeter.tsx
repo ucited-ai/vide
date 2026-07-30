@@ -1,6 +1,7 @@
 import { cn } from "~/lib/utils";
 import { type ContextWindowSnapshot, formatContextWindowTokens } from "~/lib/contextWindow";
 import { Popover, PopoverPopup, PopoverTrigger } from "../ui/popover";
+import { PINNED_POPUP_COLLISION_AVOIDANCE } from "./ProviderModelPicker";
 
 /*
  * Context usage, read at a glance.
@@ -83,6 +84,7 @@ export function ContextWindowMeter(props: {
         tooltipStyle
         side="top"
         align="end"
+        collisionAvoidance={PINNED_POPUP_COLLISION_AVOIDANCE}
         className="dropdown-glass w-64 max-w-none border-0! bg-secondary! p-0 shadow-none! before:hidden"
       >
         <div className="flex flex-col gap-2 p-3">

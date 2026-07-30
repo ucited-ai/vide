@@ -38,6 +38,7 @@ import { AzureDevOpsIcon, BitbucketIcon, GitHubIcon, GitLabIcon, type Icon } fro
 import { Input } from "./ui/input";
 import { Menu, MenuItem, MenuPopup, MenuSub, MenuSubPopup, MenuSubTrigger } from "./ui/menu";
 import { stackedThreadToast, toastManager } from "./ui/toast";
+import { keepPrintableKeysInField } from "~/lib/menuTypeahead";
 
 const MENU_POPUP_WIDTH_CLASS = "w-72";
 
@@ -482,7 +483,9 @@ function AddProjectMenuItems({
                 if (event.key === "Enter") {
                   event.preventDefault();
                   void confirmClone();
+                  return;
                 }
+                keepPrintableKeysInField(event);
               }}
             />
             <button

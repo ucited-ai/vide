@@ -28,6 +28,9 @@ import {
 import { BranchToolbarBranchSelector } from "./BranchToolbarBranchSelector";
 import { BranchToolbarEnvironmentSelector } from "./BranchToolbarEnvironmentSelector";
 import { BranchToolbarEnvModeSelector } from "./BranchToolbarEnvModeSelector";
+import { ProjectPickerMenu } from "./chat/ProjectPickerMenu";
+import { PINNED_POPUP_COLLISION_AVOIDANCE } from "./chat/ProviderModelPicker";
+import { useProjectPicker } from "./chat/useProjectPicker";
 import { Button } from "./ui/button";
 import {
   Menu,
@@ -140,7 +143,12 @@ const MobileRunContextSelector = memo(function MobileRunContextSelector({
         {triggerContent}
         <ChevronDownIcon className="size-3 shrink-0 opacity-50" />
       </MenuTrigger>
-      <MenuPopup align="start" side="top" className="w-64">
+      <MenuPopup
+        align="start"
+        side="top"
+        collisionAvoidance={PINNED_POPUP_COLLISION_AVOIDANCE}
+        className="w-64"
+      >
         {showEnvironmentPicker && availableEnvironments && onEnvironmentChange ? (
           <>
             <MenuGroup>
@@ -300,14 +308,37 @@ export const BranchToolbar = memo(function BranchToolbar({
     canPickEnvironment: showEnvironmentPicker,
   });
   const isMobile = useIsMobile();
+  // Picking another project starts a thread there. From a draft that replaces
+  // the draft it stands in for; from a started thread it pushes, so the thread
+  // the user just left stays behind them in history.
+  const projectPicker = useProjectPicker({
+    activeProjectRef,
+    activeProjectTitle: activeProject?.title ?? null,
+    replaceRoute: serverThread === null,
+  });
 
   if (!hasActiveThread || !activeProject) return null;
 
-  // The strip sits above the composer, so the chips carry no surface of their
-  // own: they are inset to the composer's corner tangents and read as a caption
-  // on the input rather than a tray hanging off it.
+  // The strip carries the composer's own surface and meets it edge to edge —
+  // the negative bottom margin covers the composer's top hairline, so the two
+  // read as one shape rather than a tray parked on top of the input. It is
+  // narrower than the composer, which is what keeps the seam inside the
+  // composer's flat top instead of landing on its rounded corners.
   return (
-    <div className="mx-auto flex w-[calc(100%-2.75rem)] max-w-[calc(48rem-2.75rem)] items-center gap-2 px-1 pb-1.5">
+    <div className="-mb-px mx-auto flex w-4/5 items-center gap-2 rounded-t-xl bg-card px-1.5 pt-1 pb-1.5">
+      <ProjectPickerMenu picker={projectPicker}>
+        <MenuTrigger
+          render={<Button variant="ghost" size="xs" />}
+          aria-label="Change project"
+          className="min-w-0 shrink justify-start font-medium text-muted-foreground/70 hover:text-foreground/80"
+        >
+          <span className="min-w-0 truncate">
+            {projectPicker.activeProjectDisplayName ?? activeProject.title}
+          </span>
+          <ChevronDownIcon className="size-3 shrink-0 opacity-50" />
+        </MenuTrigger>
+      </ProjectPickerMenu>
+      <Separator orientation="vertical" className="mx-0.5 h-3.5!" />
       {isMobile ? (
         <MobileRunContextSelector
           envLocked={envLocked}

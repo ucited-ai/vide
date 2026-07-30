@@ -5,6 +5,7 @@ import { StageBackdropButtonArt, useSidebarStageBackdropVariant } from "../Sideb
 import { Button } from "../ui/button";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
 import { Spinner } from "../ui/spinner";
+import { PINNED_POPUP_COLLISION_AVOIDANCE } from "./ProviderModelPicker";
 
 interface PendingActionState {
   questionIndex: number;
@@ -182,7 +183,7 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
           >
             <ChevronDownIcon className="size-3.5" />
           </MenuTrigger>
-          <MenuPopup align="end" side="top">
+          <MenuPopup align="end" side="top" collisionAvoidance={PINNED_POPUP_COLLISION_AVOIDANCE}>
             <MenuItem
               disabled={isSendBusy || isConnecting || isEnvironmentUnavailable}
               onClick={() => void onImplementPlanInNewThread()}
