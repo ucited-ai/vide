@@ -254,12 +254,12 @@ const runtimeModeOptions = Object.keys(runtimeModeConfig) as RuntimeMode[];
  * jammed against it. The paddings are then set one step above the app's usual
  * spacing rather than one below, for the same reason.
  */
-const COMPOSER_EDITOR_MIN_HEIGHT_CLASS = "min-h-14";
-const COMPOSER_INPUT_PADDING_CLASS = "px-3 pb-2.5 sm:px-4";
+const COMPOSER_EDITOR_MIN_HEIGHT_CLASS = "min-h-9";
+const COMPOSER_INPUT_PADDING_CLASS = "px-3 pb-2 sm:px-4";
 /** Tighter above when a banner already separates the input from what precedes it. */
-const COMPOSER_INPUT_PADDING_TOP_CLASS = "pt-3.5";
+const COMPOSER_INPUT_PADDING_TOP_CLASS = "pt-3";
 const COMPOSER_INPUT_PADDING_TOP_WITH_HEADER_CLASS = "pt-3";
-const COMPOSER_FOOTER_PADDING_CLASS = "px-2 pb-2.5 sm:px-2.5 sm:pb-3";
+const COMPOSER_FOOTER_PADDING_CLASS = "px-2 pb-2 sm:px-2.5 sm:pb-2.5";
 
 /*
  * The control row: attachments, permissions, model, context.

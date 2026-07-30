@@ -2527,7 +2527,13 @@ function ChatViewContent(props: ChatViewProps) {
     terminalUiLaunchContext?.threadId === activeThreadId ? terminalUiLaunchContext : null;
   // Default true while loading to avoid toolbar flicker.
   const isGitRepo = gitStatusQuery.data?.isRepo ?? true;
-  const showComposerContextStrip = isGitRepo && activeProject !== null;
+  /*
+   * A project is enough. Requiring a git repo hid the strip entirely on a plain
+   * folder, taking the project and workspace chips with it — and those are exactly
+   * what tells you where a prompt is about to run. Only the branch chip needs git,
+   * and BranchToolbar already decides that for itself.
+   */
+  const showComposerContextStrip = activeProject !== null;
   const initialDiffPanelGitScope =
     gitStatusQuery.data?.hasWorkingTreeChanges === true ? "unstaged" : "branch";
   const diffPanelGitStatusResolutionKey = gitStatusQuery.data ? "resolved" : "pending";

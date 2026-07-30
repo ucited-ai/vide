@@ -56,17 +56,25 @@ export const ChatHeader = memo(function ChatHeader({
   onNewThreadInProject,
 }: ChatHeaderProps) {
   const primaryEnvironmentId = usePrimaryEnvironmentId();
-  const showOpenInPicker =
-    threadHasMessages &&
-    shouldShowOpenInPicker({
-      activeProjectName,
-      activeThreadEnvironmentId,
-      primaryEnvironmentId,
-    });
-  const showEnvironmentColumn = threadHasMessages && Boolean(activeProjectName);
+  /*
+   * Gated on a project, not on the thread having messages.
+   *
+   * An earlier pass hid the whole header until the first message, on the theory
+   * that a draft titled "New thread" is noise. It also hid everything useful: the
+   * environment, the editor button, and the project you are in — all of which are
+   * meaningful before you have typed anything, and one of which ("initialise git")
+   * is only reachable here. An empty draft is exactly when you want to check which
+   * worktree you are about to work in.
+   */
+  const showOpenInPicker = shouldShowOpenInPicker({
+    activeProjectName,
+    activeThreadEnvironmentId,
+    primaryEnvironmentId,
+  });
+  const showEnvironmentColumn = Boolean(activeProjectName);
   return (
     <div className="@container/header-actions flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
-      {threadHasMessages ? (
+      {activeProjectName || threadHasMessages ? (
         <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden sm:gap-3">
           {/* The project always leads the header: knowing which project a
               thread lives in is priority zero, and the thread title alone

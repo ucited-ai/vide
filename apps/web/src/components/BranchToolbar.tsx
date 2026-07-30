@@ -325,7 +325,7 @@ export const BranchToolbar = memo(function BranchToolbar({
   // narrower than the composer, which is what keeps the seam inside the
   // composer's flat top instead of landing on its rounded corners.
   return (
-    <div className="-mb-px mx-auto flex w-4/5 items-center gap-2 rounded-t-xl bg-card px-1.5 pt-1 pb-1.5">
+    <div className="-mb-px mx-auto flex w-[calc(100%-2.75rem)] items-center justify-start gap-1 rounded-t-2xl bg-card px-2.5 pt-1.5 pb-2">
       <ProjectPickerMenu picker={projectPicker}>
         <MenuTrigger
           render={<Button variant="ghost" size="xs" />}
@@ -355,7 +355,7 @@ export const BranchToolbar = memo(function BranchToolbar({
           onUsePreviousWorktree={onUsePreviousWorktree}
         />
       ) : (
-        <div className="flex min-w-0 flex-1 items-center gap-1">
+        <div className="flex min-w-0 items-center gap-1">
           {showEnvironmentIndicator && availableEnvironments && (
             <>
               <BranchToolbarEnvironmentSelector

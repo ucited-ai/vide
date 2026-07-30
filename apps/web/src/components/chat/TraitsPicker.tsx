@@ -282,10 +282,11 @@ export type TraitsControlProps = TraitsMenuContentProps & TraitsPersistence;
  * descriptors are visible, what each one currently reads, and what choosing a
  * value writes back.
  *
- * Split out from the menu so the same behaviour can render two ways. The menu
- * variant needs a Base UI `Menu` ancestor, and nesting one inside the model
- * picker's popover made selecting an effort tear that popover down — so the
- * picker gets the inline variant, which is plain buttons and closes nothing.
+ * Split out from the menu so the same behaviour can render more than one way.
+ * The menu variant needs a Base UI `Menu` ancestor, and nesting one inside the
+ * model picker's popover made selecting an effort tear that popover down — so
+ * the picker renders its own step instead (see {@link TraitsStepContent}),
+ * plain rows with no Base UI menu underneath them.
  */
 export function useTraitsControl({
   provider,
@@ -497,145 +498,6 @@ function TraitsInlineLabel(props: { children: ReactNode; className?: string }) {
   );
 }
 
-/** Why a trait is currently not writable — today only the ultrathink body text. */
-function TraitsInlineHint(props: { children: ReactNode }) {
-  return (
-    <span className="text-(length:--text-caption) text-muted-foreground/80">{props.children}</span>
-  );
-}
-
-/** One descriptor: its name, then its choices, wrapping when they run out of room. */
-function TraitsInlineRow(props: { label: string; hint?: string | null; children: ReactNode }) {
-  return (
-    <div className="flex w-full min-w-0 flex-col gap-0.5">
-      <div className="flex w-full min-w-0 items-center gap-(--popup-item-gap)">
-        <TraitsInlineLabel>{props.label}</TraitsInlineLabel>
-        <div
-          role="group"
-          aria-label={props.label}
-          className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-0.5"
-        >
-          {props.children}
-        </div>
-      </div>
-      {props.hint ? <TraitsInlineHint>{props.hint}</TraitsInlineHint> : null}
-    </div>
-  );
-}
-
-/**
- * One choice. The check slot is always present so picking a different value
- * moves the wash rather than reflowing the row.
- */
-function TraitsInlineOption(props: {
-  label: string;
-  isSelected: boolean;
-  isDefault?: boolean;
-  isDisabled?: boolean;
-  onSelect: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      aria-pressed={props.isSelected}
-      disabled={props.isDisabled ?? false}
-      {...(props.isDefault ? { title: `${props.label} (default)` } : {})}
-      // The popup's keyboard navigation lives in its search field. Keeping the
-      // press from moving focus leaves the model list arrow-navigable while the
-      // trait is being changed.
-      onMouseDown={(event) => event.preventDefault()}
-      onClick={props.onSelect}
-      className={cn(
-        "inline-flex h-(--popup-item-height) min-w-0 cursor-default items-center gap-1.5 rounded-sm px-(--popup-item-padding-inline) text-(length:--text-ui) outline-none transition-colors",
-        props.isSelected
-          ? "bg-(--wash-selected) text-foreground"
-          : "text-muted-foreground hover:bg-(--wash-hover) hover:text-foreground",
-        props.isDisabled ? "pointer-events-none opacity-64" : "",
-      )}
-    >
-      <span className="min-w-0 truncate">{props.label}</span>
-      <CheckIcon
-        aria-hidden="true"
-        className={cn("size-3 shrink-0", props.isSelected ? "opacity-100" : "opacity-0")}
-      />
-    </button>
-  );
-}
-
-/**
- * An ordered scale as one track.
- *
- * A native range input lies transparently over the drawn track, so dragging,
- * arrow keys, Home/End and the accessible name are the browser's rather than
- * ours; the ticks and thumb underneath are decoration and carry no state. The
- * invisible native thumb is sized to match the drawn one so the two agree on
- * where a given value sits.
- *
- * Unlike the button row, this control does take focus on press. That is the
- * point — arrow keys have to move the thumb once you are on it — and it is safe
- * because the model list's combobox is rendered `inline` and `open`, so it stays
- * mounted no matter where focus goes inside the popup.
- */
-function TraitsScaleSlider(props: {
-  label: string;
-  stops: ReadonlyArray<ProviderOptionChoice>;
-  /** Index of the stop in effect, always within range. */
-  activeIndex: number;
-  /** A prompt-injected option owns the value, so the scale is shown but not in force. */
-  isOverridden: boolean;
-  isDisabled: boolean;
-  onSelectIndex: (index: number) => void;
-}) {
-  const lastIndex = props.stops.length - 1;
-  const progress = `${(props.activeIndex / lastIndex) * 100}%`;
-
-  return (
-    <div className="relative flex h-4 min-w-0 flex-1 items-center">
-      <input
-        type="range"
-        min={0}
-        max={lastIndex}
-        step={1}
-        value={props.activeIndex}
-        disabled={props.isDisabled}
-        aria-label={props.label}
-        aria-valuetext={props.stops[props.activeIndex]?.label ?? ""}
-        onChange={(event) => props.onSelectIndex(event.target.valueAsNumber)}
-        className="peer absolute inset-0 z-10 w-full cursor-default appearance-none bg-transparent opacity-0 focus-visible:outline-none disabled:pointer-events-none [&::-webkit-slider-thumb]:size-3 [&::-webkit-slider-thumb]:appearance-none"
-      />
-      {/* Inset by half a thumb so the ends of the scale are reachable and the
-          thumb never overhangs the track it runs on. */}
-      <div
-        aria-hidden="true"
-        className={cn(
-          "pointer-events-none absolute inset-x-1.5 flex h-full items-center",
-          (props.isDisabled || props.isOverridden) && "opacity-64",
-        )}
-      >
-        <span className="absolute inset-x-0 h-px rounded-full bg-(--edge-strong)" />
-        <span
-          className="absolute left-0 h-px rounded-full bg-foreground/45"
-          style={{ width: progress }}
-        />
-        {props.stops.map((stop, index) => (
-          <span
-            key={stop.id}
-            className={cn(
-              "absolute size-1 -translate-x-1/2 rounded-full",
-              index <= props.activeIndex ? "bg-foreground/45" : "bg-(--edge-strong)",
-            )}
-            style={{ left: `${(index / lastIndex) * 100}%` }}
-          />
-        ))}
-        <span
-          className="absolute size-3 -translate-x-1/2 rounded-full border border-(--edge-strong) bg-(--surface-raised-2) shadow-sm transition-[left] duration-(--duration-fast) ease-(--ease-out) peer-focus-visible:ring-2 peer-focus-visible:ring-ring motion-reduce:transition-none"
-          style={{ left: progress }}
-        />
-      </div>
-    </div>
-  );
-}
-
 /**
  * A boolean trait is a switch, not a two-stop slider: it has an off state rather
  * than a low end, and reading it as the bottom of a scale is wrong.
@@ -648,7 +510,7 @@ function TraitsSwitchRow(props: {
   const switchId = useId();
 
   return (
-    <div className="flex w-full min-w-0 items-center justify-between gap-(--popup-item-gap)">
+    <div className="flex min-h-(--popup-item-height) w-full min-w-0 items-center justify-between gap-(--popup-item-gap) px-(--popup-item-padding-inline)">
       <label htmlFor={switchId}>
         <TraitsInlineLabel className="cursor-default">{props.label}</TraitsInlineLabel>
       </label>
@@ -663,133 +525,24 @@ function TraitsSwitchRow(props: {
   );
 }
 
-/**
- * The traits controls as plain rows, for docking inside another popup.
- *
- * Same behaviour as {@link TraitsMenuContent}, no Base UI menu primitives —
- * which is the whole point: a menu nested in a popover dismisses that popover
- * the moment a value is chosen, and effort is meant to be adjustable without
- * losing the model list.
- *
- * Each descriptor shape gets the control that fits it: an ordered scale is a
- * slider, a boolean is a switch, and a choice between named alternatives stays a
- * row of buttons. A model that declares nothing renders nothing.
- */
-export const TraitsInlineContent = memo(function TraitsInlineContentImpl(
-  props: TraitsControlProps,
-) {
-  const {
-    hasAnyControls,
-    selectDescriptors,
-    booleanDescriptors,
-    getSelectValue,
-    isSelectLocked,
-    handleSelectChange,
-    handleBooleanChange,
-  } = useTraitsControl(props);
-
-  if (!hasAnyControls) {
-    return null;
-  }
-
+/** A hairline break between traits groups, standing in for a Base UI menu
+ * separator: this step renders inside a Popover rather than a Menu, so there
+ * is no Menu.Root for a real MenuSeparator to anchor to. */
+function TraitsStepDivider() {
   return (
-    <div className="flex w-full min-w-0 flex-col gap-2.5">
-      {selectDescriptors.map((descriptor) => {
-        const isLocked = isSelectLocked(descriptor);
-        const selectedValue = getSelectValue(descriptor);
-        const scale = splitDescriptorScale(descriptor);
-
-        if (!isScaleDescriptor(descriptor, scale)) {
-          return (
-            <TraitsInlineRow
-              key={descriptor.id}
-              label={descriptor.label}
-              hint={isLocked ? ULTRATHINK_BODY_TEXT_HINT : null}
-            >
-              {descriptor.options.map((option) => (
-                <TraitsInlineOption
-                  key={option.id}
-                  label={option.label}
-                  isSelected={option.id === selectedValue}
-                  isDefault={option.isDefault === true}
-                  isDisabled={isLocked}
-                  onSelect={() => handleSelectChange(descriptor, option.id)}
-                />
-              ))}
-            </TraitsInlineRow>
-          );
-        }
-
-        // A prompt-injected option is not a position on the scale, so when one is
-        // in effect the thumb falls back to the stored stop and the track is
-        // dimmed. Moving it writes that stop, which is what strips the prompt
-        // prefix again.
-        const stopIndex = scale.stops.findIndex((stop) => stop.id === selectedValue);
-        const isOverridden = stopIndex < 0;
-        const activeIndex = isOverridden
-          ? Math.max(
-              scale.stops.findIndex((stop) => stop.id === descriptor.currentValue),
-              0,
-            )
-          : stopIndex;
-        const currentLabel =
-          descriptor.options.find((option) => option.id === selectedValue)?.label ?? "";
-
-        return (
-          <div key={descriptor.id} className="flex w-full min-w-0 flex-col gap-1.5">
-            <div className="flex w-full min-w-0 items-center justify-between gap-(--popup-item-gap)">
-              <TraitsInlineLabel>{descriptor.label}</TraitsInlineLabel>
-              <span className="min-w-0 truncate text-(length:--text-caption) text-foreground">
-                {currentLabel}
-              </span>
-            </div>
-            <div className="flex w-full min-w-0 items-center gap-(--popup-item-gap)">
-              <TraitsScaleSlider
-                label={descriptor.label}
-                stops={scale.stops}
-                activeIndex={activeIndex}
-                isOverridden={isOverridden}
-                isDisabled={isLocked}
-                onSelectIndex={(index) => {
-                  const stop = scale.stops[index];
-                  if (stop) handleSelectChange(descriptor, stop.id);
-                }}
-              />
-              {scale.promptInjected.map((option) => (
-                <TraitsInlineOption
-                  key={option.id}
-                  label={option.label}
-                  isSelected={option.id === selectedValue}
-                  isDisabled={isLocked}
-                  onSelect={() => handleSelectChange(descriptor, option.id)}
-                />
-              ))}
-            </div>
-            {isLocked ? <TraitsInlineHint>{ULTRATHINK_BODY_TEXT_HINT}</TraitsInlineHint> : null}
-          </div>
-        );
-      })}
-      {booleanDescriptors.map((descriptor) => (
-        <TraitsSwitchRow
-          key={descriptor.id}
-          label={descriptor.label}
-          isOn={descriptor.currentValue === true}
-          onChange={(enabled) => handleBooleanChange(descriptor, enabled)}
-        />
-      ))}
-    </div>
+    <div aria-hidden="true" className="mx-(--popup-item-padding-inline) my-1 h-px bg-(--edge)" />
   );
-});
+}
 
 /**
- * One descriptor's options as a plain vertical list, full width.
+ * One descriptor's options as a plain vertical list, full width, one
+ * consistent row height — the same shape `ui/menu.tsx` renders a
+ * `MenuRadioItem` at, so the two surfaces read as one popup.
  *
- * The model picker's second step, unlike the docked footer, has an entire
- * popup's worth of room, so an ordered scale doesn't need a slider to read as
- * ordered — the options are already in order top to bottom. That also
- * resolves Ultrathink: a prompt-injected option is just another row here,
- * where the footer had to carve it out of the slider and stand it beside the
- * track as a separate pill.
+ * The step has an entire popup's worth of room, so an ordered scale doesn't
+ * need a slider to read as ordered — the options are already in order top to
+ * bottom. That also covers Ultrathink for free: a prompt-injected option is
+ * just another row here, not a pill carved out separately.
  */
 function TraitsStepOptionRow(props: {
   label: string;
@@ -802,12 +555,13 @@ function TraitsStepOptionRow(props: {
     <button
       type="button"
       disabled={props.isDisabled}
-      // See TraitsInlineOption: keeps the press from moving focus off the
-      // search field's keyboard navigation.
+      // The popup's keyboard navigation lives in its search field. Keeping the
+      // press from moving focus leaves the model list arrow-navigable while
+      // the trait is being changed.
       onMouseDown={(event) => event.preventDefault()}
       onClick={props.onSelect}
       className={cn(
-        "flex w-full min-w-0 cursor-default items-center gap-3 rounded-md px-(--popup-item-padding-inline) py-2 text-left text-(length:--text-ui) outline-none transition-colors",
+        "flex h-(--popup-item-height) w-full min-w-0 cursor-default items-center gap-(--popup-item-gap) rounded-sm px-(--popup-item-padding-inline) text-left text-(length:--text-ui) outline-none transition-colors",
         props.isSelected
           ? "bg-(--wash-selected) text-foreground"
           : "text-muted-foreground hover:bg-(--wash-hover) hover:text-foreground",
@@ -832,13 +586,12 @@ function TraitsStepOptionRow(props: {
 }
 
 /**
- * The traits controls as the model picker's second step.
- *
- * Same behaviour as {@link TraitsInlineContent} — same `useTraitsControl`,
- * same `handleSelectChange` — but every select descriptor renders as one
- * list of rows instead of choosing between a pill row and a slider. Nothing
- * here branches on provider: the shape of what renders follows entirely from
- * the descriptors the model declares.
+ * The traits controls as the model picker's second step, styled as a native
+ * menu section rather than a form: a hairline separator marks a new group
+ * instead of a wide gap, and every option row shares one height with
+ * `ui/menu.tsx`'s `MenuRadioItem`. Nothing here branches on provider — the
+ * shape of what renders follows entirely from the descriptors the model
+ * declares.
  */
 export const TraitsStepContent = memo(function TraitsStepContentImpl(props: TraitsControlProps) {
   const {
@@ -856,14 +609,15 @@ export const TraitsStepContent = memo(function TraitsStepContentImpl(props: Trai
   }
 
   return (
-    <div className="flex w-full min-w-0 flex-col gap-4">
-      {selectDescriptors.map((descriptor) => {
+    <div className="flex w-full min-w-0 flex-col">
+      {selectDescriptors.map((descriptor, index) => {
         const isLocked = isSelectLocked(descriptor);
         const selectedValue = getSelectValue(descriptor);
 
         return (
-          <div key={descriptor.id} className="flex w-full min-w-0 flex-col gap-1">
-            <div className="px-(--popup-item-padding-inline) font-medium text-(length:--text-caption) text-muted-foreground">
+          <div key={descriptor.id} className="flex w-full min-w-0 flex-col">
+            {index > 0 ? <TraitsStepDivider /> : null}
+            <div className="px-(--popup-item-padding-inline) pt-1.5 pb-0.5 font-medium text-(length:--text-caption) text-muted-foreground">
               {descriptor.label}
             </div>
             {isLocked ? (
@@ -871,28 +625,28 @@ export const TraitsStepContent = memo(function TraitsStepContentImpl(props: Trai
                 {ULTRATHINK_BODY_TEXT_HINT}
               </div>
             ) : null}
-            <div className="flex flex-col gap-0.5">
-              {descriptor.options.map((option) => (
-                <TraitsStepOptionRow
-                  key={option.id}
-                  label={option.label}
-                  isSelected={option.id === selectedValue}
-                  isDefault={option.isDefault === true}
-                  isDisabled={isLocked}
-                  onSelect={() => handleSelectChange(descriptor, option.id)}
-                />
-              ))}
-            </div>
+            {descriptor.options.map((option) => (
+              <TraitsStepOptionRow
+                key={option.id}
+                label={option.label}
+                isSelected={option.id === selectedValue}
+                isDefault={option.isDefault === true}
+                isDisabled={isLocked}
+                onSelect={() => handleSelectChange(descriptor, option.id)}
+              />
+            ))}
           </div>
         );
       })}
-      {booleanDescriptors.map((descriptor) => (
-        <TraitsSwitchRow
-          key={descriptor.id}
-          label={descriptor.label}
-          isOn={descriptor.currentValue === true}
-          onChange={(enabled) => handleBooleanChange(descriptor, enabled)}
-        />
+      {booleanDescriptors.map((descriptor, index) => (
+        <div key={descriptor.id} className="flex w-full min-w-0 flex-col">
+          {index > 0 || selectDescriptors.length > 0 ? <TraitsStepDivider /> : null}
+          <TraitsSwitchRow
+            label={descriptor.label}
+            isOn={descriptor.currentValue === true}
+            onChange={(enabled) => handleBooleanChange(descriptor, enabled)}
+          />
+        </div>
       ))}
     </div>
   );

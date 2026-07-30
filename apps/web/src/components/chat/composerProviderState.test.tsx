@@ -9,7 +9,6 @@ import {
   getComposerPromptInjectionState,
   getComposerProviderState,
   getProviderTraitsQualifier,
-  renderProviderTraitsInlineContent,
   renderProviderTraitsMenuContent,
 } from "./composerProviderState";
 import { DraftId } from "../../composerDraftStore";
@@ -244,13 +243,12 @@ describe("provider traits render guards", () => {
       onPromptChange: () => {},
     };
     expect(renderProviderTraitsMenuContent(args)).toBeNull();
-    expect(renderProviderTraitsInlineContent(args)).toBeNull();
   });
 
   // Effort is provider driven: a scale, a boolean, or nothing at all. The
-  // inline variant that the merged picker docks has to cover the same three
-  // shapes the menu variant does, with no per-provider branch.
-  it("renders the inline variant for every descriptor shape a model can declare", () => {
+  // trigger qualifier has to cover the same three shapes, with no
+  // per-provider branch.
+  it("derives the trigger qualifier for every descriptor shape a model can declare", () => {
     const withTarget = (descriptors: ReadonlyArray<ProviderOptionDescriptor>) => ({
       provider: PROVIDER,
       draftId: DraftId.make("draft-traits"),
@@ -270,12 +268,7 @@ describe("provider traits render guards", () => {
     const boolean = withTarget([booleanDescriptor("thinking")]);
     const none = withTarget([]);
 
-    expect(renderProviderTraitsInlineContent(scale)).not.toBeNull();
-    expect(renderProviderTraitsInlineContent(boolean)).not.toBeNull();
-    expect(renderProviderTraitsInlineContent(none)).toBeNull();
-
-    // The trigger qualifier follows the same three shapes, and degrades to a
-    // bare model name when the model exposes nothing.
+    // Degrades to a bare model name when the model exposes nothing.
     expect(getProviderTraitsQualifier(scale)).toBe("High");
     expect(getProviderTraitsQualifier(boolean)).toBe("thinking Off");
     expect(getProviderTraitsQualifier(none)).toBeNull();
