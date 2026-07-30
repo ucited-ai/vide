@@ -65,6 +65,16 @@ function DialogPopup({
       <DialogViewport
         className={cn(bottomStickOnMobile && "max-sm:grid-rows-[1fr_auto] max-sm:p-0 max-sm:pt-12")}
       >
+        {/*
+          The popup below deliberately carries no `data-popup-surface`. That
+          attribute drives the roll-out in vide-theme.css, which scales a surface
+          out of the anchor it belongs to — the right gesture for a menu, a
+          popover or a select, all of which are attached to something. A dialog
+          is attached to nothing, so it keeps its own scale-and-fade entrance
+          (see DIALOG_POPUP_CLASS), which also stacks nested dialogs via `scale`
+          and `translate`. The theme rule transitions `transform` instead, so
+          opting in here would leave that stacking to snap.
+        */}
         <DialogPrimitive.Popup
           className={cn(
             DIALOG_POPUP_CLASS,
@@ -72,7 +82,6 @@ function DialogPopup({
             bottomStickOnMobile && DIALOG_MOBILE_SHEET_CLASS,
             className,
           )}
-          data-popup-surface=""
           data-slot="dialog-popup"
           {...props}
         >

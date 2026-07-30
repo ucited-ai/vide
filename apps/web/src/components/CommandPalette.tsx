@@ -1091,10 +1091,6 @@ function OpenCommandPaletteDialog(props: {
   }
 
   function executeItem(item: CommandPaletteActionItem | CommandPaletteSubmenuItem): void {
-    if (item.disabled) {
-      return;
-    }
-
     if (item.kind === "submenu") {
       pushView(item);
       return;
