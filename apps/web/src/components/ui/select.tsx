@@ -114,6 +114,7 @@ function SelectPopup({
   alignItemWithTrigger = true,
   matchTriggerWidth = true,
   anchor,
+  collisionAvoidance,
   ...props
 }: SelectPrimitive.Popup.Props & {
   popupClassName?: string;
@@ -124,10 +125,12 @@ function SelectPopup({
   alignItemWithTrigger?: SelectPrimitive.Positioner.Props["alignItemWithTrigger"];
   matchTriggerWidth?: boolean;
   anchor?: SelectPrimitive.Positioner.Props["anchor"];
+  collisionAvoidance?: SelectPrimitive.Positioner.Props["collisionAvoidance"];
 }) {
   return (
     <SelectPrimitive.Portal>
       <SelectPrimitive.Positioner
+        collisionAvoidance={collisionAvoidance}
         align={align}
         alignItemWithTrigger={alignItemWithTrigger}
         alignOffset={alignOffset}

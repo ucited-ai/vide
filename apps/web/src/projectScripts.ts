@@ -7,6 +7,26 @@ import {
 import * as Schema from "effect/Schema";
 const isScriptRunCommand = Schema.is(SCRIPT_RUN_COMMAND_PATTERN);
 
+/**
+ * What the script editor collects, as opposed to what gets persisted.
+ *
+ * It carries `keybinding` because a shortcut is chosen alongside the script but
+ * stored separately, in the keybindings config rather than on the script itself.
+ * This lived in ProjectScriptsControl until that surface was removed; the shape
+ * outlived it because the create/update paths still take it.
+ */
+export interface NewProjectScriptInput {
+  name: string;
+  command: string;
+  icon: ProjectScript["icon"];
+  runOnWorktreeCreate: boolean;
+  keybinding: string | null;
+  /** Optional URL to open in the in-app preview when this script runs. */
+  previewUrl: string | null;
+  /** When true, automatically open the preview panel pointed at `previewUrl`. */
+  autoOpenPreview: boolean;
+}
+
 export interface ProjectScriptInput {
   readonly name: ProjectScript["name"];
   readonly command: ProjectScript["command"];

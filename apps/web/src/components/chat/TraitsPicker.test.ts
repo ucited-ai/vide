@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 import type { ProviderOptionDescriptor } from "@vide/contracts";
-import { buildTraitsTriggerDisplay } from "./TraitsPicker";
+import { buildTraitsTriggerDisplay, isScaleDescriptor, splitDescriptorScale } from "./TraitsPicker";
 
 function selectDescriptor(
   id: string,
@@ -106,5 +106,79 @@ describe("buildTraitsTriggerDisplay", () => {
         fastModeEnabled: true,
       }),
     ).toEqual({ label: "Ultrathink", showFastModeIcon: true });
+  });
+});
+
+// Which control a select descriptor earns. A slider says "more of this", so it
+// is only correct for a registered scale with somewhere to travel; everything
+// else keeps the button row.
+describe("select descriptor control mapping", () => {
+  const claudeEffort: Extract<ProviderOptionDescriptor, { type: "select" }> = {
+    id: "effort",
+    label: "Reasoning",
+    type: "select",
+    options: [
+      { id: "low", label: "Low" },
+      { id: "medium", label: "Medium" },
+      { id: "high", label: "High", isDefault: true },
+      { id: "xhigh", label: "Extra High" },
+      { id: "max", label: "Max" },
+      { id: "ultracode", label: "Ultracode" },
+      { id: "ultrathink", label: "Ultrathink" },
+    ],
+    currentValue: "high",
+    promptInjectedValues: ["ultrathink"],
+  };
+
+  it("keeps prompt-injected options off the scale but does not drop them", () => {
+    const scale = splitDescriptorScale(claudeEffort);
+
+    expect(scale.stops.map((stop) => stop.id)).toEqual([
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max",
+      "ultracode",
+    ]);
+    expect(scale.promptInjected.map((option) => option.id)).toEqual(["ultrathink"]);
+    expect(isScaleDescriptor(claudeEffort, scale)).toBe(true);
+  });
+
+  it("refuses a slider for a two-option ordered descriptor", () => {
+    expect(isScaleDescriptor(CONTEXT_WINDOW, splitDescriptorScale(CONTEXT_WINDOW))).toBe(false);
+  });
+
+  it("refuses a slider for named alternatives however many there are", () => {
+    const agent = selectDescriptor(
+      "agent",
+      [
+        { id: "build", label: "Build" },
+        { id: "plan", label: "Plan" },
+        { id: "general", label: "General" },
+      ],
+      "build",
+    );
+
+    expect(isScaleDescriptor(agent, splitDescriptorScale(agent))).toBe(false);
+  });
+
+  it("counts stops after removing prompt-injected options", () => {
+    // A registered scale whose only travel comes from an option the prompt
+    // owns is a two-stop slider, which is a worse switch.
+    const thin: Extract<ProviderOptionDescriptor, { type: "select" }> = {
+      id: "effort",
+      label: "Reasoning",
+      type: "select",
+      options: [
+        { id: "high", label: "High", isDefault: true },
+        { id: "max", label: "Max" },
+        { id: "ultrathink", label: "Ultrathink" },
+      ],
+      currentValue: "high",
+      promptInjectedValues: ["ultrathink"],
+    };
+
+    expect(isScaleDescriptor(thin, splitDescriptorScale(thin))).toBe(false);
   });
 });

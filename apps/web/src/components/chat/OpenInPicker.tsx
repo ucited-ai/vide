@@ -257,9 +257,12 @@ export const OpenInPicker = memo(function OpenInPicker({
   ]);
 
   return (
+    /* The trigger is the editor, not a generic "Open": it wears the mark and the
+       name of whichever editor is preferred, so it reads the way a VS Code
+       button does, and the chevron still reaches every other target. */
     <Group aria-label="Open in editor">
       <Button
-        aria-label={compact ? "Open file in preferred editor" : undefined}
+        aria-label={primaryOption ? `Open in ${primaryOption.label}` : "Open in editor"}
         size="xs"
         variant="outline"
         disabled={!preferredEditor || !openInCwd}
@@ -278,19 +281,13 @@ export const OpenInPicker = memo(function OpenInPicker({
               : "sr-only @3xl/header-actions:not-sr-only @3xl/header-actions:ml-0.5"
           }
         >
-          Open
+          {primaryOption?.label ?? "Open"}
         </span>
       </Button>
       <GroupSeparator {...(!compact ? { className: "hidden @3xl/header-actions:block" } : {})} />
       <Menu>
         <MenuTrigger
-          render={
-            <Button
-              aria-label={compact ? "Choose editor" : "Copy options"}
-              size="icon-xs"
-              variant="outline"
-            />
-          }
+          render={<Button aria-label="Choose editor" size="icon-xs" variant="outline" />}
         >
           <ChevronDownIcon aria-hidden="true" className="size-4" />
         </MenuTrigger>

@@ -20,7 +20,6 @@ import {
   ThreadWorktreeIndicator,
 } from "./ThreadStatusIndicators";
 import { AddProjectMenu } from "./AddProjectMenu";
-import { ProjectFavicon } from "./ProjectFavicon";
 import { useAtomValue } from "@effect/atom-react";
 import { autoAnimate } from "@formkit/auto-animate";
 import React, { useCallback, useEffect, memo, useMemo, useRef, useState } from "react";
@@ -186,6 +185,7 @@ import {
 import { sortThreads } from "../lib/threadSort";
 import { SidebarChromeFooter, SidebarChromeHeader } from "./sidebar/SidebarChrome";
 import {
+  SidebarProjectIcon,
   SidebarSectionLabel,
   SidebarStatusDot,
   SidebarStatusMark,
@@ -1002,16 +1002,26 @@ const SidebarProjectThreadList = memo(function SidebarProjectThreadList(
   const showLessButtonRender = useMemo(() => <button type="button" />, []);
 
   return (
+    // Upstream's sub-list carries a rail and an inset, both stripped here. The
+    // inset was the last thing keeping thread titles out of line with the
+    // project name above them: what nests these rows under their project is the
+    // project row's weight and the list's own vertical run, not a step to the
+    // right that only bought a ragged left edge. Every row in the sidebar now
+    // opens its label on the same x.
     <SidebarMenuSub
       ref={attachThreadListAutoAnimateRef}
-      className="mx-0.5 my-0 w-full translate-x-0 gap-0.5 overflow-hidden border-l-0 px-1 py-0 sm:mx-1 sm:px-1.5"
+      className="mx-0 my-0 w-full translate-x-0 gap-0.5 overflow-hidden border-l-0 px-0 py-0"
     >
       {shouldShowThreadPanel && showEmptyThreadState ? (
         <SidebarMenuSubItem className="w-full" data-thread-selection-safe>
           <div
             data-thread-selection-safe
-            className="flex h-8 w-full translate-x-0 items-center px-2 text-left text-[length:var(--text-caption)] text-sidebar-muted-foreground"
+            className="flex h-8 w-full translate-x-0 items-center gap-2 px-2 text-left text-[length:var(--text-caption)] text-sidebar-muted-foreground"
           >
+            {/* Reserves the same leading slot as the rows this stands in for,
+                so the one line in an empty project starts where its threads
+                would have. */}
+            <SidebarStatusDot status={null} />
             <span>No threads yet</span>
           </div>
         </SidebarMenuSubItem>
@@ -2268,10 +2278,15 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
           onContextMenu={handleProjectButtonContextMenu}
         >
           {/* No disclosure triangle: clicking the row is the disclosure, and a
-              chevron on every project bought nothing but noise. The slot stays,
-              because a collapsed project still reports the state of the threads
-              it is hiding — and because project and thread rows have to open
-              their labels at the same x. */}
+              chevron on every project bought nothing but noise.
+
+              One leading slot, exactly as wide as a thread's, is what lets a
+              project name and the thread titles under it start at the same x.
+              It normally holds the project's folder mark; a collapsed project
+              with live threads swaps that for the status those hidden threads
+              are reporting, which is the more urgent of the two and the only
+              moment the folder is redundant — you already know it is a
+              project, you cannot see what is happening inside it. */}
           {!projectExpanded && projectStatus ? (
             <Tooltip>
               <TooltipTrigger
@@ -2287,9 +2302,10 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
               <TooltipPopup side="top">{projectStatus.label}</TooltipPopup>
             </Tooltip>
           ) : (
-            <SidebarStatusDot status={null} />
+            <span className={SIDEBAR_STATUS_SLOT_CLASS}>
+              <SidebarProjectIcon />
+            </span>
           )}
-          <ProjectFavicon environmentId={project.environmentId} cwd={project.workspaceRoot} />
           <span className="flex min-w-0 flex-1 items-center gap-2">
             <span className={`${SIDEBAR_ROW_LABEL_CLASS} font-medium`}>{project.displayName}</span>
             {project.groupedProjectCount > 1 ? (

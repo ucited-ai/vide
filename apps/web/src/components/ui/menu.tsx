@@ -28,6 +28,7 @@ function MenuPopup({
   alignOffset,
   side = "bottom",
   anchor,
+  collisionAvoidance,
   ...props
 }: MenuPrimitive.Popup.Props & {
   align?: MenuPrimitive.Positioner.Props["align"];
@@ -35,10 +36,12 @@ function MenuPopup({
   alignOffset?: MenuPrimitive.Positioner.Props["alignOffset"];
   side?: MenuPrimitive.Positioner.Props["side"];
   anchor?: MenuPrimitive.Positioner.Props["anchor"];
+  collisionAvoidance?: MenuPrimitive.Positioner.Props["collisionAvoidance"];
 }) {
   return (
     <MenuPrimitive.Portal>
       <MenuPrimitive.Positioner
+        collisionAvoidance={collisionAvoidance}
         align={align}
         alignOffset={alignOffset}
         anchor={anchor}

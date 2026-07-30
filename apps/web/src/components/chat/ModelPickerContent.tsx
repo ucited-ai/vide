@@ -535,8 +535,13 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
 
   return (
     <TooltipProvider delay={0}>
+      {/* `h-screen max-h-96` sized this against the window rather than against
+          the space the popup actually has, so on a short window the surface
+          stayed 100vh tall and its bottom — the traits controls — was clipped by
+          the popup viewport instead of the list giving up rows. Capping at the
+          popup's own available height makes the list the part that shrinks. */}
       <div
-        className="dropdown-glass model-picker-surface relative flex h-screen max-h-96 w-screen max-w-100 flex-row overflow-hidden rounded-lg text-popover-foreground [clip-path:inset(0_round_var(--radius-lg))]"
+        className="dropdown-glass model-picker-surface relative flex h-96 max-h-(--available-height) w-screen max-w-100 flex-row overflow-hidden rounded-lg text-popover-foreground [clip-path:inset(0_round_var(--radius-lg))]"
         data-model-picker-content="true"
       >
         {/* Sidebar */}
@@ -685,7 +690,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
               No models found
             </ComboboxEmpty>
             {props.footer ? (
-              <div className="flex shrink-0 items-center gap-(--popup-item-gap) border-t border-border/60 px-2 py-1.5">
+              <div className="flex shrink-0 items-center gap-(--popup-item-gap) border-t border-border/60 px-3 py-2.5">
                 {props.footer}
               </div>
             ) : null}

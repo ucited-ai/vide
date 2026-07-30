@@ -156,9 +156,9 @@ import { cn, randomHex } from "~/lib/utils";
 import { COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS } from "~/workspaceTitlebar";
 import { stackedThreadToast, toastManager } from "./ui/toast";
 import { decodeProjectScriptKeybindingRule } from "~/lib/projectScriptKeybindings";
-import { type NewProjectScriptInput } from "./ProjectScriptsControl";
 import {
   buildProjectScript,
+  type NewProjectScriptInput,
   commandForProjectScript,
   nextProjectScriptId,
   projectScriptIdFromCommand,
@@ -325,12 +325,16 @@ const COMPOSER_DOCK_CLASS_NAME =
   "pointer-events-none absolute inset-x-0 bottom-0 z-20 pt-1.5 sm:pt-2";
 
 /*
- * Air between the draft suggestions and the composer. Double what it was: the
- * cards sat close enough to the input to read as part of it, which pushed them
- * up against the headline. The gap is also what lifts the headline and cards now
- * that the composer no longer floats the whole block off the bottom edge.
+ * Air between the draft suggestions and the composer.
+ *
+ * The headline and the four cards are one block and the composer is another, and
+ * the gap is the only thing saying so — they share a column and neither carries a
+ * border. Twice the 32px that separates the headline from the cards was still
+ * read as one stack, so this is now more than three times the block's own
+ * internal spacing, which is what finally separates them. It is also what lifts
+ * the whole hero, since the composer no longer floats it off the bottom edge.
  */
-const DRAFT_HERO_STACK_GAP_CLASS_NAME = "pb-16";
+const DRAFT_HERO_STACK_GAP_CLASS_NAME = "pb-28";
 function useDraftHeroLayoutTransition(isDraftHeroState: boolean) {
   const transitionGroupRef = useRef<HTMLDivElement | null>(null);
   const composerAnchorRef = useRef<HTMLDivElement | null>(null);
@@ -5690,19 +5694,12 @@ function ChatViewContent(props: ChatViewProps) {
             activeProjectName={activeProject?.title}
             activeProjectCwd={activeProject?.workspaceRoot ?? null}
             openInCwd={gitCwd}
-            activeProjectScripts={activeProject?.scripts}
-            preferredScriptId={
-              activeProject ? (lastInvokedScriptByProjectId[activeProject.id] ?? null) : null
-            }
+            threadHasMessages={timelineEntries.length > 0}
             keybindings={keybindings}
             availableEditors={availableEditors}
             rightPanelOpen={rightPanelOpen}
             gitCwd={gitCwd}
             onNewThreadInProject={handleNewThreadInActiveProject}
-            onRunProjectScript={runProjectScript}
-            onAddProjectScript={saveProjectScript}
-            onUpdateProjectScript={updateProjectScript}
-            onDeleteProjectScript={deleteProjectScript}
           />
         </header>
 

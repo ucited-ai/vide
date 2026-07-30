@@ -147,7 +147,11 @@ import { Menu, MenuPopup, MenuRadioGroup, MenuRadioItem, MenuTrigger } from "./u
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "./ui/select";
 import { SidebarContent, SidebarGroup, SidebarMenuButton, useSidebar } from "./ui/sidebar";
 import { SidebarChromeFooter, SidebarChromeHeader } from "./sidebar/SidebarChrome";
-import { SidebarSectionLabel, SidebarWorkingIndicator } from "./sidebar/SidebarRowParts";
+import {
+  SidebarProjectIcon,
+  SidebarSectionLabel,
+  SidebarWorkingIndicator,
+} from "./sidebar/SidebarRowParts";
 import {
   SIDEBAR_MUTED_ROW_CLASS,
   SIDEBAR_ROW_LABEL_CLASS,
@@ -2257,15 +2261,13 @@ export default function SidebarV2() {
                     SIDEBAR_ROW_MOTION_CLASS,
                   )}
                 >
-                  {scopedProjectGroup ? (
-                    <ProjectFavicon
-                      environmentId={scopedProjectGroup.environmentId}
-                      cwd={scopedProjectGroup.workspaceRoot}
-                      className="size-4 shrink-0"
-                    />
-                  ) : (
-                    <FolderIcon className="size-4 shrink-0 text-sidebar-muted-foreground/80" />
-                  )}
+                  {/* v2 has no project rows, but this trigger is where a
+                      project is named in the sidebar chrome, so it carries the
+                      same folder mark v1's project rows do — scoped or not.
+                      The list inside the popup keeps favicons: there you are
+                      telling one project from another, which is the one job a
+                      favicon is better at than a name. */}
+                  <SidebarProjectIcon />
                   <span className={SIDEBAR_ROW_LABEL_CLASS}>
                     {scopedProjectGroup?.displayName ?? "All projects"}
                   </span>

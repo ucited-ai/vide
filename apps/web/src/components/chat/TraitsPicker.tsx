@@ -1,6 +1,7 @@
 import {
   type ProviderDriverKind,
   type ProviderInstanceId,
+  type ProviderOptionChoice,
   type ProviderOptionDescriptor,
   type ProviderOptionSelection,
   type ScopedThreadRef,
@@ -14,7 +15,7 @@ import {
   getProviderOptionDescriptors,
   isClaudeUltrathinkPrompt,
 } from "@vide/shared/model";
-import { memo, type ReactNode, useCallback, useState } from "react";
+import { memo, type ReactNode, useCallback, useId, useState } from "react";
 import type { VariantProps } from "class-variance-authority";
 import { CheckIcon, ChevronDownIcon, ZapIcon } from "lucide-react";
 import { Button, buttonVariants } from "../ui/button";
@@ -31,6 +32,7 @@ import { useComposerDraftStore, DraftId } from "../../composerDraftStore";
 import { getProviderModelCapabilities } from "../../providerModels";
 import { cn } from "~/lib/utils";
 import { Badge } from "../ui/badge";
+import { Switch } from "../ui/switch";
 
 type ProviderOptions = ReadonlyArray<ProviderOptionSelection>;
 
@@ -79,6 +81,56 @@ function replaceDescriptorCurrentValue(
             ...(typeof currentValue === "string" ? { currentValue } : {}),
           },
   );
+}
+
+/**
+ * Descriptor ids whose options are an ordered scale rather than a set of
+ * alternatives.
+ *
+ * A slider means "more of this", which is true of reasoning effort and false of
+ * an agent or a model variant — and nothing in the descriptor shape tells the
+ * two apart, since both arrive as an ordered list of choices. A provider adding
+ * a new scale registers it here; anything unlisted keeps the button row, which
+ * is the right control for a choice between named alternatives.
+ */
+const SCALE_DESCRIPTOR_IDS: ReadonlySet<string> = new Set([
+  "effort",
+  "reasoning",
+  "reasoningEffort",
+]);
+
+/**
+ * Below this a "scale" is a choice between two things, and a two-stop slider is
+ * a worse switch. Those fall back to the button row.
+ */
+const MIN_SCALE_STOPS = 3;
+
+export interface DescriptorScale {
+  /** The ordered stops the slider runs over. */
+  readonly stops: ReadonlyArray<ProviderOptionChoice>;
+  /**
+   * Options the provider fulfils by rewriting the prompt rather than by storing
+   * a value — Claude's Ultrathink. They are not positions on the scale, so they
+   * cannot be stops on it.
+   */
+  readonly promptInjected: ReadonlyArray<ProviderOptionChoice>;
+}
+
+export function splitDescriptorScale(
+  descriptor: Extract<ProviderOptionDescriptor, { type: "select" }>,
+): DescriptorScale {
+  const injectedIds = descriptor.promptInjectedValues ?? [];
+  return {
+    stops: descriptor.options.filter((option) => !injectedIds.includes(option.id)),
+    promptInjected: descriptor.options.filter((option) => injectedIds.includes(option.id)),
+  };
+}
+
+export function isScaleDescriptor(
+  descriptor: Extract<ProviderOptionDescriptor, { type: "select" }>,
+  scale: DescriptorScale,
+): boolean {
+  return SCALE_DESCRIPTOR_IDS.has(descriptor.id) && scale.stops.length >= MIN_SCALE_STOPS;
 }
 
 function getDescriptorStringValue(
@@ -431,14 +483,33 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl(props: Trai
   );
 });
 
+/** The name of a trait, in the ink every trait row uses for it. */
+function TraitsInlineLabel(props: { children: ReactNode; className?: string }) {
+  return (
+    <span
+      className={cn(
+        "shrink-0 font-medium text-(length:--text-caption) text-muted-foreground",
+        props.className,
+      )}
+    >
+      {props.children}
+    </span>
+  );
+}
+
+/** Why a trait is currently not writable — today only the ultrathink body text. */
+function TraitsInlineHint(props: { children: ReactNode }) {
+  return (
+    <span className="text-(length:--text-caption) text-muted-foreground/80">{props.children}</span>
+  );
+}
+
 /** One descriptor: its name, then its choices, wrapping when they run out of room. */
 function TraitsInlineRow(props: { label: string; hint?: string | null; children: ReactNode }) {
   return (
     <div className="flex w-full min-w-0 flex-col gap-0.5">
       <div className="flex w-full min-w-0 items-center gap-(--popup-item-gap)">
-        <span className="shrink-0 font-medium text-(length:--text-caption) text-muted-foreground">
-          {props.label}
-        </span>
+        <TraitsInlineLabel>{props.label}</TraitsInlineLabel>
         <div
           role="group"
           aria-label={props.label}
@@ -447,9 +518,7 @@ function TraitsInlineRow(props: { label: string; hint?: string | null; children:
           {props.children}
         </div>
       </div>
-      {props.hint ? (
-        <span className="text-(length:--text-caption) text-muted-foreground/80">{props.hint}</span>
-      ) : null}
+      {props.hint ? <TraitsInlineHint>{props.hint}</TraitsInlineHint> : null}
     </div>
   );
 }
@@ -494,12 +563,117 @@ function TraitsInlineOption(props: {
 }
 
 /**
+ * An ordered scale as one track.
+ *
+ * A native range input lies transparently over the drawn track, so dragging,
+ * arrow keys, Home/End and the accessible name are the browser's rather than
+ * ours; the ticks and thumb underneath are decoration and carry no state. The
+ * invisible native thumb is sized to match the drawn one so the two agree on
+ * where a given value sits.
+ *
+ * Unlike the button row, this control does take focus on press. That is the
+ * point — arrow keys have to move the thumb once you are on it — and it is safe
+ * because the model list's combobox is rendered `inline` and `open`, so it stays
+ * mounted no matter where focus goes inside the popup.
+ */
+function TraitsScaleSlider(props: {
+  label: string;
+  stops: ReadonlyArray<ProviderOptionChoice>;
+  /** Index of the stop in effect, always within range. */
+  activeIndex: number;
+  /** A prompt-injected option owns the value, so the scale is shown but not in force. */
+  isOverridden: boolean;
+  isDisabled: boolean;
+  onSelectIndex: (index: number) => void;
+}) {
+  const lastIndex = props.stops.length - 1;
+  const progress = `${(props.activeIndex / lastIndex) * 100}%`;
+
+  return (
+    <div className="relative flex h-4 min-w-0 flex-1 items-center">
+      <input
+        type="range"
+        min={0}
+        max={lastIndex}
+        step={1}
+        value={props.activeIndex}
+        disabled={props.isDisabled}
+        aria-label={props.label}
+        aria-valuetext={props.stops[props.activeIndex]?.label ?? ""}
+        onChange={(event) => props.onSelectIndex(event.target.valueAsNumber)}
+        className="peer absolute inset-0 z-10 w-full cursor-default appearance-none bg-transparent opacity-0 focus-visible:outline-none disabled:pointer-events-none [&::-webkit-slider-thumb]:size-3 [&::-webkit-slider-thumb]:appearance-none"
+      />
+      {/* Inset by half a thumb so the ends of the scale are reachable and the
+          thumb never overhangs the track it runs on. */}
+      <div
+        aria-hidden="true"
+        className={cn(
+          "pointer-events-none absolute inset-x-1.5 flex h-full items-center",
+          (props.isDisabled || props.isOverridden) && "opacity-64",
+        )}
+      >
+        <span className="absolute inset-x-0 h-px rounded-full bg-(--edge-strong)" />
+        <span
+          className="absolute left-0 h-px rounded-full bg-foreground/45"
+          style={{ width: progress }}
+        />
+        {props.stops.map((stop, index) => (
+          <span
+            key={stop.id}
+            className={cn(
+              "absolute size-1 -translate-x-1/2 rounded-full",
+              index <= props.activeIndex ? "bg-foreground/45" : "bg-(--edge-strong)",
+            )}
+            style={{ left: `${(index / lastIndex) * 100}%` }}
+          />
+        ))}
+        <span
+          className="absolute size-3 -translate-x-1/2 rounded-full border border-(--edge-strong) bg-(--surface-raised-2) shadow-sm transition-[left] duration-(--duration-fast) ease-(--ease-out) peer-focus-visible:ring-2 peer-focus-visible:ring-ring motion-reduce:transition-none"
+          style={{ left: progress }}
+        />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * A boolean trait is a switch, not a two-stop slider: it has an off state rather
+ * than a low end, and reading it as the bottom of a scale is wrong.
+ */
+function TraitsSwitchRow(props: {
+  label: string;
+  isOn: boolean;
+  onChange: (enabled: boolean) => void;
+}) {
+  const switchId = useId();
+
+  return (
+    <div className="flex w-full min-w-0 items-center justify-between gap-(--popup-item-gap)">
+      <label htmlFor={switchId}>
+        <TraitsInlineLabel className="cursor-default">{props.label}</TraitsInlineLabel>
+      </label>
+      <Switch
+        id={switchId}
+        aria-label={props.label}
+        checked={props.isOn}
+        onCheckedChange={props.onChange}
+        className="shrink-0"
+      />
+    </div>
+  );
+}
+
+/**
  * The traits controls as plain rows, for docking inside another popup.
  *
  * Same behaviour as {@link TraitsMenuContent}, no Base UI menu primitives —
  * which is the whole point: a menu nested in a popover dismisses that popover
  * the moment a value is chosen, and effort is meant to be adjustable without
  * losing the model list.
+ *
+ * Each descriptor shape gets the control that fits it: an ordered scale is a
+ * slider, a boolean is a switch, and a choice between named alternatives stays a
+ * row of buttons. A model that declares nothing renders nothing.
  */
 export const TraitsInlineContent = memo(function TraitsInlineContentImpl(
   props: TraitsControlProps,
@@ -519,46 +693,90 @@ export const TraitsInlineContent = memo(function TraitsInlineContentImpl(
   }
 
   return (
-    <div className="flex w-full min-w-0 flex-col gap-1">
+    <div className="flex w-full min-w-0 flex-col gap-2.5">
       {selectDescriptors.map((descriptor) => {
         const isLocked = isSelectLocked(descriptor);
         const selectedValue = getSelectValue(descriptor);
+        const scale = splitDescriptorScale(descriptor);
+
+        if (!isScaleDescriptor(descriptor, scale)) {
+          return (
+            <TraitsInlineRow
+              key={descriptor.id}
+              label={descriptor.label}
+              hint={isLocked ? ULTRATHINK_BODY_TEXT_HINT : null}
+            >
+              {descriptor.options.map((option) => (
+                <TraitsInlineOption
+                  key={option.id}
+                  label={option.label}
+                  isSelected={option.id === selectedValue}
+                  isDefault={option.isDefault === true}
+                  isDisabled={isLocked}
+                  onSelect={() => handleSelectChange(descriptor, option.id)}
+                />
+              ))}
+            </TraitsInlineRow>
+          );
+        }
+
+        // A prompt-injected option is not a position on the scale, so when one is
+        // in effect the thumb falls back to the stored stop and the track is
+        // dimmed. Moving it writes that stop, which is what strips the prompt
+        // prefix again.
+        const stopIndex = scale.stops.findIndex((stop) => stop.id === selectedValue);
+        const isOverridden = stopIndex < 0;
+        const activeIndex = isOverridden
+          ? Math.max(
+              scale.stops.findIndex((stop) => stop.id === descriptor.currentValue),
+              0,
+            )
+          : stopIndex;
+        const currentLabel =
+          descriptor.options.find((option) => option.id === selectedValue)?.label ?? "";
 
         return (
-          <TraitsInlineRow
-            key={descriptor.id}
-            label={descriptor.label}
-            hint={isLocked ? ULTRATHINK_BODY_TEXT_HINT : null}
-          >
-            {descriptor.options.map((option) => (
-              <TraitsInlineOption
-                key={option.id}
-                label={option.label}
-                isSelected={option.id === selectedValue}
-                isDefault={option.isDefault === true}
+          <div key={descriptor.id} className="flex w-full min-w-0 flex-col gap-1.5">
+            <div className="flex w-full min-w-0 items-center justify-between gap-(--popup-item-gap)">
+              <TraitsInlineLabel>{descriptor.label}</TraitsInlineLabel>
+              <span className="min-w-0 truncate text-(length:--text-caption) text-foreground">
+                {currentLabel}
+              </span>
+            </div>
+            <div className="flex w-full min-w-0 items-center gap-(--popup-item-gap)">
+              <TraitsScaleSlider
+                label={descriptor.label}
+                stops={scale.stops}
+                activeIndex={activeIndex}
+                isOverridden={isOverridden}
                 isDisabled={isLocked}
-                onSelect={() => handleSelectChange(descriptor, option.id)}
+                onSelectIndex={(index) => {
+                  const stop = scale.stops[index];
+                  if (stop) handleSelectChange(descriptor, stop.id);
+                }}
               />
-            ))}
-          </TraitsInlineRow>
+              {scale.promptInjected.map((option) => (
+                <TraitsInlineOption
+                  key={option.id}
+                  label={option.label}
+                  isSelected={option.id === selectedValue}
+                  isDisabled={isLocked}
+                  onSelect={() => handleSelectChange(descriptor, option.id)}
+                />
+              ))}
+            </div>
+            {isLocked ? <TraitsInlineHint>{ULTRATHINK_BODY_TEXT_HINT}</TraitsInlineHint> : null}
+          </div>
         );
       })}
-      {booleanDescriptors.map((descriptor) => {
-        const selectedValue = descriptor.currentValue === true ? "on" : "off";
-
-        return (
-          <TraitsInlineRow key={descriptor.id} label={descriptor.label}>
-            {(["on", "off"] as const).map((value) => (
-              <TraitsInlineOption
-                key={value}
-                label={value === "on" ? "On" : "Off"}
-                isSelected={selectedValue === value}
-                onSelect={() => handleBooleanChange(descriptor, value === "on")}
-              />
-            ))}
-          </TraitsInlineRow>
-        );
-      })}
+      {booleanDescriptors.map((descriptor) => (
+        <TraitsSwitchRow
+          key={descriptor.id}
+          label={descriptor.label}
+          isOn={descriptor.currentValue === true}
+          onChange={(enabled) => handleBooleanChange(descriptor, enabled)}
+        />
+      ))}
     </div>
   );
 });

@@ -76,15 +76,6 @@
   --duration-slow: 340ms;
 
   /*
-   * A popup's surface leads and its content follows. The container is already
-   * most of the way open before the content starts to appear, and on the way
-   * out the content clears first — so you never read text against a box that is
-   * still moving.
-   */
-  --popup-content-enter-delay: 70ms;
-  --popup-content-exit-duration: 90ms;
-
-  /*
    * Type scale. Named by role rather than size so a component never has to pick
    * a number: the transcript is read, the sidebar is scanned, and captions are
    * glanced at, and each wants a different size.
@@ -115,8 +106,15 @@
    */
   --surface-content: #131416;
   --surface-chrome: #1b1c20;
-  --surface-raised-1: #232429;
-  --surface-raised-2: #2a2b31;
+
+  /*
+   * Popups and dialogs sit well clear of the chrome beneath them. The step from
+   * chrome to raised is deliberately larger than the one from content to chrome:
+   * a sidebar shares the window with what surrounds it, while a popup is
+   * temporarily on top of everything and has to read that way at a glance.
+   */
+  --surface-raised-1: #2c2d33;
+  --surface-raised-2: #36373e;
 
   --ink: #ededf0;
   --ink-secondary: #9a9aa4;
@@ -200,24 +198,30 @@
  * which inverts the usual web instinct to shrink navigation.
  */
 :root:root:root [data-app-sidebar] {
-  font-size: 13.5px;
+  font-size: var(--text-ui);
   line-height: 1.45;
   letter-spacing: -0.003em;
 }
 
 :root:root:root [data-app-sidebar] [data-sidebar="menu-button"],
 :root:root:root [data-app-sidebar] [data-slot="sidebar-menu-button"] {
-  font-size: 13.5px;
+  font-size: var(--text-ui);
   min-height: 30px;
 }
 
-/* Section labels: the one place small type is correct, because it is a
-   signpost rather than content. */
+/*
+ * Section labels sit at the same size as the rows beneath them, not smaller.
+ * An earlier revision shrank them to caption size on the theory that a signpost
+ * should recede — but in a sidebar the section name is what you navigate by, and
+ * shrinking it made the whole column read as undifferentiated. Weight and colour
+ * do the receding instead, which keeps the heading legible while still letting
+ * the project names dominate.
+ */
 :root:root:root [data-app-sidebar] [data-sidebar="group-label"],
 :root:root:root [data-app-sidebar] [data-slot="sidebar-group-label"] {
-  font-size: 11.5px;
+  font-size: var(--text-ui);
   font-weight: 500;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.01em;
   color: var(--ink-tertiary);
 }
 
@@ -323,36 +327,40 @@
 }
 
 /*
- * Popups unroll from their own anchor rather than appearing at full size.
+ * Popups unfold from the edge they are anchored to.
  *
- * Base UI sets --transform-origin to the edge the popup is anchored from, so
- * scaling against it reads as the surface growing out of its trigger. The
- * vertical scale is deliberately more compressed than the horizontal one: that
- * asymmetry is what makes it look like a roll rather than a zoom.
+ * An earlier revision scaled the whole surface from 0.97/0.92 and cross-faded
+ * its content on a delay. Both were wrong. Scaling a rectangle down and back up
+ * is a zoom, not an unfold — at 3% it barely reads, and the eye registers only
+ * the abrupt appearance. And fading the content separately meant the text
+ * arrived after the box, which looks like lag rather than polish.
+ *
+ * Instead the surface grows along ONE axis from its anchor, at full opacity
+ * from the first frame, and its content simply comes with it. Base UI sets
+ * --transform-origin to the anchored edge, so scaleY against that origin reads
+ * as the panel unrolling out of its trigger. There is no fade at all.
  */
-:root:root:root [data-popup-surface][data-starting-style],
-:root:root:root [data-popup-surface][data-ending-style] {
-  transform: scale(0.97, 0.92);
-  opacity: 0;
-}
-
 :root:root:root [data-popup-surface] {
   transform-origin: var(--transform-origin, center);
-  transition-property: transform, opacity, width, height;
+  transition-property: transform;
   transition-duration: var(--duration-drop);
   transition-timing-function: var(--ease-drop);
 }
 
-/* Content follows the surface: in late, out early. */
-:root:root:root [data-popup-surface] > * {
-  transition: opacity var(--duration-fast) var(--ease-out) var(--popup-content-enter-delay);
+:root:root:root [data-popup-surface][data-starting-style],
+:root:root:root [data-popup-surface][data-ending-style] {
+  transform: scaleY(0.55);
 }
 
-:root:root:root [data-popup-surface][data-starting-style] > *,
-:root:root:root [data-popup-surface][data-ending-style] > * {
-  opacity: 0;
-  transition-duration: var(--popup-content-exit-duration);
-  transition-delay: 0ms;
+/*
+ * Side-anchored surfaces unroll horizontally instead. A submenu that grew
+ * vertically would contradict the direction it just travelled in.
+ */
+:root:root:root [data-popup-surface][data-side="left"][data-starting-style],
+:root:root:root [data-popup-surface][data-side="left"][data-ending-style],
+:root:root:root [data-popup-surface][data-side="right"][data-starting-style],
+:root:root:root [data-popup-surface][data-side="right"][data-ending-style] {
+  transform: scaleX(0.55);
 }
 
 /*

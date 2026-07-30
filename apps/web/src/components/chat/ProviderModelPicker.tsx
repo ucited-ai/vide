@@ -20,6 +20,24 @@ import {
 } from "./providerIconUtils";
 import type { ProviderInstanceEntry } from "../../providerInstances";
 
+/**
+ * Collision handling for a popup whose direction is a decision, not a
+ * preference.
+ *
+ * Base UI's default is to flip to the opposite side when the preferred one runs
+ * short. For a control docked to the bottom of the window that is exactly wrong:
+ * the same picker opened above the trigger on a tall window and below it on a
+ * short one, which is the restlessness the composer's popups were read as. Here
+ * the side is pinned and only the alignment is allowed to move, so a popup with
+ * too little room scrolls its own viewport — it is already capped at
+ * `--available-height` — instead of jumping to the other side of the trigger.
+ */
+export const PINNED_POPUP_COLLISION_AVOIDANCE = {
+  side: "none",
+  align: "shift",
+  fallbackAxisSide: "none",
+} as const;
+
 export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
   /**
    * The instance currently selected in the composer. Drives the trigger
@@ -46,7 +64,10 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
   qualifier?: string | null;
   /** Controls for that qualifier, docked under the model list in the popup. */
   optionsFooter?: ReactNode;
-  /** "top" makes this a drop-up, which is what a composer-anchored picker wants. */
+  /**
+   * "top" makes this a drop-up, which is what a composer-anchored picker wants.
+   * Naming a side also pins it: see {@link PINNED_POPUP_COLLISION_AVOIDANCE}.
+   */
   popupSide?: "top" | "bottom";
   triggerVariant?: VariantProps<typeof buttonVariants>["variant"];
   triggerClassName?: string;
@@ -203,6 +224,7 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
       <PopoverPopup
         align="start"
         side={props.popupSide ?? "bottom"}
+        {...(props.popupSide ? { collisionAvoidance: PINNED_POPUP_COLLISION_AVOIDANCE } : {})}
         className="border-0 bg-transparent p-0 shadow-none before:hidden [-webkit-backdrop-filter:none]! [--viewport-inline-padding:0] [backdrop-filter:none]!"
         viewportClassName="rounded-lg !overflow-hidden p-0"
       >

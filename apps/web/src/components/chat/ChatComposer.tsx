@@ -86,7 +86,7 @@ import {
   shouldUseCompactComposerFooter,
 } from "../composerFooterLayout";
 import { type ComposerPromptEditorHandle, ComposerPromptEditor } from "../ComposerPromptEditor";
-import { ProviderModelPicker } from "./ProviderModelPicker";
+import { PINNED_POPUP_COLLISION_AVOIDANCE, ProviderModelPicker } from "./ProviderModelPicker";
 import { type ComposerCommandItem, ComposerCommandMenu } from "./ComposerCommandMenu";
 import { ComposerPendingApprovalActions } from "./ComposerPendingApprovalActions";
 import { CompactComposerControlsMenu } from "./CompactComposerControlsMenu";
@@ -237,25 +237,24 @@ const runtimeModeOptions = Object.keys(runtimeModeConfig) as RuntimeMode[];
 /*
  * Composer geometry, in one place so the input keeps a single rhythm.
  *
- * The composer is a control, not a panel: it should read as a slim field with a
- * row of chrome under it. The editor's floor is just under two lines of prompt
- * text — enough that a one-line prompt still has air around it, small enough
- * that an empty composer does not look like a box waiting to be filled — and
- * every padding step sits one notch below the app's usual spacing so the
- * chrome hugs the field instead of framing it.
+ * The composer is where the work is written, so it is given the depth of a
+ * writing surface rather than the height of a search field. A previous pass took
+ * the editor's floor away entirely — an empty composer was one line tall — which
+ * collapsed the model picker, the permissions control and the context meter into
+ * a thin strip with nothing around them.
+ *
+ * The floor is back at two and a half lines of prompt text. That is the number
+ * that matters: it is what puts open space between the caret and the control
+ * row, so the row reads as chrome sitting under the field instead of chrome
+ * jammed against it. The paddings are then set one step above the app's usual
+ * spacing rather than one below, for the same reason.
  */
-/*
- * No floor under the editor: an empty composer is exactly one line tall and
- * grows only when the prompt wraps. A minimum height would be dead space every
- * time the composer is empty, which is most of the time. The click target comes
- * from the padded area around the editor instead — see the wrapper's mousedown.
- */
-const COMPOSER_EDITOR_MIN_HEIGHT_CLASS = "min-h-0";
-const COMPOSER_INPUT_PADDING_CLASS = "px-3 pb-1.5 sm:px-4";
+const COMPOSER_EDITOR_MIN_HEIGHT_CLASS = "min-h-14";
+const COMPOSER_INPUT_PADDING_CLASS = "px-3 pb-2.5 sm:px-4";
 /** Tighter above when a banner already separates the input from what precedes it. */
-const COMPOSER_INPUT_PADDING_TOP_CLASS = "pt-2.5";
-const COMPOSER_INPUT_PADDING_TOP_WITH_HEADER_CLASS = "pt-2";
-const COMPOSER_FOOTER_PADDING_CLASS = "px-2 pb-2 sm:px-2.5 sm:pb-2.5";
+const COMPOSER_INPUT_PADDING_TOP_CLASS = "pt-3.5";
+const COMPOSER_INPUT_PADDING_TOP_WITH_HEADER_CLASS = "pt-3";
+const COMPOSER_FOOTER_PADDING_CLASS = "px-2 pb-2.5 sm:px-2.5 sm:pb-3";
 
 /*
  * The control row: attachments, permissions, model, context.
@@ -379,6 +378,8 @@ const ComposerPermissionsPicker = memo(function ComposerPermissionsPicker(props:
   const runtimeModeOption = runtimeModeConfig[props.runtimeMode];
   const RuntimeModeIcon = runtimeModeOption.icon;
 
+  // The control row is the bottom edge of the window, so this list opens upward
+  // and stays there — see the composer picker note on ProviderModelPicker.
   return (
     <Tooltip>
       <Select
@@ -401,7 +402,12 @@ const ComposerPermissionsPicker = memo(function ComposerPermissionsPicker(props:
           <RuntimeModeIcon className="size-4" />
           <SelectValue>{runtimeModeOption.label}</SelectValue>
         </TooltipTrigger>
-        <SelectPopup alignItemWithTrigger={false}>
+        <SelectPopup
+          alignItemWithTrigger={false}
+          align="start"
+          side="top"
+          collisionAvoidance={PINNED_POPUP_COLLISION_AVOIDANCE}
+        >
           {runtimeModeOptions.map((mode) => {
             const option = runtimeModeConfig[mode];
             const OptionIcon = option.icon;
@@ -2821,10 +2827,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
               isComposerCollapsedMobile && "hidden",
             )}
             onMouseDown={(event) => {
-              // The editor is only as tall as its text, so the padding around it
-              // has to carry the click — otherwise a slim composer is a slim
-              // target. Only a press on the padding itself counts; anything
-              // inside keeps its own behaviour.
+              // The editor is as tall as its floor, but the padding around it is
+              // still part of the field to a reader, so a press there has to land
+              // in the prompt. Only a press on the padding itself counts;
+              // anything inside keeps its own behaviour.
               if (event.target !== event.currentTarget) return;
               event.preventDefault();
               focusComposer();
