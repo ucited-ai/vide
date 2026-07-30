@@ -98,14 +98,26 @@ export function PreviewPanelShell(props: {
       ) : null}
       {useDragRegion ? <div className="electron-drag-region h-0 w-full" aria-hidden /> : null}
       {/*
-       * Animating width means everything in here is laid out again on every
-       * frame: at the start there's almost no room, so tab labels and the
-       * empty-state cards wrap, and they unwrap as space arrives. `data-slot`
-       * gives vide-theme.css something to key the same cross-fade the left
-       * sidebar already uses off `data-preview-panel-open` on the root above —
-       * see the sidebar-inner rule next to it.
+       * Holds its own width instead of following the shell's.
+       *
+       * The shell animates width, and anything sized off it is laid out again on
+       * every frame: tab labels and the empty-state cards wrap as the room runs
+       * out, then unwrap on the way back. Cross-fading it only hid that; giving
+       * the content a fixed width and letting the shell's `overflow-hidden` clip
+       * it means the reflow never happens in either direction — the panel slides
+       * behind an edge rather than being squeezed through it.
+       *
+       * Maximised, the shell is `flex-1` and has no pixel width to hold, so the
+       * content tracks it as usual.
        */}
-      <div data-slot="preview-panel-inner" className="flex min-h-0 flex-1 flex-col">
+      <div
+        data-slot="preview-panel-inner"
+        className={cn(
+          "flex min-h-0 flex-1 flex-col",
+          isInline && !(props.maximized && isOpen) && "shrink-0",
+        )}
+        style={isInline && !(props.maximized && isOpen) ? { width: `${width}px` } : undefined}
+      >
         {props.children}
       </div>
     </div>

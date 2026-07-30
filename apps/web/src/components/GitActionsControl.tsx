@@ -73,6 +73,7 @@ import {
   useVcsInitAction,
   useVcsPullAction,
 } from "~/lib/sourceControlActions";
+import type { SourceControlActionScope } from "~/state/sourceControlActions";
 import { useThread } from "~/state/entities";
 import { useEnvironmentQuery } from "~/state/query";
 import { serverEnvironment } from "~/state/server";
@@ -964,6 +965,40 @@ function PublishRepositoryDialog(props: PublishRepositoryDialogProps) {
 }
 
 /**
+ * Runs `git init` for a cwd and reports failure through the thread toast.
+ * Pulled out of `useGitActions` so the branch chip can offer the same
+ * "Initialize Git" action without re-deriving the toast handling — the
+ * pending state itself already lives in `vcsActionManager`, shared by every
+ * caller scoped to the same cwd, so calling this a second time never races
+ * the environment column's own init.
+ */
+export function useGitRepositoryInit(
+  scope: SourceControlActionScope,
+  threadToastData?: ThreadToastData,
+) {
+  const initAction = useVcsInitAction(scope);
+  const initRepository = useCallback(() => {
+    void (async () => {
+      const result = await initAction.run();
+      if (result._tag === "Success" || isAtomCommandInterrupted(result)) {
+        return;
+      }
+      const error = squashAtomCommandFailure(result);
+      toastManager.add(
+        stackedThreadToast({
+          type: "error",
+          title: "Git initialization failed",
+          description: error instanceof Error ? error.message : "An error occurred.",
+          ...(threadToastData !== undefined ? { data: threadToastData } : {}),
+        }),
+      );
+    })();
+  }, [initAction, threadToastData]);
+
+  return { isInitPending: initAction.isPending, initRepository };
+}
+
+/**
  * Every git action a thread can take, plus the dialogs they open. The surface
  * that offers them — today the environment menu in the chat header — supplies
  * only the rows; the state, the guards, and the toasts stay here.
@@ -1102,7 +1137,10 @@ export function useGitActions({ gitCwd, activeThreadRef, draftId }: GitActionsIn
   const allSelected = excludedFiles.size === 0;
   const noneSelected = selectedFiles.length === 0;
 
-  const initAction = useVcsInitAction(sourceControlScope);
+  const { isInitPending, initRepository } = useGitRepositoryInit(
+    sourceControlScope,
+    threadToastData,
+  );
   const runImmediateGitAction = useGitStackedAction(sourceControlScope);
   const pullAction = useVcsPullAction(sourceControlScope);
   const isGitActionRunning = useSourceControlActionRunning(
@@ -1652,24 +1690,6 @@ export function useGitActions({ gitCwd, activeThreadRef, draftId }: GitActionsIn
 
   const canPublishRepository = isRepo && gitStatusForActions !== null && !hasPrimaryRemote;
 
-  const initRepository = () => {
-    void (async () => {
-      const result = await initAction.run();
-      if (result._tag === "Success" || isAtomCommandInterrupted(result)) {
-        return;
-      }
-      const error = squashAtomCommandFailure(result);
-      toastManager.add(
-        stackedThreadToast({
-          type: "error",
-          title: "Git initialization failed",
-          description: error instanceof Error ? error.message : "An error occurred.",
-          ...(threadToastData !== undefined ? { data: threadToastData } : {}),
-        }),
-      );
-    })();
-  };
-
   const dialogs =
     gitCwd === null ? null : (
       <>
@@ -1902,7 +1922,7 @@ export function useGitActions({ gitCwd, activeThreadRef, draftId }: GitActionsIn
     gitStatusError,
     initRepository,
     isBusy: isGitActionRunning,
-    isInitPending: initAction.isPending,
+    isInitPending,
     isRepo,
     menuItemDisabledReason: (item: GitActionMenuItem) =>
       getMenuActionDisabledReason({

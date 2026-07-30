@@ -12,7 +12,6 @@ import {
   GitBranchPlusIcon,
   GlobeIcon,
   MoreHorizontalIcon,
-  PlusIcon,
   XIcon,
 } from "lucide-react";
 import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -25,6 +24,7 @@ import { useThreadBranchSelection } from "../BranchToolbarBranchSelector";
 import { GitActionItemIcon, GitQuickActionIcon, useGitActions } from "../GitActionsControl";
 import { Button } from "../ui/button";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
+import { Spinner } from "../ui/spinner";
 
 interface ChatEnvironmentColumnProps {
   environmentId: EnvironmentId;
@@ -35,12 +35,6 @@ interface ChatEnvironmentColumnProps {
    *  does — the column stays mounted at all times so both directions animate. */
   open: boolean;
   onClose: () => void;
-}
-
-interface SectionAddAction {
-  readonly label: string;
-  readonly disabled: boolean;
-  readonly onClick: () => void;
 }
 
 /** The column's resting width — the same 288px the popover this replaced used. */
@@ -56,27 +50,13 @@ const ENVIRONMENT_COLUMN_WIDTH = 288;
 const ROW_CLASSNAME =
   "flex min-h-(--popup-item-height) w-full cursor-default select-none items-center gap-(--popup-item-gap) rounded-sm px-(--popup-item-padding-inline) py-1 text-left text-(length:--text-ui) text-foreground outline-none transition-colors hover:bg-accent disabled:pointer-events-none disabled:opacity-64 [&>svg:not([class*='opacity-'])]:opacity-80 [&>svg:not([class*='size-'])]:size-4 [&>svg:not([class*='text-'])]:text-muted-foreground [&>svg]:pointer-events-none [&>svg]:shrink-0";
 
-/**
- * A section heading, with the add affordance the Codex menu puts beside it —
- * rendered only where the section actually has something to add.
- */
-function SectionHeader({ label, add }: { label: string; add?: SectionAddAction }) {
+/** A section heading. */
+function SectionHeader({ label }: { label: string }) {
   return (
     <div className="flex items-center justify-between gap-2 pe-1">
       <span className="px-(--popup-item-padding-inline) py-1.5 font-medium text-(length:--text-caption) text-muted-foreground">
         {label}
       </span>
-      {add ? (
-        <button
-          type="button"
-          aria-label={add.label}
-          disabled={add.disabled}
-          onClick={add.onClick}
-          className="inline-flex size-5 shrink-0 cursor-default items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-64"
-        >
-          <PlusIcon aria-hidden className="size-3.5" />
-        </button>
-      ) : null}
     </div>
   );
 }
@@ -297,15 +277,6 @@ export const ChatEnvironmentColumn = memo(function ChatEnvironmentColumn({
   const WorkspaceIcon = branch.activeWorktreePath ? FolderGit2Icon : FolderIcon;
   const branchLabel = branch.resolvedActiveBranch ?? "No ref";
   const showPublishRow = git.canPublishRepository && git.quickAction.kind !== "open_publish";
-  const addAction: SectionAddAction | undefined = !git.isRepo
-    ? {
-        label: git.isInitPending ? "Initializing Git..." : "Initialize Git",
-        disabled: git.isInitPending,
-        onClick: () => {
-          git.initRepository();
-        },
-      }
-    : undefined;
 
   return (
     <>
@@ -337,12 +308,22 @@ export const ChatEnvironmentColumn = memo(function ChatEnvironmentColumn({
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto p-(--popup-padding)">
           <div>
-            <SectionHeader label="Environment" {...(addAction ? { add: addAction } : {})} />
+            <SectionHeader label="Environment" />
             {!git.isRepo ? (
-              <EnvironmentStatus
-                icon={<GitBranchPlusIcon aria-hidden />}
-                label="Not a Git repository"
-              />
+              <>
+                <EnvironmentStatus
+                  icon={<GitBranchPlusIcon aria-hidden />}
+                  label="Not a Git repository"
+                />
+                <EnvironmentRow
+                  icon={
+                    git.isInitPending ? <Spinner aria-hidden /> : <GitBranchPlusIcon aria-hidden />
+                  }
+                  label={git.isInitPending ? "Initializing Git…" : "Initialize Git repository"}
+                  disabled={git.isInitPending}
+                  onClick={git.initRepository}
+                />
+              </>
             ) : (
               <>
                 <EnvironmentRow

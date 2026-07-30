@@ -5,7 +5,13 @@ import {
 } from "@vide/client-runtime/state/runtime";
 import type { ContextMenuItem, EnvironmentId, VcsRef, ThreadId } from "@vide/contracts";
 import { LegendList, type LegendListRef } from "@legendapp/list/react";
-import { ChevronDownIcon, GitBranchIcon, RefreshCwIcon, SearchIcon } from "lucide-react";
+import {
+  ChevronDownIcon,
+  GitBranchIcon,
+  GitBranchPlusIcon,
+  RefreshCwIcon,
+  SearchIcon,
+} from "lucide-react";
 import {
   useCallback,
   useDeferredValue,
@@ -43,6 +49,7 @@ import {
   resolveEffectiveEnvMode,
   shouldIncludeBranchPickerItem,
 } from "./BranchToolbar.logic";
+import { useGitRepositoryInit } from "./GitActionsControl";
 import {
   ChangeRequestStatusIcon,
   prStatusIndicator,
@@ -60,6 +67,7 @@ import {
   ComboboxStatus,
   ComboboxTrigger,
 } from "./ui/combobox";
+import { Spinner } from "./ui/spinner";
 import { stackedThreadToast, toastManager } from "./ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 
@@ -408,6 +416,20 @@ export function BranchToolbarBranchSelector({
       branchRefState.refresh();
     },
   });
+  // Default to true while status is loading, same as everywhere else this
+  // flag is read — otherwise the chip flashes "not a repository" for every
+  // plain folder for the one frame before the query resolves.
+  const isRepo = branchStatus?.isRepo ?? true;
+  const gitInitScope = useMemo(
+    () => ({ environmentId, cwd: branchCwd }),
+    [branchCwd, environmentId],
+  );
+  const gitInitThreadRef = useMemo(
+    () => scopeThreadRef(environmentId, threadId),
+    [environmentId, threadId],
+  );
+  const gitInitToastData = useMemo(() => ({ threadRef: gitInitThreadRef }), [gitInitThreadRef]);
+  const { isInitPending, initRepository } = useGitRepositoryInit(gitInitScope, gitInitToastData);
   const branchRefTarget = useMemo(
     () => ({
       environmentId,
@@ -690,6 +712,43 @@ export function BranchToolbarBranchSelector({
     ? `Open ${sourceControlPresentation.terminology.singular} #${branchPr.number} (${branchPr.state}) in browser`
     : "";
   const openPrLink = useOpenPrLink();
+
+  // A plain folder has no refs to pick from, so the chip that would normally
+  // open the branch picker instead names the actual state — silence here is
+  // the one thing this strip can't afford, since it exists to answer "where
+  // is this about to run" — and opens the same init action as the
+  // environment column's "Initialize Git repository" row.
+  if (!isRepo) {
+    return (
+      <div className={cn("flex min-w-0 items-center gap-1", className)}>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="xs"
+                disabled={isInitPending}
+                onClick={initRepository}
+                className="min-w-0 max-w-full text-muted-foreground/70 hover:text-foreground/80"
+              />
+            }
+          >
+            {isInitPending ? (
+              <Spinner aria-hidden className="size-3 shrink-0" />
+            ) : (
+              <GitBranchPlusIcon aria-hidden className="size-3 shrink-0 opacity-70" />
+            )}
+            <span className="min-w-0 max-w-[240px] truncate">
+              {isInitPending ? "Initializing Git…" : "Not a Git repository"}
+            </span>
+          </TooltipTrigger>
+          <TooltipPopup side="top">
+            {isInitPending ? "Initializing…" : "Initialize a Git repository for this folder"}
+          </TooltipPopup>
+        </Tooltip>
+      </div>
+    );
+  }
 
   function renderPickerItem(itemValue: string, index: number) {
     if (checkoutPullRequestItemValue && itemValue === checkoutPullRequestItemValue) {

@@ -466,29 +466,14 @@
   }
 
   /*
-   * The right panel animates its own width the same way the sidebar does
-   * (see PreviewPanelShell), and reflows its tab labels and empty-state cards
-   * across that transition for the same reason — squeezed at the start,
-   * unwrapping as the width arrives. Same fix, same asymmetric idea, but the
-   * delay can't just copy the sidebar's 130ms: the sidebar's reflowing content
-   * is short row labels that stop wrapping well before the width animation
-   * finishes, so revealing at 130ms of a 220ms transition was already safe for
-   * it. The empty-state cards here (icon + label + description in a row) need
-   * close to the *final* width before they stop wrapping, so fading them in
-   * at 130ms just made the wrap visible at partial opacity instead of none —
-   * still the bug, just softer. Delaying the full width-transition duration
-   * means the reveal can only start once the width transition has actually
-   * finished, whatever its curve.
+   * The right panel needs no cross-fade. Its content holds its own width and is
+   * clipped by the shell (see PreviewPanelShell), so nothing inside re-wraps
+   * while the width animates. Fading it was covering a reflow that no longer
+   * happens, at the cost of delaying content behind a panel already in place.
+   *
+   * The left sidebar still needs one: its rows are sized off the panel, so they
+   * genuinely do re-lay-out as it opens.
    */
-  [data-preview-panel-open="true"] [data-slot="preview-panel-inner"] {
-    opacity: 1;
-    transition: opacity var(--duration-fast) var(--ease-out) var(--duration-base);
-  }
-
-  [data-preview-panel-open="false"] [data-slot="preview-panel-inner"] {
-    opacity: 0;
-    transition: opacity 80ms var(--ease-out);
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
