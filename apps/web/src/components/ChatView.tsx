@@ -226,6 +226,7 @@ import { DraftHeroSuggestions } from "./chat/DraftHeroSuggestions";
 import { ExpandedImageDialog } from "./chat/ExpandedImageDialog";
 import { PullRequestThreadDialog } from "./PullRequestThreadDialog";
 import { MessagesTimeline } from "./chat/MessagesTimeline";
+import { ChatEnvironmentColumn } from "./chat/ChatEnvironmentColumn";
 import { ChatHeader } from "./chat/ChatHeader";
 import { PanelLayoutControls, RightPanelMaximizeControl } from "./chat/PanelLayoutControls";
 import { type ExpandedImagePreview } from "./chat/ExpandedImagePreview";
@@ -622,6 +623,27 @@ function serverTerminalIdsStrictSubsetOfClient(
   return true;
 }
 
+const TERMINAL_DRAWER_CLOSE_GRACE_FALLBACK_MS = 220;
+
+/**
+ * The terminal drawer closes via the grid-row transition on `--duration-base`
+ * (see the `PersistentThreadTerminalDrawer` wrapper below), but the thread key
+ * that keeps it mounted is evicted by a plain reconciliation effect that has
+ * no notion of a CSS transition running. Reading the token instead of pinning
+ * a second copy of the number keeps this grace window from drifting out of
+ * sync with the transition it exists to cover for — same reasoning as the
+ * sidebar's own `--duration-base` read in sidebarRowStyles.ts.
+ */
+function readTerminalDrawerCloseGraceMs(): number {
+  if (typeof window === "undefined") {
+    return TERMINAL_DRAWER_CLOSE_GRACE_FALLBACK_MS;
+  }
+  const parsed = Number.parseFloat(
+    window.getComputedStyle(document.documentElement).getPropertyValue("--duration-base"),
+  );
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : TERMINAL_DRAWER_CLOSE_GRACE_FALLBACK_MS;
+}
+
 interface PersistentThreadTerminalDrawerProps {
   threadRef: { environmentId: EnvironmentId; threadId: ThreadId };
   threadId: ThreadId;
@@ -934,7 +956,14 @@ const PersistentThreadTerminalDrawer = memo(function PersistentThreadTerminalDra
     [onAddTerminalContext, visible],
   );
 
-  if (!project || !terminalUiState.terminalOpen || !cwd) {
+  // `terminalUiState.terminalOpen` is deliberately NOT part of this guard: the
+  // grid-row wrapper below is what animates the drawer shut, and it can only
+  // do that while it stays mounted. Unmounting here the instant the user
+  // closes the terminal removed the wrapper before its transition could run —
+  // closes just snapped. `visible` (which already factors terminalOpen in)
+  // drives the animation instead; only a genuinely gone project/cwd should
+  // unmount this outright.
+  if (!project || !cwd) {
     return null;
   }
 
@@ -1556,6 +1585,8 @@ function ChatViewContent(props: ChatViewProps) {
   const rightPanelMaximized =
     canMaximizeRightPanel && maximizedRightPanelThreadKey === routeThreadKey;
   const inlineRightPanelOwnsTitleBar = rightPanelOpen && !shouldUsePlanSidebarSheet;
+  // Its own column beside the chat pane, not a dropdown — see ChatEnvironmentColumn.
+  const [environmentColumnOpen, setEnvironmentColumnOpen] = useState(false);
 
   useEffect(() => {
     if (!activeThreadRef) return;
@@ -1612,13 +1643,49 @@ function ChatViewContent(props: ChatViewProps) {
     }
     return entries;
   }, [activeThread, sourcePlanThreadRef, sourceThreadProposedPlans]);
+  /*
+   * The reconciliation effect just below drops the active thread's key from
+   * `mountedTerminalThreadKeys` as soon as `terminalUiState.terminalOpen`
+   * goes false, which unmounts `PersistentThreadTerminalDrawer` — cutting off
+   * its grid-row close transition before it can play. Comparing against the
+   * previous render's flag *during render* (the React-sanctioned way to
+   * derive state from a prop/state change, not in a separate effect a tick
+   * behind) means `terminalCloseGrace.active` is already correct by the time
+   * this same commit's reconciliation effect runs, so the very first pass
+   * keeps the key mounted instead of evicting-then-remounting it.
+   */
+  const currentActiveTerminalOpen = Boolean(terminalUiState.terminalOpen);
+  const [terminalCloseGrace, setTerminalCloseGrace] = useState(() => ({
+    active: false,
+    wasOpen: currentActiveTerminalOpen,
+  }));
+  if (terminalCloseGrace.wasOpen !== currentActiveTerminalOpen) {
+    setTerminalCloseGrace({
+      active: terminalCloseGrace.wasOpen && !currentActiveTerminalOpen,
+      wasOpen: currentActiveTerminalOpen,
+    });
+  }
+  useEffect(() => {
+    if (!terminalCloseGrace.active) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setTerminalCloseGrace((current) =>
+        current.active ? { ...current, active: false } : current,
+      );
+    }, readTerminalDrawerCloseGraceMs());
+    return () => window.clearTimeout(timer);
+  }, [terminalCloseGrace.active]);
+
   useEffect(() => {
     setMountedTerminalThreadKeys((currentThreadIds) => {
       const nextThreadIds = reconcileMountedTerminalThreadIds({
         currentThreadIds,
         openThreadIds: existingOpenTerminalThreadKeys,
         activeThreadId: activeThreadKey,
-        activeThreadTerminalOpen: Boolean(activeThreadKey && terminalUiState.terminalOpen),
+        activeThreadTerminalOpen: Boolean(
+          activeThreadKey && (terminalUiState.terminalOpen || terminalCloseGrace.active),
+        ),
         maxHiddenThreadCount: MAX_HIDDEN_MOUNTED_TERMINAL_THREADS,
       });
       return currentThreadIds.length === nextThreadIds.length &&
@@ -1626,7 +1693,12 @@ function ChatViewContent(props: ChatViewProps) {
         ? currentThreadIds
         : nextThreadIds;
     });
-  }, [activeThreadKey, existingOpenTerminalThreadKeys, terminalUiState.terminalOpen]);
+  }, [
+    activeThreadKey,
+    existingOpenTerminalThreadKeys,
+    terminalCloseGrace.active,
+    terminalUiState.terminalOpen,
+  ]);
   const latestTurnSettled = isLatestTurnSettled(activeLatestTurn, activeThread?.session ?? null);
   const activeProjectRef = activeThread
     ? scopeProjectRef(activeThread.environmentId, activeThread.projectId)
@@ -3247,6 +3319,12 @@ function ChatViewContent(props: ChatViewProps) {
       threadKey === routeThreadKey ? null : routeThreadKey,
     );
   }, [canMaximizeRightPanel, routeThreadKey]);
+  const toggleEnvironmentColumn = useCallback(() => {
+    setEnvironmentColumnOpen((open) => !open);
+  }, []);
+  const closeEnvironmentColumn = useCallback(() => {
+    setEnvironmentColumnOpen(false);
+  }, []);
   const cleanupRightPanelSurfaces = useCallback(
     (surfaces: readonly RightPanelSurface[]) => {
       if (!activeThreadRef) return;
@@ -5581,6 +5659,10 @@ function ChatViewContent(props: ChatViewProps) {
     return <NoActiveThreadState />;
   }
 
+  // Mirrors ChatHeader's own gate for the trigger button: no messages or no
+  // project means there is nothing yet for the column to report on.
+  const showEnvironmentColumn = timelineEntries.length > 0 && Boolean(activeProject?.title);
+
   const panelToggleControls = (
     <PanelLayoutControls
       terminalAvailable={activeProject !== null}
@@ -5720,8 +5802,6 @@ function ChatViewContent(props: ChatViewProps) {
           {!rightPanelOpen ? panelLayoutControls : null}
           <ChatHeader
             activeThreadEnvironmentId={activeThread.environmentId}
-            activeThreadId={activeThread.id}
-            {...(routeKind === "draft" && draftId ? { draftId } : {})}
             activeThreadTitle={activeThread.title}
             activeProjectName={activeProject?.title}
             activeProjectCwd={activeProject?.workspaceRoot ?? null}
@@ -5730,7 +5810,8 @@ function ChatViewContent(props: ChatViewProps) {
             keybindings={keybindings}
             availableEditors={availableEditors}
             rightPanelOpen={rightPanelOpen}
-            gitCwd={gitCwd}
+            environmentColumnOpen={environmentColumnOpen}
+            onToggleEnvironmentColumn={toggleEnvironmentColumn}
             onNewThreadInProject={handleNewThreadInActiveProject}
           />
         </header>
@@ -6050,6 +6131,25 @@ function ChatViewContent(props: ChatViewProps) {
           />
         ))}
       </div>
+
+      {/*
+        Its own column, beside the chat pane rather than floating over it —
+        mounted whenever there is something to show, same as the right panel
+        below, so opening and closing both animate instead of one of them
+        snapping. `useGitActions` lives inside it and owns the commit /
+        publish / default-branch dialogs, which is why it has to stay mounted
+        even while the column itself is visually collapsed.
+      */}
+      {showEnvironmentColumn ? (
+        <ChatEnvironmentColumn
+          environmentId={activeThread.environmentId}
+          threadId={activeThread.id}
+          {...(routeKind === "draft" && draftId ? { draftId } : {})}
+          gitCwd={gitCwd}
+          open={environmentColumnOpen}
+          onClose={closeEnvironmentColumn}
+        />
+      ) : null}
 
       {/*
         Rendered whenever an inline panel is possible, not only while it is open.

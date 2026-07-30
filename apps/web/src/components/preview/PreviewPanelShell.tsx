@@ -97,7 +97,17 @@ export function PreviewPanelShell(props: {
         <RightPanelResizeHandle handlers={resizeHandlers} />
       ) : null}
       {useDragRegion ? <div className="electron-drag-region h-0 w-full" aria-hidden /> : null}
-      {props.children}
+      {/*
+       * Animating width means everything in here is laid out again on every
+       * frame: at the start there's almost no room, so tab labels and the
+       * empty-state cards wrap, and they unwrap as space arrives. `data-slot`
+       * gives vide-theme.css something to key the same cross-fade the left
+       * sidebar already uses off `data-preview-panel-open` on the root above —
+       * see the sidebar-inner rule next to it.
+       */}
+      <div data-slot="preview-panel-inner" className="flex min-h-0 flex-1 flex-col">
+        {props.children}
+      </div>
     </div>
   );
 }

@@ -1,12 +1,7 @@
-import {
-  type EnvironmentId,
-  type EditorId,
-  type ResolvedKeybindingsConfig,
-  type ThreadId,
-} from "@vide/contracts";
+import { type EnvironmentId, type EditorId, type ResolvedKeybindingsConfig } from "@vide/contracts";
+import { BoxIcon } from "lucide-react";
 import { memo } from "react";
-import { ChatEnvironmentMenu } from "./ChatEnvironmentMenu";
-import { type DraftId } from "~/composerDraftStore";
+import { Toggle } from "../ui/toggle";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { OpenInPicker } from "./OpenInPicker";
 import { usePrimaryEnvironmentId } from "../../state/environments";
@@ -15,8 +10,6 @@ import { cn } from "~/lib/utils";
 
 interface ChatHeaderProps {
   activeThreadEnvironmentId: EnvironmentId;
-  activeThreadId: ThreadId;
-  draftId?: DraftId;
   activeThreadTitle: string;
   activeProjectName: string | undefined;
   activeProjectCwd: string | null;
@@ -30,7 +23,9 @@ interface ChatHeaderProps {
   keybindings: ResolvedKeybindingsConfig;
   availableEditors: ReadonlyArray<EditorId>;
   rightPanelOpen: boolean;
-  gitCwd: string | null;
+  /** Whether the environment column beside the chat pane is open. */
+  environmentColumnOpen: boolean;
+  onToggleEnvironmentColumn: () => void;
   onNewThreadInProject: () => void;
 }
 
@@ -48,8 +43,6 @@ export function shouldShowOpenInPicker(input: {
 
 export const ChatHeader = memo(function ChatHeader({
   activeThreadEnvironmentId,
-  activeThreadId,
-  draftId,
   activeThreadTitle,
   activeProjectName,
   activeProjectCwd,
@@ -58,7 +51,8 @@ export const ChatHeader = memo(function ChatHeader({
   keybindings,
   availableEditors,
   rightPanelOpen,
-  gitCwd,
+  environmentColumnOpen,
+  onToggleEnvironmentColumn,
   onNewThreadInProject,
 }: ChatHeaderProps) {
   const primaryEnvironmentId = usePrimaryEnvironmentId();
@@ -69,7 +63,7 @@ export const ChatHeader = memo(function ChatHeader({
       activeThreadEnvironmentId,
       primaryEnvironmentId,
     });
-  const showEnvironmentMenu = threadHasMessages && Boolean(activeProjectName);
+  const showEnvironmentColumn = threadHasMessages && Boolean(activeProjectName);
   return (
     <div className="@container/header-actions flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
       {threadHasMessages ? (
@@ -134,13 +128,23 @@ export const ChatHeader = memo(function ChatHeader({
             openInCwd={openInCwd}
           />
         )}
-        {showEnvironmentMenu && (
-          <ChatEnvironmentMenu
-            environmentId={activeThreadEnvironmentId}
-            threadId={activeThreadId}
-            gitCwd={gitCwd}
-            {...(draftId ? { draftId } : {})}
-          />
+        {showEnvironmentColumn && (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Toggle
+                  aria-label="Environment overview"
+                  pressed={environmentColumnOpen}
+                  onPressedChange={onToggleEnvironmentColumn}
+                  variant="ghost"
+                  size="sm"
+                />
+              }
+            >
+              <BoxIcon aria-hidden="true" className="size-4" />
+            </TooltipTrigger>
+            <TooltipPopup side="bottom">Environment overview</TooltipPopup>
+          </Tooltip>
         )}
       </div>
     </div>

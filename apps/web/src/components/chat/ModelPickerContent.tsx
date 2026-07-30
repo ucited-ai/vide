@@ -5,23 +5,19 @@ import {
 } from "@vide/contracts";
 import { resolveSelectableModel } from "@vide/shared/model";
 import { LegendList, type LegendListRef } from "@legendapp/list/react";
-import {
-  memo,
-  type ReactNode,
-  useMemo,
-  useState,
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-} from "react";
-import { SearchIcon } from "lucide-react";
+import { memo, useMemo, useState, useCallback, useEffect, useLayoutEffect, useRef } from "react";
+import { ChevronLeftIcon, SearchIcon } from "lucide-react";
+import { Button } from "../ui/button";
 import { ModelListRow } from "./ModelListRow";
-import { ModelPickerSidebar } from "./ModelPickerSidebar";
 import { isModelPickerNewModel } from "./modelPickerModelHighlights";
 import { buildModelPickerSearchText, scoreModelPickerSearch } from "./modelPickerSearch";
 import { Combobox, ComboboxEmpty, ComboboxInput, ComboboxListVirtualized } from "../ui/combobox";
-import { ModelEsque } from "./providerIconUtils";
+import { getDisplayModelName, ModelEsque } from "./providerIconUtils";
+import {
+  shouldRenderTraitsControls,
+  TraitsStepContent,
+  type TraitsControlProps,
+} from "./TraitsPicker";
 import {
   modelPickerJumpCommandForIndex,
   modelPickerJumpIndexFromCommand,
@@ -31,11 +27,7 @@ import {
 import { useClientSettings, useUpdateClientSettings } from "~/hooks/useSettings";
 import { cn } from "~/lib/utils";
 import { TooltipProvider } from "../ui/tooltip";
-import {
-  isProviderInstancePickerReady,
-  isProviderInstancePickerVisible,
-  type ProviderInstanceEntry,
-} from "../../providerInstances";
+import { isProviderInstancePickerReady, type ProviderInstanceEntry } from "../../providerInstances";
 import { providerModelKey, sortProviderModelItems } from "../../modelOrdering";
 
 type ModelPickerItem = {
@@ -80,9 +72,8 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
   lockedProvider: ProviderDriverKind | null;
   lockedContinuationGroupKey?: string | null;
   /**
-   * All configured provider instances in display order. Used to render
-   * the sidebar (one button per instance) and to resolve display names
-   * for the locked-mode header.
+   * All configured provider instances in display order. Used to resolve
+   * each model's display name and driver kind when flattening the list.
    */
   instanceEntries: ReadonlyArray<ProviderInstanceEntry>;
   keybindings?: ResolvedKeybindingsConfig;
@@ -95,11 +86,12 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
   modelOptionsByInstance: ReadonlyMap<ProviderInstanceId, ReadonlyArray<ModelEsque>>;
   terminalOpen: boolean;
   /**
-   * Controls for the selected model's options, docked under the list. They live
-   * here rather than beside the composer's picker so model and effort are one
-   * choice in one surface.
+   * Drives the popup's second step, shown once a model with any options is
+   * picked. Absent for callers with no traits target (the settings pages),
+   * which keeps this a single-step picker for them — see
+   * {@link ProviderModelPicker}'s prop of the same name.
    */
-  footer?: ReactNode;
+  traitsInput?: TraitsControlProps;
   onRequestClose?: () => void;
   getModelDisabledReason?: (instanceId: ProviderInstanceId, model: string) => string | null;
   onInstanceModelChange: (instanceId: ProviderInstanceId, model: string) => void;
@@ -118,16 +110,10 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
   const modelListRef = useRef<LegendListRef | null>(null);
   const highlightedModelKeyRef = useRef<string | null>(null);
   const favorites = useClientSettings((s) => s.favorites ?? []);
-  const [selectedInstanceId, setSelectedInstanceId] = useState<ProviderInstanceId | "favorites">(
-    () => {
-      if (props.lockedProvider !== null) {
-        // When locked, prime the sidebar to the currently-active instance
-        // so jumping into the picker keeps the focused instance visible.
-        return props.activeInstanceId;
-      }
-      return favorites.length > 0 ? "favorites" : props.activeInstanceId;
-    },
-  );
+  // The popup's two views. Starts on the list every time it mounts, which is
+  // every time it opens — Base UI doesn't keep this content around while
+  // closed, so there is no stale "options" step to reset.
+  const [step, setStep] = useState<"list" | "options">("list");
   const keybindings = useMemo<ResolvedKeybindingsConfig>(
     () => providedKeybindings ?? [],
     [providedKeybindings],
@@ -138,15 +124,12 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
     searchInputRef.current?.focus({ preventScroll: true });
   }, []);
 
-  const handleSelectInstance = useCallback(
-    (instanceId: ProviderInstanceId | "favorites") => {
-      setSelectedInstanceId(instanceId);
-      window.requestAnimationFrame(() => {
-        focusSearchInput();
-      });
-    },
-    [focusSearchInput],
-  );
+  const handleBackToList = useCallback(() => {
+    setStep("list");
+    window.requestAnimationFrame(() => {
+      focusSearchInput();
+    });
+  }, [focusSearchInput]);
 
   useLayoutEffect(() => {
     focusSearchInput();
@@ -236,48 +219,19 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
   }, [modelOptionsByInstance, entryByInstanceId, readyInstanceSet]);
 
   const isLocked = props.lockedProvider !== null;
-  const isSearching = searchQuery.trim().length > 0;
-  const lockedDisabledInstanceIds = useMemo(() => {
-    if (!isLocked) {
-      return undefined;
-    }
-    const disabled = new Set<ProviderInstanceId>();
-    for (const entry of instanceEntries) {
-      if (!matchesLockedProvider(entry)) {
-        disabled.add(entry.instanceId);
-      }
-    }
-    return disabled;
-  }, [instanceEntries, isLocked, matchesLockedProvider]);
-  const sidebarInstanceEntries = useMemo(() => {
-    const enabledEntries = instanceEntries.filter(isProviderInstancePickerVisible);
-    if (!isLocked) {
-      return enabledEntries;
-    }
-    const available: ProviderInstanceEntry[] = [];
-    const disabled: ProviderInstanceEntry[] = [];
-    for (const entry of enabledEntries) {
-      if (matchesLockedProvider(entry)) {
-        available.push(entry);
-      } else {
-        disabled.push(entry);
-      }
-    }
-    return [...available, ...disabled];
-  }, [instanceEntries, isLocked, matchesLockedProvider]);
-  const showSidebar = !isSearching && sidebarInstanceEntries.length > 0;
   const instanceOrder = useMemo(
     () => instanceEntries.map((entry) => entry.instanceId),
     [instanceEntries],
   );
 
-  // Filter models based on search query and selected instance
+  // Every ready model, everywhere: with no provider rail this is the only
+  // list there is, and `matchesLockedProvider` (a no-op when there is no
+  // lock) is the only narrowing left. Favorites bubble to the top; below
+  // that, instances keep their configured order.
   const filteredModels = useMemo(() => {
-    let result = flatModels;
-
     // Apply tokenized fuzzy search across the combined provider/model search fields.
     if (searchQuery.trim()) {
-      const rankedMatches = result
+      const rankedMatches = flatModels
         .map((model) => ({
           model,
           score: scoreModelPickerSearch(
@@ -309,31 +263,8 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
             isFavorite: boolean;
             tieBreaker: string;
           } => rankedModel.score !== null,
-        );
-
-      // When searching, we only respect locked provider (by driver kind),
-      // ignoring sidebar selection so account-scoped searches can find a
-      // model before the user chooses a specific instance rail item.
-      if (props.lockedProvider !== null) {
-        const lockedProviderMatches: Array<(typeof rankedMatches)[number]> = [];
-        for (const rankedModel of rankedMatches) {
-          if (matchesLockedProvider(rankedModel.model)) {
-            lockedProviderMatches.push(rankedModel);
-          }
-        }
-        return lockedProviderMatches
-          .toSorted((a, b) => {
-            const scoreDelta = a.score - b.score;
-            if (scoreDelta !== 0) {
-              return scoreDelta;
-            }
-            if (a.isFavorite !== b.isFavorite) {
-              return a.isFavorite ? -1 : 1;
-            }
-            return a.tieBreaker.localeCompare(b.tieBreaker);
-          })
-          .map((rankedModel) => rankedModel.model);
-      }
+        )
+        .filter((rankedModel) => matchesLockedProvider(rankedModel.model));
 
       return rankedMatches
         .toSorted((a, b) => {
@@ -349,33 +280,13 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
         .map((rankedModel) => rankedModel.model);
     }
 
-    if (props.lockedProvider !== null) {
-      result = result.filter((m) => matchesLockedProvider(m));
-      if (selectedInstanceId === "favorites") {
-        result = result.filter((m) => favoritesSet.has(providerModelKey(m.instanceId, m.slug)));
-      } else {
-        result = result.filter((m) => m.instanceId === selectedInstanceId);
-      }
-    } else if (selectedInstanceId === "favorites") {
-      result = result.filter((m) => favoritesSet.has(providerModelKey(m.instanceId, m.slug)));
-    } else {
-      result = result.filter((m) => m.instanceId === selectedInstanceId);
-    }
-
+    const result = flatModels.filter((model) => matchesLockedProvider(model));
     return sortProviderModelItems(result, {
       favoriteModelKeys: favoritesSet,
-      groupFavorites: selectedInstanceId !== "favorites",
-      instanceOrder: selectedInstanceId === "favorites" ? instanceOrder : [],
+      groupFavorites: true,
+      instanceOrder,
     });
-  }, [
-    favoritesSet,
-    flatModels,
-    instanceOrder,
-    matchesLockedProvider,
-    props.lockedProvider,
-    searchQuery,
-    selectedInstanceId,
-  ]);
+  }, [favoritesSet, flatModels, instanceOrder, matchesLockedProvider, searchQuery]);
 
   const handleModelSelect = useCallback(
     (modelSlug: string, instanceId: ProviderInstanceId) => {
@@ -394,11 +305,29 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
       // (slug casing etc.). Custom instances share their driver's
       // normalization rules, so pass the driver kind here.
       const resolvedModel = resolveSelectableModel(entry.driverKind, modelSlug, options);
-      if (resolvedModel) {
-        onInstanceModelChange(instanceId, resolvedModel);
+      if (!resolvedModel) {
+        return;
+      }
+      onInstanceModelChange(instanceId, resolvedModel);
+      // A model with options advances to the second step so effort/context/
+      // etc. can be set right after picking. One with no traits target at
+      // all (the settings pages) or nothing to configure closes immediately
+      // instead — ModelOptionsStep makes that second call once it can see
+      // the freshly-picked model's descriptors.
+      if (props.traitsInput) {
+        setStep("options");
+      } else {
+        props.onRequestClose?.();
       }
     },
-    [entryByInstanceId, getModelDisabledReason, modelOptionsByInstance, onInstanceModelChange],
+    [
+      entryByInstanceId,
+      getModelDisabledReason,
+      modelOptionsByInstance,
+      onInstanceModelChange,
+      props.onRequestClose,
+      props.traitsInput,
+    ],
   );
 
   const toggleFavorite = useCallback(
@@ -533,170 +462,254 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
     };
   }, [filteredModelKeys, updateModelListScrollFades]);
 
+  // The model step 2 is showing options for — always the active selection,
+  // since picking a row applies it immediately and only then advances the
+  // step (see handleModelSelect). Looked up unfiltered so it resolves
+  // regardless of the current search text or sort position.
+  const activeModelKey = `${props.activeInstanceId}:${props.model}`;
+  const activeModelInfo = useMemo(
+    () =>
+      flatModels.find((model) => `${model.instanceId}:${model.slug}` === activeModelKey) ?? null,
+    [activeModelKey, flatModels],
+  );
+
   return (
     <TooltipProvider delay={0}>
       {/* `h-screen max-h-96` sized this against the window rather than against
           the space the popup actually has, so on a short window the surface
           stayed 100vh tall and its bottom — the traits controls — was clipped by
           the popup viewport instead of the list giving up rows. Capping at the
-          popup's own available height makes the list the part that shrinks. */}
+          popup's own available height makes the list the part that shrinks.
+          Both steps share this box — same width, same height — so advancing
+          from one to the other reads as one control, not a different popup. */}
       <div
-        className="dropdown-glass model-picker-surface relative flex h-96 max-h-(--available-height) w-screen max-w-100 flex-row overflow-hidden rounded-lg text-popover-foreground [clip-path:inset(0_round_var(--radius-lg))]"
+        className="dropdown-glass model-picker-surface relative flex h-96 max-h-(--available-height) w-screen max-w-100 flex-col overflow-hidden rounded-lg text-popover-foreground [clip-path:inset(0_round_var(--radius-lg))]"
         data-model-picker-content="true"
       >
-        {/* Sidebar */}
-        {showSidebar && (
-          <ModelPickerSidebar
-            selectedInstanceId={selectedInstanceId}
-            onSelectInstance={handleSelectInstance}
-            instanceEntries={sidebarInstanceEntries}
-            showFavorites
-            {...(lockedDisabledInstanceIds
-              ? {
-                  disabledInstanceIds: lockedDisabledInstanceIds,
-                  getDisabledInstanceTooltip: (entry: ProviderInstanceEntry) =>
-                    `${entry.displayName} is unavailable in this thread. Start a new thread to switch providers.`,
-                }
-              : {})}
+        {step === "options" && props.traitsInput ? (
+          <ModelOptionsStep
+            traitsInput={props.traitsInput}
+            modelName={activeModelInfo ? getDisplayModelName(activeModelInfo) : props.model}
+            providerLabel={activeModelInfo?.instanceDisplayName ?? ""}
+            onBack={handleBackToList}
+            onRequestClose={props.onRequestClose}
           />
-        )}
-
-        {/* Main content area */}
-        <Combobox
-          inline
-          items={allModelKeys}
-          filteredItems={filteredModelKeys}
-          filter={null}
-          autoHighlight
-          open
-          virtualized
-          value={`${props.activeInstanceId}:${props.model}`}
-          onItemHighlighted={(modelKey, eventDetails) => {
-            highlightedModelKeyRef.current = typeof modelKey === "string" ? modelKey : null;
-            if (eventDetails.reason === "keyboard" && eventDetails.index >= 0) {
-              void modelListRef.current?.scrollIndexIntoView?.({
-                index: eventDetails.index,
-                animated: false,
-              });
-            }
-          }}
-          onValueChange={(modelKey) => {
-            if (typeof modelKey !== "string") {
-              return;
-            }
-            const { instanceId, slug } = splitInstanceModelKey(modelKey);
-            handleModelSelect(slug, instanceId);
-          }}
-        >
-          <div
-            className={cn(
-              "flex min-h-0 flex-1 flex-col overflow-hidden bg-muted/40",
-              showSidebar && "border-l",
-            )}
+        ) : (
+          <Combobox
+            inline
+            items={allModelKeys}
+            filteredItems={filteredModelKeys}
+            filter={null}
+            autoHighlight
+            open
+            virtualized
+            value={`${props.activeInstanceId}:${props.model}`}
+            onItemHighlighted={(modelKey, eventDetails) => {
+              highlightedModelKeyRef.current = typeof modelKey === "string" ? modelKey : null;
+              if (eventDetails.reason === "keyboard" && eventDetails.index >= 0) {
+                void modelListRef.current?.scrollIndexIntoView?.({
+                  index: eventDetails.index,
+                  animated: false,
+                });
+              }
+            }}
+            onValueChange={(modelKey) => {
+              if (typeof modelKey !== "string") {
+                return;
+              }
+              const { instanceId, slug } = splitInstanceModelKey(modelKey);
+              handleModelSelect(slug, instanceId);
+            }}
           >
-            {/* Search bar */}
-            <div className="px-4 pt-2.5">
-              <div className="-translate-y-px border-b border-border/70 pb-2.5 transition-colors focus-within:border-ring">
-                <ComboboxInput
-                  ref={searchInputRef}
-                  className="[&_input]:h-6.5 [&_input]:font-sans [&_input]:leading-6.5"
-                  inputClassName="rounded-none bg-transparent text-sm"
-                  placeholder="Search models..."
-                  showTrigger={false}
-                  startAddon={
-                    <SearchIcon className="-translate-x-0.5 size-4 shrink-0 text-muted-foreground/55" />
-                  }
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Escape") {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      props.onRequestClose?.();
-                      return;
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-muted/40">
+              {/* Search bar */}
+              <div className="px-4 pt-2.5">
+                <div className="-translate-y-px border-b border-border/70 pb-2.5 transition-colors focus-within:border-ring">
+                  <ComboboxInput
+                    ref={searchInputRef}
+                    className="[&_input]:h-6.5 [&_input]:font-sans [&_input]:leading-6.5"
+                    inputClassName="rounded-none bg-transparent text-sm"
+                    placeholder="Search models..."
+                    showTrigger={false}
+                    startAddon={
+                      <SearchIcon className="-translate-x-0.5 size-4 shrink-0 text-muted-foreground/55" />
                     }
-                    if (e.key === "Enter" && highlightedModelKeyRef.current) {
-                      (
-                        e as typeof e & { preventBaseUIHandler?: () => void }
-                      ).preventBaseUIHandler?.();
-                      e.preventDefault();
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        props.onRequestClose?.();
+                        return;
+                      }
+                      if (e.key === "Enter" && highlightedModelKeyRef.current) {
+                        (
+                          e as typeof e & { preventBaseUIHandler?: () => void }
+                        ).preventBaseUIHandler?.();
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const { instanceId, slug } = splitInstanceModelKey(
+                          highlightedModelKeyRef.current,
+                        );
+                        handleModelSelect(slug, instanceId);
+                        return;
+                      }
                       e.stopPropagation();
-                      const { instanceId, slug } = splitInstanceModelKey(
-                        highlightedModelKeyRef.current,
-                      );
-                      handleModelSelect(slug, instanceId);
-                      return;
-                    }
-                    e.stopPropagation();
-                  }}
-                  onMouseDown={(e) => e.stopPropagation()}
-                  onTouchStart={(e) => e.stopPropagation()}
-                  size="sm"
-                  unstyled
-                />
+                    }}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onTouchStart={(e) => e.stopPropagation()}
+                    size="sm"
+                    unstyled
+                  />
+                </div>
               </div>
-            </div>
 
-            {/* Model list */}
-            <div className="relative min-h-0 flex-1 overflow-hidden">
-              <ComboboxListVirtualized className="model-picker-list size-full min-w-0 p-0">
-                <LegendList<string>
-                  ref={modelListRef}
-                  data={filteredModelKeys}
-                  extraData={favoritesSet}
-                  keyExtractor={(modelKey) => modelKey}
-                  renderItem={({ item: modelKey, index }) => {
-                    const model = filteredModelByKey.get(modelKey);
-                    if (!model) {
-                      return null;
-                    }
-                    const disabledReason =
-                      getModelDisabledReason?.(model.instanceId, model.slug) ?? null;
-                    return (
-                      <ModelListRow
-                        key={modelKey}
-                        index={index}
-                        model={model}
-                        instanceId={model.instanceId}
-                        driverKind={model.driverKind}
-                        providerDisplayName={model.instanceDisplayName}
-                        providerAccentColor={model.instanceAccentColor}
-                        isFavorite={favoritesSet.has(modelKey)}
-                        isSelected={modelKey === `${props.activeInstanceId}:${props.model}`}
-                        showProvider
-                        preferShortName={!isLocked}
-                        useTriggerLabel={false}
-                        showNewBadge={isModelPickerNewModel(model.driverKind, model.slug)}
-                        jumpLabel={modelJumpLabelByKey.get(modelKey) ?? null}
-                        disabledReason={disabledReason}
-                        onToggleFavorite={() => toggleFavorite(model.instanceId, model.slug)}
-                      />
-                    );
-                  }}
-                  estimatedItemSize={60}
-                  drawDistance={480}
-                  recycleItems
-                  onLayout={updateModelListScrollFades}
-                  onScroll={updateModelListScrollFades}
-                  className={cn(
-                    "scrollbar-gutter-both h-full overflow-x-hidden overscroll-y-contain py-1.5 [--fade-size:1.5rem]",
-                    showTopScrollFade && "mask-t-from-[calc(100%-var(--fade-size))]",
-                    showBottomScrollFade && "mask-b-from-[calc(100%-var(--fade-size))]",
-                  )}
-                />
-              </ComboboxListVirtualized>
-            </div>
-            <ComboboxEmpty className="not-empty:py-6 empty:h-0 text-xs font-normal leading-snug">
-              No models found
-            </ComboboxEmpty>
-            {props.footer ? (
-              <div className="flex shrink-0 items-center gap-(--popup-item-gap) border-t border-border/60 px-3 py-2.5">
-                {props.footer}
+              {/* Model list */}
+              <div className="relative min-h-0 flex-1 overflow-hidden">
+                <ComboboxListVirtualized className="model-picker-list size-full min-w-0 p-0">
+                  <LegendList<string>
+                    ref={modelListRef}
+                    data={filteredModelKeys}
+                    extraData={favoritesSet}
+                    keyExtractor={(modelKey) => modelKey}
+                    renderItem={({ item: modelKey, index }) => {
+                      const model = filteredModelByKey.get(modelKey);
+                      if (!model) {
+                        return null;
+                      }
+                      const disabledReason =
+                        getModelDisabledReason?.(model.instanceId, model.slug) ?? null;
+                      return (
+                        <ModelListRow
+                          key={modelKey}
+                          index={index}
+                          model={model}
+                          instanceId={model.instanceId}
+                          driverKind={model.driverKind}
+                          providerDisplayName={model.instanceDisplayName}
+                          providerAccentColor={model.instanceAccentColor}
+                          isFavorite={favoritesSet.has(modelKey)}
+                          isSelected={modelKey === `${props.activeInstanceId}:${props.model}`}
+                          showProvider
+                          preferShortName={!isLocked}
+                          useTriggerLabel={false}
+                          showNewBadge={isModelPickerNewModel(model.driverKind, model.slug)}
+                          jumpLabel={modelJumpLabelByKey.get(modelKey) ?? null}
+                          disabledReason={disabledReason}
+                          onToggleFavorite={() => toggleFavorite(model.instanceId, model.slug)}
+                        />
+                      );
+                    }}
+                    estimatedItemSize={60}
+                    drawDistance={480}
+                    recycleItems
+                    onLayout={updateModelListScrollFades}
+                    onScroll={updateModelListScrollFades}
+                    className={cn(
+                      "scrollbar-gutter-both h-full overflow-x-hidden overscroll-y-contain py-1.5 [--fade-size:1.5rem]",
+                      showTopScrollFade && "mask-t-from-[calc(100%-var(--fade-size))]",
+                      showBottomScrollFade && "mask-b-from-[calc(100%-var(--fade-size))]",
+                    )}
+                  />
+                </ComboboxListVirtualized>
               </div>
-            ) : null}
-          </div>
-        </Combobox>
+              <ComboboxEmpty className="not-empty:py-6 empty:h-0 text-xs font-normal leading-snug">
+                No models found
+              </ComboboxEmpty>
+            </div>
+          </Combobox>
+        )}
       </div>
     </TooltipProvider>
   );
 });
+
+/**
+ * Step 2: the just-picked model's options, filling the same box the list
+ * just occupied.
+ *
+ * `shouldRenderTraitsControls` is checked again here rather than trusted
+ * from the click that got us here — that click's `traitsInput` still
+ * described the *previous* model, since ModelPickerContent's props only
+ * catch up once the selection change round-trips back down. By the time
+ * this step actually renders, `traitsInput` is current; a model that turns
+ * out to declare nothing closes the popup instead of showing an empty step,
+ * via a layout effect so the empty frame never paints.
+ */
+function ModelOptionsStep(props: {
+  traitsInput: TraitsControlProps;
+  modelName: string;
+  providerLabel: string;
+  onBack: () => void;
+  onRequestClose?: (() => void) | undefined;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const { provider, models, model, prompt, modelOptions, allowPromptInjectedEffort } =
+    props.traitsInput;
+  const hasControls = shouldRenderTraitsControls({
+    provider,
+    models,
+    model,
+    prompt,
+    modelOptions,
+    ...(allowPromptInjectedEffort !== undefined ? { allowPromptInjectedEffort } : {}),
+  });
+  const onRequestClose = props.onRequestClose;
+
+  useLayoutEffect(() => {
+    if (!hasControls) {
+      onRequestClose?.();
+    }
+  }, [hasControls, onRequestClose]);
+
+  useLayoutEffect(() => {
+    if (hasControls) {
+      containerRef.current?.focus({ preventScroll: true });
+    }
+  }, [hasControls]);
+
+  if (!hasControls) {
+    return null;
+  }
+
+  return (
+    <div
+      ref={containerRef}
+      tabIndex={-1}
+      className="flex min-h-0 flex-1 flex-col overflow-hidden outline-none"
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          event.stopPropagation();
+          props.onBack();
+        }
+      }}
+    >
+      <div className="flex shrink-0 items-center gap-2 border-b border-border/70 px-2.5 py-2">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-xs"
+          onClick={props.onBack}
+          aria-label="Back to model list"
+        >
+          <ChevronLeftIcon />
+        </Button>
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-(length:--text-ui) font-medium leading-snug">
+            {props.modelName}
+          </div>
+          {props.providerLabel ? (
+            <div className="truncate text-(length:--text-caption) leading-snug text-muted-foreground/70">
+              {props.providerLabel}
+            </div>
+          ) : null}
+        </div>
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+        <TraitsStepContent {...props.traitsInput} />
+      </div>
+    </div>
+  );
+}

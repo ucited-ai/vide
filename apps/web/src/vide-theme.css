@@ -229,9 +229,18 @@
  * length readable and stops the input from dominating the empty screen, and an
  * opaque surface one step above the pane keeps it legible over scrolling text
  * instead of letting the transcript smear through it.
+ *
+ * It is exactly as wide as the transcript, not inset from it: MessagesTimeline
+ * lays its messages out in `max-w-3xl`, so 48rem lines the input up with the
+ * text it answers. A narrower composer looked stranded under a wider column —
+ * the two read as one column or as a mistake, nothing in between.
+ *
+ * Both the context-chip strip (BranchToolbar's `w-4/5`) and the composer size
+ * off this same container, so the strip stays at 80% of the composer without
+ * needing a number of its own.
  */
 :root:root:root .chat-composer-horizontal-inset {
-  --composer-max-width: 46rem;
+  --composer-max-width: 48rem;
 
   margin-inline: auto;
   max-width: calc(var(--composer-max-width) + 1.5rem);
@@ -397,6 +406,24 @@
     opacity: 0;
     transition: opacity 80ms var(--ease-out);
   }
+
+  /*
+   * The right panel animates its own width the same way the sidebar does
+   * (see PreviewPanelShell), and reflows its tab labels and empty-state cards
+   * across that transition for the same reason — squeezed at the start,
+   * unwrapping as the width arrives. Same fix, same asymmetric timing, keyed
+   * off data-preview-panel-open (set on the shell's root) instead of
+   * data-state.
+   */
+  [data-preview-panel-open="true"] [data-slot="preview-panel-inner"] {
+    opacity: 1;
+    transition: opacity var(--duration-fast) var(--ease-out) 130ms;
+  }
+
+  [data-preview-panel-open="false"] [data-slot="preview-panel-inner"] {
+    opacity: 0;
+    transition: opacity 80ms var(--ease-out);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -412,7 +439,8 @@
     animation: none;
   }
 
-  :root:root:root [data-slot="sidebar-inner"] {
+  :root:root:root [data-slot="sidebar-inner"],
+  :root:root:root [data-slot="preview-panel-inner"] {
     transition: none;
     opacity: 1;
   }

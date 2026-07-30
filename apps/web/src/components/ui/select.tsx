@@ -22,8 +22,17 @@ const selectTriggerVariants = cva(
       variant: {
         default:
           "w-full min-w-36 border-input bg-background not-dark:bg-clip-padding text-foreground shadow-xs/5 ring-ring/24 before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-lg)-1px)] not-data-disabled:not-focus-visible:not-aria-invalid:not-data-pressed:before:shadow-[0_1px_--theme(--color-black/4%)] pointer-coarse:after:absolute pointer-coarse:after:size-full pointer-coarse:after:min-h-11 focus-visible:border-ring focus-visible:ring-[3px] aria-invalid:border-destructive/36 focus-visible:aria-invalid:border-destructive/64 focus-visible:aria-invalid:ring-destructive/16 dark:bg-input/32 dark:aria-invalid:ring-destructive/24 dark:not-data-disabled:not-focus-visible:not-aria-invalid:not-data-pressed:before:shadow-[0_-1px_--theme(--color-white/6%)] [&_svg:not([class*='opacity-'])]:opacity-80 [&_svg:not([class*='text-'])]:text-muted-foreground [[data-disabled],:focus-visible,[aria-invalid],[data-pressed]]:shadow-none",
+        // `data-popup-open` (alias `data-pressed`) is present for as long as the
+        // trigger's own popup is open, which used to share `bg-accent` with
+        // `:hover` through the base transition. Base UI drops both attributes the
+        // instant the popup closes, but that shared transition doesn't know the
+        // difference from a mouse leaving — it eased the departure, so the
+        // trigger visibly flashed for a beat after the (instantly-closing) popup
+        // was already gone. `background-image` isn't in the transitioned
+        // property list, so painting the open-state fill on that channel instead
+        // makes it snap with the popup while leaving real hover's fade untouched.
         ghost:
-          "border-transparent text-muted-foreground/70 focus-visible:ring-2 focus-visible:ring-ring data-pressed:bg-accent [:hover,[data-pressed]]:bg-accent [:hover,[data-pressed]]:text-foreground/80",
+          "border-transparent text-muted-foreground/70 focus-visible:ring-2 focus-visible:ring-ring hover:bg-accent hover:text-foreground/80 data-popup-open:[background-image:linear-gradient(var(--color-accent),var(--color-accent))]",
       },
       size: {
         default: "min-h-9 px-[calc(--spacing(3)-1px)] sm:min-h-8",

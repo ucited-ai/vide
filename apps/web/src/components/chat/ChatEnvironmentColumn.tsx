@@ -3,6 +3,7 @@ import type { EnvironmentId, ThreadId, VcsRef } from "@vide/contracts";
 import {
   BoxIcon,
   CheckIcon,
+  ChevronDownIcon,
   CloudUploadIcon,
   FileDiffIcon,
   FolderGit2Icon,
@@ -12,33 +13,28 @@ import {
   GlobeIcon,
   MoreHorizontalIcon,
   PlusIcon,
+  XIcon,
 } from "lucide-react";
-import { memo, useMemo, useState, type ReactNode } from "react";
+import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { type DraftId } from "~/composerDraftStore";
+import { cn } from "~/lib/utils";
 import { usePaginatedBranches } from "~/state/queries";
 import { resolveLockedWorkspaceLabel } from "../BranchToolbar.logic";
 import { useThreadBranchSelection } from "../BranchToolbarBranchSelector";
 import { GitActionItemIcon, GitQuickActionIcon, useGitActions } from "../GitActionsControl";
 import { Button } from "../ui/button";
-import {
-  Menu,
-  MenuGroup,
-  MenuGroupLabel,
-  MenuItem,
-  MenuPopup,
-  MenuSeparator,
-  MenuSub,
-  MenuSubPopup,
-  MenuSubTrigger,
-  MenuTrigger,
-} from "../ui/menu";
+import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
 
-interface ChatEnvironmentMenuProps {
+interface ChatEnvironmentColumnProps {
   environmentId: EnvironmentId;
   threadId: ThreadId;
   draftId?: DraftId;
   gitCwd: string | null;
+  /** Width animates between 0 and its resting size, the way the right panel
+   *  does — the column stays mounted at all times so both directions animate. */
+  open: boolean;
+  onClose: () => void;
 }
 
 interface SectionAddAction {
@@ -47,14 +43,29 @@ interface SectionAddAction {
   readonly onClick: () => void;
 }
 
+/** The column's resting width — the same 288px the popover this replaced used. */
+const ENVIRONMENT_COLUMN_WIDTH = 288;
+
+/**
+ * Row chrome shared by every plain row in the column. A real `MenuItem` isn't
+ * usable here: this column stays on screen, and Base UI's menu items dismiss
+ * their menu on activation, which would close the whole column every time a
+ * row did something. So rows are plain buttons styled to match, and only the
+ * branch picker below — which is genuinely transient — gets a real menu.
+ */
+const ROW_CLASSNAME =
+  "flex min-h-(--popup-item-height) w-full cursor-default select-none items-center gap-(--popup-item-gap) rounded-sm px-(--popup-item-padding-inline) py-1 text-left text-(length:--text-ui) text-foreground outline-none transition-colors hover:bg-accent disabled:pointer-events-none disabled:opacity-64 [&>svg:not([class*='opacity-'])]:opacity-80 [&>svg:not([class*='size-'])]:size-4 [&>svg:not([class*='text-'])]:text-muted-foreground [&>svg]:pointer-events-none [&>svg]:shrink-0";
+
 /**
  * A section heading, with the add affordance the Codex menu puts beside it —
  * rendered only where the section actually has something to add.
  */
-function MenuSectionHeader({ label, add }: { label: string; add?: SectionAddAction }) {
+function SectionHeader({ label, add }: { label: string; add?: SectionAddAction }) {
   return (
     <div className="flex items-center justify-between gap-2 pe-1">
-      <MenuGroupLabel>{label}</MenuGroupLabel>
+      <span className="px-(--popup-item-padding-inline) py-1.5 font-medium text-(length:--text-caption) text-muted-foreground">
+        {label}
+      </span>
       {add ? (
         <button
           type="button"
@@ -74,7 +85,7 @@ function MenuSectionHeader({ label, add }: { label: string; add?: SectionAddActi
  * One action row. The caption carries whatever the row wants to say quietly —
  * a file count, a pull request state, or the reason the row is unavailable.
  */
-function EnvironmentMenuRow({
+function EnvironmentRow({
   icon,
   label,
   caption,
@@ -88,7 +99,7 @@ function EnvironmentMenuRow({
   onClick?: () => void;
 }) {
   return (
-    <MenuItem disabled={disabled} {...(onClick ? { onClick } : {})}>
+    <button type="button" disabled={disabled} onClick={onClick} className={ROW_CLASSNAME}>
       {icon}
       <span className="min-w-0 flex-1 truncate">{label}</span>
       {caption ? (
@@ -96,12 +107,12 @@ function EnvironmentMenuRow({
           {caption}
         </span>
       ) : null}
-    </MenuItem>
+    </button>
   );
 }
 
 /** A row that reports state rather than offering an action. */
-function EnvironmentMenuStatus({
+function EnvironmentStatus({
   icon,
   label,
   caption,
@@ -134,10 +145,10 @@ function EnvironmentMenuStatus({
 }
 
 /**
- * The refs this thread can move to. Mounted only while the submenu is open, so
- * the ref list is not fetched until someone asks for it.
+ * The refs this thread can move to. Mounted only while the branch picker is
+ * open, so the ref list is not fetched until someone asks for it.
  */
-function EnvironmentBranchSubmenu({
+function EnvironmentBranchList({
   environmentId,
   branchCwd,
   activeBranch,
@@ -162,8 +173,8 @@ function EnvironmentBranchSubmenu({
   }
 
   /*
-   * Ten rows, then scroll. Rendering every ref made this submenu taller than the
-   * window on any repo with real history, which is the one shape a menu must
+   * Ten rows, then scroll. Rendering every ref made this popup taller than the
+   * window on any repo with real history, which is the one shape a picker must
    * never take. The branch picker above the composer caps the same way.
    */
   return (
@@ -185,17 +196,62 @@ function EnvironmentBranchSubmenu({
 }
 
 /**
- * Everything a thread runs against — its worktree, its ref, and the git actions
- * that move it forward — behind a single header control, in place of the row of
- * icon buttons this replaced.
+ * The branch row doubles as the trigger for a small popup listing refs — the
+ * one piece of this column that stays a transient menu, since picking a
+ * branch is an occasional action rather than something to keep on screen.
  */
-export const ChatEnvironmentMenu = memo(function ChatEnvironmentMenu({
+function EnvironmentBranchRow({
+  environmentId,
+  branchCwd,
+  activeBranch,
+  branchLabel,
+  onSelectBranch,
+}: {
+  environmentId: EnvironmentId;
+  branchCwd: string | null;
+  activeBranch: string | null;
+  branchLabel: string;
+  onSelectBranch: (refName: VcsRef) => void;
+}) {
+  const [pickerOpen, setPickerOpen] = useState(false);
+  return (
+    <Menu open={pickerOpen} onOpenChange={setPickerOpen}>
+      <MenuTrigger
+        render={<button type="button" className={cn(ROW_CLASSNAME, "data-popup-open:bg-accent")} />}
+      >
+        <GitBranchIcon aria-hidden />
+        <span className="min-w-0 flex-1 truncate">{branchLabel}</span>
+        <ChevronDownIcon aria-hidden className="ms-auto size-3.5 shrink-0 opacity-50" />
+      </MenuTrigger>
+      <MenuPopup align="start" className="w-72">
+        <EnvironmentBranchList
+          environmentId={environmentId}
+          branchCwd={branchCwd}
+          activeBranch={activeBranch}
+          onSelectBranch={(refName) => {
+            setPickerOpen(false);
+            onSelectBranch(refName);
+          }}
+        />
+      </MenuPopup>
+    </Menu>
+  );
+}
+
+/**
+ * Everything a thread runs against — its worktree, its ref, and the git actions
+ * that move it forward — as its own column beside the chat pane, in place of
+ * the dropdown this replaced. Stays mounted so it can animate both open and
+ * shut; `open` only ever changes its width.
+ */
+export const ChatEnvironmentColumn = memo(function ChatEnvironmentColumn({
   environmentId,
   threadId,
   draftId,
   gitCwd,
-}: ChatEnvironmentMenuProps) {
-  const [isOpen, setIsOpen] = useState(false);
+  open,
+  onClose,
+}: ChatEnvironmentColumnProps) {
   const activeThreadRef = useMemo(
     () => scopeThreadRef(environmentId, threadId),
     [environmentId, threadId],
@@ -210,16 +266,24 @@ export const ChatEnvironmentMenu = memo(function ChatEnvironmentMenu({
     threadId,
     envLocked: false,
     ...(draftId ? { draftId } : {}),
-    onBranchApplied: () => {
-      setIsOpen(false);
-    },
     onBranchActionSettled: git.refreshStatus,
   });
+
+  // Refreshes the moment the column opens, the way the dropdown menu it
+  // replaced refreshed on every open. The column now stays mounted while
+  // closed, so this only needs to fire on the closed -> open edge.
+  const wasOpenRef = useRef(open);
+  useEffect(() => {
+    if (open && !wasOpenRef.current) {
+      git.refreshStatus();
+    }
+    wasOpenRef.current = open;
+  }, [open, git.refreshStatus]);
 
   const SourceControlIcon = git.sourceControlPresentation.Icon;
   const commitItem = git.menuItems.find((item) => item.id === "commit") ?? null;
   const pullRequestItem = git.menuItems.find((item) => item.id === "pr") ?? null;
-  // The quick action already spells out the recommended next step, so a menu row
+  // The quick action already spells out the recommended next step, so a row
   // repeating it under the same label would just be the same button twice.
   const secondaryItems = git.menuItems.filter(
     (item) => item.id !== "commit" && item.id !== "pr" && item.label !== git.quickAction.label,
@@ -238,7 +302,6 @@ export const ChatEnvironmentMenu = memo(function ChatEnvironmentMenu({
         label: git.isInitPending ? "Initializing Git..." : "Initialize Git",
         disabled: git.isInitPending,
         onClick: () => {
-          setIsOpen(false);
           git.initRepository();
         },
       }
@@ -246,37 +309,43 @@ export const ChatEnvironmentMenu = memo(function ChatEnvironmentMenu({
 
   return (
     <>
-      <Menu
-        open={isOpen}
-        onOpenChange={(open) => {
-          setIsOpen(open);
-          if (open) {
-            git.refreshStatus();
-          }
-        }}
+      <div
+        className={cn(
+          "relative flex h-full min-h-0 min-w-0 flex-col self-stretch overflow-hidden bg-background",
+          "transition-[width] duration-(--duration-base) ease-(--ease-soft)",
+          open && "border-l border-border",
+        )}
+        style={{ width: open ? `${ENVIRONMENT_COLUMN_WIDTH}px` : 0 }}
+        // Collapsed but mounted, it must not be reachable: without this, Tab
+        // walks into a column nobody can see.
+        {...(!open ? { inert: true } : {})}
+        data-environment-column-open={open ? "true" : "false"}
       >
-        {/*
-          Icon only. The label spelled out what the icon already says, and the
-          chevron restated what opening the menu demonstrates — two words and a
-          glyph of chrome for a control that needs none. The accessible name
-          carries the meaning instead.
-        */}
-        <MenuTrigger
-          render={<Button aria-label="Environment overview" size="icon-sm" variant="ghost" />}
-        >
-          <BoxIcon aria-hidden="true" className="size-4" />
-        </MenuTrigger>
-        <MenuPopup align="end" className="w-72">
-          <MenuGroup>
-            <MenuSectionHeader label="Environment" {...(addAction ? { add: addAction } : {})} />
+        <div className="flex h-9 shrink-0 items-center justify-between gap-2 border-b border-border px-2.5">
+          <span className="flex min-w-0 items-center gap-1.5 text-(length:--text-ui) font-medium text-foreground">
+            <BoxIcon aria-hidden className="size-3.5 shrink-0 opacity-70" />
+            <span className="truncate">Environment</span>
+          </span>
+          <Button
+            aria-label="Hide environment overview"
+            size="icon-xs"
+            variant="ghost"
+            onClick={onClose}
+          >
+            <XIcon aria-hidden className="size-3.5" />
+          </Button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto p-(--popup-padding)">
+          <div>
+            <SectionHeader label="Environment" {...(addAction ? { add: addAction } : {})} />
             {!git.isRepo ? (
-              <EnvironmentMenuStatus
+              <EnvironmentStatus
                 icon={<GitBranchPlusIcon aria-hidden />}
                 label="Not a Git repository"
               />
             ) : (
               <>
-                <EnvironmentMenuRow
+                <EnvironmentRow
                   icon={<FileDiffIcon aria-hidden />}
                   label="Changes"
                   caption={changedFileCaption}
@@ -289,26 +358,19 @@ export const ChatEnvironmentMenu = memo(function ChatEnvironmentMenu({
                       }
                     : {})}
                 />
-                <EnvironmentMenuStatus
+                <EnvironmentStatus
                   icon={<WorkspaceIcon aria-hidden />}
                   label={workspaceLabel}
                   caption={branch.activeWorktreePath}
                 />
-                <MenuSub>
-                  <MenuSubTrigger>
-                    <GitBranchIcon aria-hidden />
-                    <span className="min-w-0 flex-1 truncate">{branchLabel}</span>
-                  </MenuSubTrigger>
-                  <MenuSubPopup className="w-72">
-                    <EnvironmentBranchSubmenu
-                      environmentId={environmentId}
-                      branchCwd={branch.branchCwd}
-                      activeBranch={branch.resolvedActiveBranch}
-                      onSelectBranch={branch.selectBranch}
-                    />
-                  </MenuSubPopup>
-                </MenuSub>
-                <EnvironmentMenuRow
+                <EnvironmentBranchRow
+                  environmentId={environmentId}
+                  branchCwd={branch.branchCwd}
+                  activeBranch={branch.resolvedActiveBranch}
+                  branchLabel={branchLabel}
+                  onSelectBranch={branch.selectBranch}
+                />
+                <EnvironmentRow
                   icon={
                     <GitQuickActionIcon
                       quickAction={git.quickAction}
@@ -321,7 +383,7 @@ export const ChatEnvironmentMenu = memo(function ChatEnvironmentMenu({
                   onClick={git.runQuickAction}
                 />
                 {secondaryItems.map((item) => (
-                  <EnvironmentMenuRow
+                  <EnvironmentRow
                     key={`${item.id}-${item.label}`}
                     icon={
                       <GitActionItemIcon icon={item.icon} SourceControlIcon={SourceControlIcon} />
@@ -335,7 +397,7 @@ export const ChatEnvironmentMenu = memo(function ChatEnvironmentMenu({
                   />
                 ))}
                 {pullRequestItem ? (
-                  <EnvironmentMenuRow
+                  <EnvironmentRow
                     icon={
                       <GitActionItemIcon
                         icon={pullRequestItem.icon}
@@ -355,7 +417,7 @@ export const ChatEnvironmentMenu = memo(function ChatEnvironmentMenu({
                   />
                 ) : null}
                 {showPublishRow ? (
-                  <EnvironmentMenuRow
+                  <EnvironmentRow
                     icon={<CloudUploadIcon aria-hidden />}
                     label="Publish repository"
                     disabled={git.isBusy}
@@ -363,41 +425,41 @@ export const ChatEnvironmentMenu = memo(function ChatEnvironmentMenu({
                   />
                 ) : null}
                 {git.gitStatus?.refName === null ? (
-                  <EnvironmentMenuStatus label="Detached HEAD: check out a ref to push or open a pull request." />
+                  <EnvironmentStatus label="Detached HEAD: check out a ref to push or open a pull request." />
                 ) : null}
                 {git.gitStatus &&
                 git.gitStatus.refName !== null &&
                 !git.gitStatus.hasWorkingTreeChanges &&
                 git.gitStatus.behindCount > 0 &&
                 git.gitStatus.aheadCount === 0 ? (
-                  <EnvironmentMenuStatus label="Behind upstream. Pull or rebase first." />
+                  <EnvironmentStatus label="Behind upstream. Pull or rebase first." />
                 ) : null}
                 {git.gitStatusError ? (
-                  <EnvironmentMenuStatus label={git.gitStatusError} tone="destructive" />
+                  <EnvironmentStatus label={git.gitStatusError} tone="destructive" />
                 ) : null}
               </>
             )}
-          </MenuGroup>
-          <MenuSeparator />
-          <MenuGroup>
-            <MenuSectionHeader label="Sources" />
+          </div>
+          <div aria-hidden className="mx-(--popup-padding) my-(--popup-padding) h-px bg-border" />
+          <div>
+            <SectionHeader label="Sources" />
             {/* No implementation behind either of these yet; they are shown
                 unavailable rather than wired to something that does not exist. */}
-            <EnvironmentMenuRow
+            <EnvironmentRow
               icon={<GlobeIcon aria-hidden />}
               label="Internet search"
               caption="Unavailable"
               disabled
             />
-            <EnvironmentMenuRow
+            <EnvironmentRow
               icon={<MoreHorizontalIcon aria-hidden />}
               label="Show all"
               caption="Unavailable"
               disabled
             />
-          </MenuGroup>
-        </MenuPopup>
-      </Menu>
+          </div>
+        </div>
+      </div>
       {git.dialogs}
     </>
   );

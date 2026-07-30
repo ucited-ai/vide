@@ -100,9 +100,14 @@ import {
   getComposerPromptInjectionState,
   getComposerProviderState,
   getProviderTraitsQualifier,
-  renderProviderTraitsInlineContent,
 } from "./composerProviderState";
 import { ContextWindowMeter } from "./ContextWindowMeter";
+import {
+  COMPOSER_CONTROL_GAP_CLASS,
+  COMPOSER_CONTROL_HEIGHT_CLASS,
+  COMPOSER_CONTROL_ICON_SIZE_CLASS,
+  COMPOSER_CONTROL_TEXT_CLASS,
+} from "./composerControlMetrics";
 import { buildExpandedImagePreview, type ExpandedImagePreview } from "./ExpandedImagePreview";
 import { basenameOfPath } from "../../pierre-icons";
 import { cn, randomUUID } from "~/lib/utils";
@@ -268,12 +273,26 @@ const COMPOSER_CONTROL_ROW_GAP_CLASS = "gap-(--popup-item-gap)";
 const COMPOSER_CONTROL_INK_CLASS_NAME = "text-muted-foreground/70 hover:text-foreground/80";
 
 /*
+ * Permissions, the model trigger, and the context meter are three peers
+ * within that row and, on top of the ink/gap above, share one height, one
+ * type size, and one internal gap — see composerControlMetrics.ts.
+ */
+const COMPOSER_CONTROL_METRICS_CLASS_NAME = cn(
+  COMPOSER_CONTROL_HEIGHT_CLASS,
+  COMPOSER_CONTROL_TEXT_CLASS,
+  COMPOSER_CONTROL_GAP_CLASS,
+);
+
+/*
  * The model and its qualifier are two controls here rather than one label — the
  * picker names the model, the traits control grades it ("Extra High") — so the
  * ink split that `QualifiedLabel` applies within a label is applied across them
  * instead: the name holds primary ink and everything grading it stays muted.
  */
-const COMPOSER_MODEL_TRIGGER_CLASS_NAME = "text-foreground hover:text-foreground";
+const COMPOSER_MODEL_TRIGGER_CLASS_NAME = cn(
+  "text-foreground hover:text-foreground",
+  COMPOSER_CONTROL_METRICS_CLASS_NAME,
+);
 
 const COMPOSER_FLOATING_LAYER_SELECTOR = [
   '[data-slot="popover-popup"]',
@@ -394,12 +413,13 @@ const ComposerPermissionsPicker = memo(function ComposerPermissionsPicker(props:
               className={cn(
                 "shrink-0 whitespace-nowrap font-normal",
                 COMPOSER_CONTROL_INK_CLASS_NAME,
+                COMPOSER_CONTROL_METRICS_CLASS_NAME,
               )}
               aria-label="Permissions"
             />
           }
         >
-          <RuntimeModeIcon className="size-4" />
+          <RuntimeModeIcon className={COMPOSER_CONTROL_ICON_SIZE_CLASS} />
           <SelectValue>{runtimeModeOption.label}</SelectValue>
         </TooltipTrigger>
         <SelectPopup
@@ -1242,7 +1262,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     prompt,
     onPromptChange: setPromptFromTraits,
   };
-  const providerTraitsControls = renderProviderTraitsInlineContent(providerTraitsInput);
   const providerTraitsQualifier = getProviderTraitsQualifier(providerTraitsInput);
   const pendingPrimaryAction = useMemo(
     () =>
@@ -3156,7 +3175,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     terminalOpen={terminalOpen}
                     triggerClassName={COMPOSER_MODEL_TRIGGER_CLASS_NAME}
                     qualifier={providerTraitsQualifier}
-                    {...(providerTraitsControls ? { optionsFooter: providerTraitsControls } : {})}
+                    traitsInput={providerTraitsInput}
                     popupSide="top"
                     open={isComposerModelPickerOpen}
                     {...(composerProviderState.modelPickerIconClassName

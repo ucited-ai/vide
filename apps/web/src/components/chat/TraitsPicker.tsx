@@ -287,7 +287,7 @@ export type TraitsControlProps = TraitsMenuContentProps & TraitsPersistence;
  * picker's popover made selecting an effort tear that popover down — so the
  * picker gets the inline variant, which is plain buttons and closes nothing.
  */
-function useTraitsControl({
+export function useTraitsControl({
   provider,
   instanceId,
   models,
@@ -766,6 +766,123 @@ export const TraitsInlineContent = memo(function TraitsInlineContentImpl(
               ))}
             </div>
             {isLocked ? <TraitsInlineHint>{ULTRATHINK_BODY_TEXT_HINT}</TraitsInlineHint> : null}
+          </div>
+        );
+      })}
+      {booleanDescriptors.map((descriptor) => (
+        <TraitsSwitchRow
+          key={descriptor.id}
+          label={descriptor.label}
+          isOn={descriptor.currentValue === true}
+          onChange={(enabled) => handleBooleanChange(descriptor, enabled)}
+        />
+      ))}
+    </div>
+  );
+});
+
+/**
+ * One descriptor's options as a plain vertical list, full width.
+ *
+ * The model picker's second step, unlike the docked footer, has an entire
+ * popup's worth of room, so an ordered scale doesn't need a slider to read as
+ * ordered — the options are already in order top to bottom. That also
+ * resolves Ultrathink: a prompt-injected option is just another row here,
+ * where the footer had to carve it out of the slider and stand it beside the
+ * track as a separate pill.
+ */
+function TraitsStepOptionRow(props: {
+  label: string;
+  isSelected: boolean;
+  isDefault: boolean;
+  isDisabled: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={props.isDisabled}
+      // See TraitsInlineOption: keeps the press from moving focus off the
+      // search field's keyboard navigation.
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={props.onSelect}
+      className={cn(
+        "flex w-full min-w-0 cursor-default items-center gap-3 rounded-md px-(--popup-item-padding-inline) py-2 text-left text-(length:--text-ui) outline-none transition-colors",
+        props.isSelected
+          ? "bg-(--wash-selected) text-foreground"
+          : "text-muted-foreground hover:bg-(--wash-hover) hover:text-foreground",
+        props.isDisabled ? "pointer-events-none opacity-64" : "",
+      )}
+    >
+      <span className="min-w-0 flex-1 truncate">
+        {props.label}
+        {props.isDefault ? (
+          <>
+            {" "}
+            <DefaultBadge />
+          </>
+        ) : null}
+      </span>
+      <CheckIcon
+        aria-hidden="true"
+        className={cn("size-3.5 shrink-0", props.isSelected ? "opacity-100" : "opacity-0")}
+      />
+    </button>
+  );
+}
+
+/**
+ * The traits controls as the model picker's second step.
+ *
+ * Same behaviour as {@link TraitsInlineContent} — same `useTraitsControl`,
+ * same `handleSelectChange` — but every select descriptor renders as one
+ * list of rows instead of choosing between a pill row and a slider. Nothing
+ * here branches on provider: the shape of what renders follows entirely from
+ * the descriptors the model declares.
+ */
+export const TraitsStepContent = memo(function TraitsStepContentImpl(props: TraitsControlProps) {
+  const {
+    hasAnyControls,
+    selectDescriptors,
+    booleanDescriptors,
+    getSelectValue,
+    isSelectLocked,
+    handleSelectChange,
+    handleBooleanChange,
+  } = useTraitsControl(props);
+
+  if (!hasAnyControls) {
+    return null;
+  }
+
+  return (
+    <div className="flex w-full min-w-0 flex-col gap-4">
+      {selectDescriptors.map((descriptor) => {
+        const isLocked = isSelectLocked(descriptor);
+        const selectedValue = getSelectValue(descriptor);
+
+        return (
+          <div key={descriptor.id} className="flex w-full min-w-0 flex-col gap-1">
+            <div className="px-(--popup-item-padding-inline) font-medium text-(length:--text-caption) text-muted-foreground">
+              {descriptor.label}
+            </div>
+            {isLocked ? (
+              <div className="px-(--popup-item-padding-inline) pb-1 text-(length:--text-caption) text-muted-foreground/80">
+                {ULTRATHINK_BODY_TEXT_HINT}
+              </div>
+            ) : null}
+            <div className="flex flex-col gap-0.5">
+              {descriptor.options.map((option) => (
+                <TraitsStepOptionRow
+                  key={option.id}
+                  label={option.label}
+                  isSelected={option.id === selectedValue}
+                  isDefault={option.isDefault === true}
+                  isDisabled={isLocked}
+                  onSelect={() => handleSelectChange(descriptor, option.id)}
+                />
+              ))}
+            </div>
           </div>
         );
       })}

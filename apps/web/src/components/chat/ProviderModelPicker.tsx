@@ -3,7 +3,7 @@ import {
   type ProviderDriverKind,
   type ResolvedKeybindingsConfig,
 } from "@vide/contracts";
-import { memo, type ReactNode, useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import type { VariantProps } from "class-variance-authority";
 import { ChevronDownIcon } from "lucide-react";
 import { Button, buttonVariants } from "../ui/button";
@@ -18,6 +18,7 @@ import {
   getTriggerDisplayModelLabel,
   getTriggerDisplayModelName,
 } from "./providerIconUtils";
+import type { TraitsControlProps } from "./TraitsPicker";
 import type { ProviderInstanceEntry } from "../../providerInstances";
 
 /**
@@ -47,7 +48,7 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
   model: string;
   lockedProvider: ProviderDriverKind | null;
   lockedContinuationGroupKey?: string | null;
-  /** Instance entries rendered in the sidebar + used to resolve display name. */
+  /** Configured provider instances, used to resolve each model's display name. */
   instanceEntries: ReadonlyArray<ProviderInstanceEntry>;
   keybindings?: ResolvedKeybindingsConfig;
   modelOptionsByInstance: ReadonlyMap<ProviderInstanceId, ReadonlyArray<ModelEsque>>;
@@ -62,8 +63,14 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
    * driven, so it is absent for models that expose no options.
    */
   qualifier?: string | null;
-  /** Controls for that qualifier, docked under the model list in the popup. */
-  optionsFooter?: ReactNode;
+  /**
+   * Drives the popup's second step — the picked model's options — via
+   * `useTraitsControl`. Omitted by callers with no traits target (the
+   * settings pages' pickers), which keeps the popup a single step: picking a
+   * model there still closes it immediately, same as before this became a
+   * two-step control.
+   */
+  traitsInput?: TraitsControlProps;
   /**
    * "top" makes this a drop-up, which is what a composer-anchored picker wants.
    * Naming a side also pins it: see {@link PINNED_POPUP_COLLISION_AVOIDANCE}.
@@ -162,7 +169,10 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
   const handleInstanceModelChange = (instanceId: ProviderInstanceId, model: string) => {
     if (props.disabled) return;
     props.onInstanceModelChange(instanceId, model);
-    setIsMenuOpen(false);
+    // Closing is now ModelPickerContent's call, not this one: a model with
+    // options advances to the popup's second step instead of closing, so it
+    // can be adjusted right after picking. It closes itself via
+    // `onRequestClose` for a model with nothing to configure.
   };
 
   return (
@@ -229,7 +239,7 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
         viewportClassName="rounded-lg !overflow-hidden p-0"
       >
         <ModelPickerContent
-          {...(props.optionsFooter ? { footer: props.optionsFooter } : {})}
+          {...(props.traitsInput ? { traitsInput: props.traitsInput } : {})}
           activeInstanceId={activeInstanceId}
           model={props.model}
           lockedProvider={props.lockedProvider}

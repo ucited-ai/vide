@@ -2,6 +2,11 @@ import { cn } from "~/lib/utils";
 import { type ContextWindowSnapshot, formatContextWindowTokens } from "~/lib/contextWindow";
 import { Popover, PopoverPopup, PopoverTrigger } from "../ui/popover";
 import { PINNED_POPUP_COLLISION_AVOIDANCE } from "./ProviderModelPicker";
+import {
+  COMPOSER_CONTROL_GAP_CLASS,
+  COMPOSER_CONTROL_HEIGHT_CLASS,
+  COMPOSER_CONTROL_TEXT_CLASS,
+} from "./composerControlMetrics";
 
 /*
  * Context usage, read at a glance.
@@ -44,16 +49,17 @@ export function ContextWindowMeter(props: {
   return (
     <Popover>
       <PopoverTrigger
-        openOnHover
-        delay={150}
-        closeDelay={0}
         render={
           <button
             type="button"
             className={cn(
-              // h-8/sm:h-7 is the button `sm` size: the meter is a peer of the
-              // other controls in the row and has to sit on the same baseline.
-              "inline-flex h-8 shrink-0 items-center gap-2 rounded-md px-1.5 text-(length:--text-caption) tabular-nums outline-none transition-colors sm:h-7",
+              // Shares its height, type size, and gap with the permissions
+              // and model-trigger controls it sits beside in the row — see
+              // composerControlMetrics.ts.
+              "inline-flex shrink-0 items-center rounded-md px-1.5 tabular-nums outline-none transition-colors",
+              COMPOSER_CONTROL_HEIGHT_CLASS,
+              COMPOSER_CONTROL_TEXT_CLASS,
+              COMPOSER_CONTROL_GAP_CLASS,
               isNearLimit ? "text-destructive" : "text-muted-foreground/70",
               "hover:bg-accent hover:text-foreground/80 data-[pressed]:bg-accent",
               "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background",
@@ -81,35 +87,35 @@ export function ContextWindowMeter(props: {
         }
       />
       <PopoverPopup
-        tooltipStyle
         side="top"
         align="end"
         collisionAvoidance={PINNED_POPUP_COLLISION_AVOIDANCE}
-        className="dropdown-glass w-64 max-w-none border-0! bg-secondary! p-0 shadow-none! before:hidden"
+        className="w-64"
       >
-        <div className="flex flex-col gap-2 p-3">
-          <div className="flex items-center justify-between gap-3">
-            <div className="font-medium text-muted-foreground text-xs">Context Window</div>
-            {maxTokens !== null && usedPercentage ? (
-              <div className="text-[11px] tabular-nums text-muted-foreground/70">
-                <span>{usedPercentage}</span>
-                <span className="mx-1">·</span>
-                <span>{label}</span>
-              </div>
-            ) : (
-              <div className="text-[11px] tabular-nums text-muted-foreground/70">{usedLabel}</div>
-            )}
+        {/* Name over a muted detail line, left-aligned throughout — the same
+            reading order as a model picker row or a permissions item, rather
+            than a label-left/value-right spread that read as its own thing. */}
+        <div className="flex flex-col gap-3 text-left">
+          <div className="flex flex-col gap-0.5">
+            <div className="text-(length:--text-ui) font-medium text-foreground">
+              Context Window
+            </div>
+            <div className="text-(length:--text-caption) tabular-nums text-muted-foreground">
+              {maxTokens !== null && usedPercentage ? `${usedPercentage} · ${label}` : usedLabel}
+            </div>
           </div>
           {showTotalProcessed ? (
-            <div className="flex items-center justify-between gap-3 text-[11px] leading-4">
-              <span className="text-muted-foreground/60">Total processed</span>
-              <span className="font-medium tabular-nums text-muted-foreground/80">
+            <div className="flex flex-col gap-0.5">
+              <div className="text-(length:--text-ui) font-medium text-foreground">
+                Total processed
+              </div>
+              <div className="text-(length:--text-caption) tabular-nums text-muted-foreground">
                 {formatContextWindowTokens(totalProcessedTokens)}
-              </span>
+              </div>
             </div>
           ) : null}
           {usage.compactsAutomatically ? (
-            <div className="mt-1 text-pretty text-[11px] font-medium text-muted-foreground/70">
+            <div className="text-pretty text-(length:--text-caption) text-muted-foreground/70">
               {providerDisplayName ?? "It"} automatically compacts its context when needed.
             </div>
           ) : null}
