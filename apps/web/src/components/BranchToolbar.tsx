@@ -303,8 +303,11 @@ export const BranchToolbar = memo(function BranchToolbar({
 
   if (!hasActiveThread || !activeProject) return null;
 
+  // The strip sits above the composer, so the chips carry no surface of their
+  // own: they are inset to the composer's corner tangents and read as a caption
+  // on the input rather than a tray hanging off it.
   return (
-    <div className="chat-composer-context-strip -mt-4 mx-auto flex w-[calc(100%-2.75rem)] max-w-[calc(48rem-2.75rem)] items-center gap-2 px-1 pt-5 pb-1">
+    <div className="mx-auto flex w-[calc(100%-2.75rem)] max-w-[calc(48rem-2.75rem)] items-center gap-2 px-1 pb-1.5">
       {isMobile ? (
         <MobileRunContextSelector
           envLocked={envLocked}

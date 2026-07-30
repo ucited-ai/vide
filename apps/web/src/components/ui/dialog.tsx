@@ -72,6 +72,7 @@ function DialogPopup({
             bottomStickOnMobile && DIALOG_MOBILE_SHEET_CLASS,
             className,
           )}
+          data-popup-surface=""
           data-slot="dialog-popup"
           {...props}
         >

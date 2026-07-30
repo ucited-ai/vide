@@ -12,6 +12,7 @@ import type { ThreadRouteTarget } from "../threadRoutes";
 import { cn } from "../lib/utils";
 import { isLatestTurnSettled } from "../session-logic";
 import { resolveServerBackedAppStageLabel } from "../branding.logic";
+import { SIDEBAR_ROW_MOTION_CLASS } from "./sidebar/sidebarRowStyles";
 
 export const THREAD_SELECTION_SAFE_SELECTOR = "[data-thread-item], [data-thread-selection-safe]";
 export const THREAD_JUMP_HINT_SHOW_DELAY_MS = 100;
@@ -364,8 +365,10 @@ export function resolveThreadRowClassName(input: {
   isActive: boolean;
   isSelected: boolean;
 }): string {
-  const baseClassName =
-    "h-8 w-full translate-x-0 cursor-pointer justify-start rounded-md px-2 text-left text-sm select-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring";
+  const baseClassName = cn(
+    "h-8 w-full translate-x-0 cursor-pointer justify-start gap-2 rounded-md px-2 text-left select-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring",
+    SIDEBAR_ROW_MOTION_CLASS,
+  );
 
   if (input.isSelected && input.isActive) {
     return cn(
@@ -388,10 +391,10 @@ export function resolveThreadRowClassName(input: {
     );
   }
 
-  return cn(
-    baseClassName,
-    "text-sidebar-muted-foreground/80 hover:bg-sidebar-row-hover hover:text-sidebar-foreground",
-  );
+  // Resting rows carry the same ink as project names. A thread title is
+  // content, not chrome: muting it is the single biggest thing that made the
+  // list hard to scan, and the surface already says which row is current.
+  return cn(baseClassName, "text-sidebar-foreground hover:bg-sidebar-row-hover");
 }
 
 // ── Sidebar v2 status model ─────────────────────────────────────────

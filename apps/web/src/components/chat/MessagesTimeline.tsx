@@ -106,7 +106,8 @@ import {
   textContainsInlineTerminalContextLabels,
 } from "./userMessageTerminalContexts";
 import { SkillInlineText } from "./SkillInlineText";
-import { formatWorkspaceRelativePath } from "../../filePathDisplay";
+import { FilePathLabel, QualifiedLabel } from "./QualifiedLabel";
+import { formatWorkspaceRelativePath, splitWorkspaceRelativePath } from "../../filePathDisplay";
 import {
   buildReviewCommentRenderablePatch,
   formatReviewCommentFence,
@@ -1395,6 +1396,13 @@ function UserMessagePreviewAnnotationCard(props: {
   );
 }
 
+/*
+ * User message bodies wrap inline chips around nested markdown, so they must
+ * carry the transcript type size themselves — otherwise the prose beside a chip
+ * renders a step smaller than the same prose inside ChatMarkdown.
+ */
+const USER_MESSAGE_BODY_CLASS_NAME = "text-(length:--text-chat) leading-relaxed text-foreground";
+
 const MAX_COLLAPSED_USER_MESSAGE_LINES = 8;
 const MAX_COLLAPSED_USER_MESSAGE_LENGTH = 600;
 const COLLAPSED_USER_MESSAGE_FADE_HEIGHT_REM = 1.75;
@@ -1516,7 +1524,7 @@ const UserMessageBody = memo(function UserMessageBody(props: {
   const reviewCommentSegments = parseReviewCommentMessageSegments(props.text);
   if (reviewCommentSegments.some((segment) => segment.kind === "review-comment")) {
     return (
-      <div className="space-y-3 text-sm leading-relaxed text-foreground">
+      <div className={cn("space-y-3", USER_MESSAGE_BODY_CLASS_NAME)}>
         {reviewCommentSegments.map((segment) =>
           segment.kind === "text" ? (
             segment.text.trim().length > 0 ? (
@@ -1585,7 +1593,7 @@ const UserMessageBody = memo(function UserMessageBody(props: {
         }
 
         return (
-          <div className="whitespace-pre-wrap wrap-break-word text-sm leading-relaxed text-foreground">
+          <div className={cn("whitespace-pre-wrap wrap-break-word", USER_MESSAGE_BODY_CLASS_NAME)}>
             {inlineNodes}
           </div>
         );
@@ -1623,7 +1631,7 @@ const UserMessageBody = memo(function UserMessageBody(props: {
     }
 
     return (
-      <div className="whitespace-pre-wrap wrap-break-word text-sm leading-relaxed text-foreground">
+      <div className={cn("whitespace-pre-wrap wrap-break-word", USER_MESSAGE_BODY_CLASS_NAME)}>
         {inlineNodes}
       </div>
     );
@@ -1656,8 +1664,8 @@ function UserMessageReviewCommentCard({ comment }: { comment: ReviewCommentConte
   return (
     <div className="space-y-2 rounded-lg border border-border/70 bg-background/70 p-3">
       <div className="space-y-1">
-        <div className="text-xs font-medium text-foreground">
-          {formatWorkspaceRelativePath(comment.filePath, ctx.workspaceRoot)}
+        <div className="text-xs font-medium">
+          <FilePathLabel path={comment.filePath} workspaceRoot={ctx.workspaceRoot} />
         </div>
         <div className="text-[11px] text-muted-foreground">
           {comment.sectionTitle} · {comment.rangeLabel}
@@ -1820,19 +1828,39 @@ function workToneIcon(tone: TimelineWorkEntry["tone"]): {
   };
 }
 
+/**
+ * What a tool row shows after its heading.
+ *
+ * `text` is the flat form the row needs for its accessible label and for the
+ * check that the preview is not just repeating the heading. `path` is set only
+ * when the preview is a file, so the row can put the file's name in ink and let
+ * the folder it lives in recede.
+ */
+type WorkEntryPreview = {
+  readonly text: string;
+  readonly path: {
+    readonly directory: string;
+    readonly name: string;
+    readonly extra: string | null;
+  } | null;
+};
+
 function workEntryPreview(
   workEntry: Pick<TimelineWorkEntry, "detail" | "command" | "changedFiles">,
   workspaceRoot: string | undefined,
-) {
-  if (workEntry.command) return workEntry.command;
-  if (workEntry.detail) return workEntry.detail;
-  if ((workEntry.changedFiles?.length ?? 0) === 0) return null;
-  const [firstPath] = workEntry.changedFiles ?? [];
+): WorkEntryPreview | null {
+  if (workEntry.command) return { text: workEntry.command, path: null };
+  if (workEntry.detail) return { text: workEntry.detail, path: null };
+  const changedFiles = workEntry.changedFiles ?? [];
+  const [firstPath] = changedFiles;
   if (!firstPath) return null;
-  const displayPath = formatWorkspaceRelativePath(firstPath, workspaceRoot);
-  return workEntry.changedFiles!.length === 1
-    ? displayPath
-    : `${displayPath} +${workEntry.changedFiles!.length - 1} more`;
+  const { directory, fileName } = splitWorkspaceRelativePath(firstPath, workspaceRoot);
+  const extra = changedFiles.length > 1 ? `+${changedFiles.length - 1} more` : null;
+  const displayPath = `${directory}${fileName}`;
+  return {
+    text: extra ? `${displayPath} ${extra}` : displayPath,
+    path: { directory, name: fileName, extra },
+  };
 }
 
 function workEntryRawCommand(
@@ -1935,11 +1963,11 @@ const SimpleWorkEntryRow = memo(function SimpleWorkEntryRow(props: {
   const rawPreview = workEntryPreview(workEntry, workspaceRoot);
   const preview =
     rawPreview &&
-    normalizeCompactToolLabel(rawPreview).toLowerCase() ===
+    normalizeCompactToolLabel(rawPreview.text).toLowerCase() ===
       normalizeCompactToolLabel(heading).toLowerCase()
       ? null
       : rawPreview;
-  const displayText = preview ? `${heading} - ${preview}` : heading;
+  const displayText = preview ? `${heading} - ${preview.text}` : heading;
   const expandedBody = buildToolCallExpandedBody(workEntry, workspaceRoot);
   const canExpand = expandedBody !== null;
   const showFailedIndicator = workEntryIndicatesToolFailure(workEntry);
@@ -2002,7 +2030,17 @@ const SimpleWorkEntryRow = memo(function SimpleWorkEntryRow(props: {
             <p className="flex min-w-0 w-full items-baseline gap-1.5 text-[12px] leading-5">
               <span className={cn("min-w-0 shrink truncate", headingClass)}>{heading}</span>
               {preview && (
-                <span className="min-w-0 flex-1 truncate text-muted-foreground/55">{preview}</span>
+                <span className="min-w-0 flex-1 truncate text-muted-foreground/55">
+                  {preview.path ? (
+                    <QualifiedLabel
+                      lead={preview.path.directory}
+                      name={preview.path.name}
+                      trail={preview.path.extra}
+                    />
+                  ) : (
+                    preview.text
+                  )}
+                </span>
               )}
             </p>
           </div>

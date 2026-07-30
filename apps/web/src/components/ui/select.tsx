@@ -139,6 +139,7 @@ function SelectPopup({
       >
         <SelectPrimitive.Popup
           className="origin-(--transform-origin) rounded-lg text-foreground outline-none"
+          data-popup-surface=""
           data-slot="select-popup"
           {...props}
         >
@@ -151,12 +152,18 @@ function SelectPopup({
           <div
             className={cn(
               "dropdown-glass relative h-full rounded-lg",
-              matchTriggerWidth && "min-w-(--anchor-width)",
+              // Never narrower than the shared popup floor: a select that opens
+              // tighter than the menus around it is what makes the app read as
+              // squeezed, even when the trigger itself is small.
+              matchTriggerWidth && "min-w-[max(var(--anchor-width),var(--popup-min-width))]",
               popupClassName,
             )}
           >
             <SelectPrimitive.List
-              className={cn("max-h-(--available-height) overflow-y-auto p-1", className)}
+              className={cn(
+                "max-h-(--available-height) overflow-y-auto p-(--popup-padding)",
+                className,
+              )}
               data-slot="select-list"
             >
               {children}
@@ -185,7 +192,7 @@ function SelectItem({
   return (
     <SelectPrimitive.Item
       className={cn(
-        "flex min-h-8 in-data-[side=none]:min-w-[calc(var(--anchor-width)+1.25rem)] cursor-default items-center rounded-sm px-2 py-1 text-base outline-none data-selected:bg-foreground/[0.08] data-disabled:pointer-events-none data-highlighted:bg-accent data-highlighted:text-accent-foreground data-disabled:opacity-64 sm:min-h-7 sm:text-sm [&_svg:not([class*='size-'])]:size-4.5 sm:[&_svg:not([class*='size-'])]:size-4 [&_svg]:pointer-events-none [&_svg]:shrink-0",
+        "flex min-h-(--popup-item-height) in-data-[side=none]:min-w-[calc(var(--anchor-width)+1.25rem)] cursor-default items-center gap-(--popup-item-gap) rounded-sm px-(--popup-item-padding-inline) py-1 text-(length:--text-ui) outline-none data-selected:bg-foreground/[0.08] data-disabled:pointer-events-none data-highlighted:bg-accent data-highlighted:text-accent-foreground data-disabled:opacity-64 [&_svg:not([class*='size-'])]:size-4 [&_svg]:pointer-events-none [&_svg]:shrink-0",
         className,
       )}
       data-slot="select-item"
@@ -204,7 +211,7 @@ function SelectItem({
 function SelectSeparator({ className, ...props }: SelectPrimitive.Separator.Props) {
   return (
     <SelectPrimitive.Separator
-      className={cn("mx-2 my-1 h-px bg-border", className)}
+      className={cn("mx-(--popup-padding) my-(--popup-padding) h-px bg-border", className)}
       data-slot="select-separator"
       {...props}
     />
@@ -218,7 +225,7 @@ function SelectGroup(props: SelectPrimitive.Group.Props) {
 function SelectGroupLabel(props: SelectPrimitive.GroupLabel.Props) {
   return (
     <SelectPrimitive.GroupLabel
-      className="px-2 py-1.5 font-medium text-muted-foreground text-xs"
+      className="px-(--popup-item-padding-inline) py-1.5 font-medium text-(length:--text-caption) text-muted-foreground"
       data-slot="select-group-label"
       {...props}
     />

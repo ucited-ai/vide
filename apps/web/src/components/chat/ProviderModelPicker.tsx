@@ -3,7 +3,7 @@ import {
   type ProviderDriverKind,
   type ResolvedKeybindingsConfig,
 } from "@vide/contracts";
-import { memo, useEffect, useMemo, useState } from "react";
+import { memo, type ReactNode, useEffect, useMemo, useState } from "react";
 import type { VariantProps } from "class-variance-authority";
 import { ChevronDownIcon } from "lucide-react";
 import { Button, buttonVariants } from "../ui/button";
@@ -12,6 +12,7 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { cn } from "~/lib/utils";
 import { ModelPickerContent } from "./ModelPickerContent";
 import { ProviderInstanceIcon } from "./ProviderInstanceIcon";
+import { QualifiedLabel } from "./QualifiedLabel";
 import {
   ModelEsque,
   getTriggerDisplayModelLabel,
@@ -37,6 +38,16 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
   disabled?: boolean;
   terminalOpen?: boolean;
   open?: boolean;
+  /**
+   * What grades the selected model — a reasoning effort, a thinking level.
+   * Rendered muted after the name so the two read as one label. Provider
+   * driven, so it is absent for models that expose no options.
+   */
+  qualifier?: string | null;
+  /** Controls for that qualifier, docked under the model list in the popup. */
+  optionsFooter?: ReactNode;
+  /** "top" makes this a drop-up, which is what a composer-anchored picker wants. */
+  popupSide?: "top" | "bottom";
   triggerVariant?: VariantProps<typeof buttonVariants>["variant"];
   triggerClassName?: string;
   triggerAriaLabel?: string;
@@ -178,9 +189,11 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
           ) : null}
           <Tooltip>
             <TooltipTrigger render={<span className="min-w-0 flex-1 overflow-hidden truncate" />}>
-              {triggerTitle}
+              <QualifiedLabel name={triggerTitle} trail={props.qualifier} separator=" · " />
             </TooltipTrigger>
-            <TooltipPopup side="top">{triggerLabel}</TooltipPopup>
+            <TooltipPopup side="top">
+              {props.qualifier ? `${triggerLabel} · ${props.qualifier}` : triggerLabel}
+            </TooltipPopup>
           </Tooltip>
         </span>
         <span aria-hidden="true" className="flex items-center">
@@ -189,10 +202,12 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
       </PopoverTrigger>
       <PopoverPopup
         align="start"
+        side={props.popupSide ?? "bottom"}
         className="border-0 bg-transparent p-0 shadow-none before:hidden [-webkit-backdrop-filter:none]! [--viewport-inline-padding:0] [backdrop-filter:none]!"
         viewportClassName="rounded-lg !overflow-hidden p-0"
       >
         <ModelPickerContent
+          {...(props.optionsFooter ? { footer: props.optionsFooter } : {})}
           activeInstanceId={activeInstanceId}
           model={props.model}
           lockedProvider={props.lockedProvider}

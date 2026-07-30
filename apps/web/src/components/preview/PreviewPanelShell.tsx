@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useState } from "react";
+import { type PointerEvent as ReactPointerEvent, type ReactNode, useEffect, useState } from "react";
 
 import { isElectron } from "~/env";
 import { useResizableWidth } from "~/hooks/useResizableWidth";
@@ -38,6 +38,27 @@ export function PreviewPanelShell(props: {
     maxWidth,
     edge: "left",
   });
+  /*
+   * Width settles on the shared panel curve, except while the handle is held:
+   * a drag has to track the cursor exactly, and easing every rAF tick would
+   * make the edge trail the pointer.
+   */
+  const [resizing, setResizing] = useState(false);
+  const resizeHandlers = {
+    onPointerDown: (event: ReactPointerEvent<HTMLElement>) => {
+      setResizing(true);
+      handlers.onPointerDown(event);
+    },
+    onPointerMove: handlers.onPointerMove,
+    onPointerUp: (event: ReactPointerEvent<HTMLElement>) => {
+      handlers.onPointerUp(event);
+      setResizing(false);
+    },
+    onPointerCancel: (event: ReactPointerEvent<HTMLElement>) => {
+      handlers.onPointerCancel(event);
+      setResizing(false);
+    },
+  };
 
   return (
     <div
@@ -48,12 +69,13 @@ export function PreviewPanelShell(props: {
             ? "flex-1 border-l border-border"
             : "shrink-0 border-l border-border"
           : "w-full",
+        isInline && !resizing && "transition-[width] duration-(--duration-base) ease-(--ease-soft)",
       )}
       style={isInline && !props.maximized ? { width: `${width}px` } : undefined}
       data-preview-panel-mode={props.mode}
       data-preview-panel-maximized={props.maximized ? "true" : "false"}
     >
-      {isInline && !props.maximized ? <RightPanelResizeHandle handlers={handlers} /> : null}
+      {isInline && !props.maximized ? <RightPanelResizeHandle handlers={resizeHandlers} /> : null}
       {useDragRegion ? <div className="electron-drag-region h-0 w-full" aria-hidden /> : null}
       {props.children}
     </div>

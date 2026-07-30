@@ -4,7 +4,6 @@ import type {
   ModelSelection,
   PreviewAnnotationPayload,
   ProviderApprovalDecision,
-  ProviderInteractionMode,
   ResolvedKeybindingsConfig,
   RuntimeMode,
   ScopedThreadRef,
@@ -100,14 +99,13 @@ import { searchSlashCommandItems } from "./composerSlashCommandSearch";
 import {
   getComposerPromptInjectionState,
   getComposerProviderState,
-  renderProviderTraitsMenuContent,
+  getProviderTraitsQualifier,
   renderProviderTraitsPicker,
 } from "./composerProviderState";
 import { ContextWindowMeter } from "./ContextWindowMeter";
 import { buildExpandedImagePreview, type ExpandedImagePreview } from "./ExpandedImagePreview";
 import { basenameOfPath } from "../../pierre-icons";
 import { cn, randomUUID } from "~/lib/utils";
-import { Separator } from "../ui/separator";
 
 function ComposerCommandMenuLayer(props: { anchor: HTMLElement | null; children: ReactNode }) {
   const [position, setPosition] = useState<{
@@ -171,19 +169,18 @@ import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { toastManager } from "../ui/toast";
 import {
-  BotIcon,
   CircleAlertIcon,
   ListTodoIcon,
-  PencilRulerIcon,
   type LucideIcon,
   LockIcon,
   LockOpenIcon,
   PenLineIcon,
+  PlusIcon,
   SparklesIcon,
   XIcon,
 } from "lucide-react";
 import { proposedPlanTitle } from "../../proposedPlan";
-import { getProviderDisplayName, getProviderInteractionModeToggle } from "../../providerModels";
+import { getProviderDisplayName } from "../../providerModels";
 import {
   applyProviderInstanceSettings,
   deriveProviderInstanceEntries,
@@ -236,6 +233,49 @@ const runtimeModeConfig: Record<
 };
 
 const runtimeModeOptions = Object.keys(runtimeModeConfig) as RuntimeMode[];
+
+/*
+ * Composer geometry, in one place so the input keeps a single rhythm.
+ *
+ * The composer is a control, not a panel: it should read as a slim field with a
+ * row of chrome under it. The editor's floor is just under two lines of prompt
+ * text — enough that a one-line prompt still has air around it, small enough
+ * that an empty composer does not look like a box waiting to be filled — and
+ * every padding step sits one notch below the app's usual spacing so the
+ * chrome hugs the field instead of framing it.
+ */
+/*
+ * No floor under the editor: an empty composer is exactly one line tall and
+ * grows only when the prompt wraps. A minimum height would be dead space every
+ * time the composer is empty, which is most of the time. The click target comes
+ * from the padded area around the editor instead — see the wrapper's mousedown.
+ */
+const COMPOSER_EDITOR_MIN_HEIGHT_CLASS = "min-h-0";
+const COMPOSER_INPUT_PADDING_CLASS = "px-3 pb-1.5 sm:px-4";
+/** Tighter above when a banner already separates the input from what precedes it. */
+const COMPOSER_INPUT_PADDING_TOP_CLASS = "pt-2.5";
+const COMPOSER_INPUT_PADDING_TOP_WITH_HEADER_CLASS = "pt-2";
+const COMPOSER_FOOTER_PADDING_CLASS = "px-2 pb-2 sm:px-2.5 sm:pb-2.5";
+
+/*
+ * The control row: attachments, permissions, model, context.
+ *
+ * Four controls that are peers, so they share one gap, one ink, and one height.
+ * The gap is the app's popup item gap — the same rhythm menus run on — because a
+ * row of controls is read the way a menu is, and inventing a number here is how
+ * the row drifted out of step in the first place.
+ */
+const COMPOSER_CONTROL_ROW_GAP_CLASS = "gap-(--popup-item-gap)";
+const COMPOSER_CONTROL_INK_CLASS_NAME = "text-muted-foreground/70 hover:text-foreground/80";
+
+/*
+ * The model and its qualifier are two controls here rather than one label — the
+ * picker names the model, the traits control grades it ("Extra High") — so the
+ * ink split that `QualifiedLabel` applies within a label is applied across them
+ * instead: the name holds primary ink and everything grading it stays muted.
+ */
+const COMPOSER_MODEL_TRIGGER_CLASS_NAME = "text-foreground hover:text-foreground";
+
 const COMPOSER_FLOATING_LAYER_SELECTOR = [
   '[data-slot="popover-popup"]',
   '[data-slot="menu-popup"]',
@@ -276,149 +316,154 @@ function isInsideComposerFloatingLayer(element: Element): boolean {
   return element.closest(COMPOSER_FLOATING_LAYER_SELECTOR) !== null;
 }
 
-const ComposerFooterModeControls = memo(function ComposerFooterModeControls(props: {
-  showInteractionModeToggle: boolean;
-  interactionMode: ProviderInteractionMode;
-  runtimeMode: RuntimeMode;
-  showPlanToggle: boolean;
-  planSidebarLabel: string;
-  planSidebarOpen: boolean;
-  onToggleInteractionMode: () => void;
-  onRuntimeModeChange: (mode: RuntimeMode) => void;
-  onTogglePlanSidebar: () => void;
+/**
+ * Attachments. A plain "+" rather than a paperclip: the button is the row's
+ * opening move, and it reuses the same intake the composer already runs for
+ * pasted and dropped files.
+ */
+const ComposerAttachButton = memo(function ComposerAttachButton(props: {
+  disabled: boolean;
+  onFilesSelected: (files: File[]) => void;
 }) {
-  const runtimeModeOption = runtimeModeConfig[props.runtimeMode];
-  const RuntimeModeIcon = runtimeModeOption.icon;
-  const interactionModeTooltip =
-    props.interactionMode === "plan"
-      ? "Plan mode — click to return to normal build mode"
-      : "Default mode — click to enter plan mode";
-  const planSidebarTooltip = props.planSidebarOpen
-    ? `Hide ${props.planSidebarLabel.toLowerCase()} sidebar`
-    : `Show ${props.planSidebarLabel.toLowerCase()} sidebar`;
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  const interactionModeToggle = props.showInteractionModeToggle ? (
+  return (
     <>
-      <Separator orientation="vertical" className="mx-0.5 hidden h-4 sm:block" />
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        onChange={(event) => {
+          const files = Array.from(event.target.files ?? []);
+          event.target.value = "";
+          if (files.length > 0) {
+            props.onFilesSelected(files);
+          }
+        }}
+      />
       <Tooltip>
         <TooltipTrigger
           render={
             <Button
               variant="ghost"
-              className={cn(
-                "shrink-0 whitespace-nowrap px-2 sm:px-3",
-                props.interactionMode === "plan"
-                  ? "bg-blue-500/10 text-blue-400 hover:bg-blue-500/15 hover:text-blue-300"
-                  : "text-muted-foreground/70 hover:text-foreground/80",
-              )}
-              size="sm"
+              size="icon-sm"
               type="button"
-              onClick={props.onToggleInteractionMode}
-              aria-label={interactionModeTooltip}
+              disabled={props.disabled}
+              className={COMPOSER_CONTROL_INK_CLASS_NAME}
+              onClick={() => inputRef.current?.click()}
+              aria-label="Attach images"
             />
           }
         >
-          {props.interactionMode === "plan" ? (
-            <PencilRulerIcon className="text-current opacity-100" />
-          ) : (
-            <BotIcon />
-          )}
-          <span className="sr-only sm:not-sr-only">
-            {props.interactionMode === "plan" ? "Plan" : "Build"}
-          </span>
+          <PlusIcon />
         </TooltipTrigger>
-        <TooltipPopup side="top">{interactionModeTooltip}</TooltipPopup>
+        <TooltipPopup side="top">Attach images</TooltipPopup>
       </Tooltip>
     </>
-  ) : null;
+  );
+});
+
+/**
+ * What the agent is allowed to do without asking.
+ *
+ * This used to be a bold select that read as an alarm; it is a standing setting,
+ * not a warning, so it now carries the same ink and weight as everything else in
+ * the row and lets the icon do the signalling.
+ */
+const ComposerPermissionsPicker = memo(function ComposerPermissionsPicker(props: {
+  runtimeMode: RuntimeMode;
+  onRuntimeModeChange: (mode: RuntimeMode) => void;
+}) {
+  const runtimeModeOption = runtimeModeConfig[props.runtimeMode];
+  const RuntimeModeIcon = runtimeModeOption.icon;
 
   return (
-    <>
-      <Separator orientation="vertical" className="mx-0.5 hidden h-4 sm:block" />
-
-      <Tooltip>
-        <Select
-          value={props.runtimeMode}
-          onValueChange={(value) => props.onRuntimeModeChange(value!)}
+    <Tooltip>
+      <Select
+        value={props.runtimeMode}
+        onValueChange={(value) => props.onRuntimeModeChange(value!)}
+      >
+        <TooltipTrigger
+          render={
+            <SelectTrigger
+              variant="ghost"
+              size="sm"
+              className={cn(
+                "shrink-0 whitespace-nowrap font-normal",
+                COMPOSER_CONTROL_INK_CLASS_NAME,
+              )}
+              aria-label="Permissions"
+            />
+          }
         >
-          <TooltipTrigger
-            render={
-              <SelectTrigger
-                variant="ghost"
-                size="sm"
-                className="font-medium"
-                aria-label="Runtime mode"
-              />
-            }
-          >
-            <RuntimeModeIcon className="size-4" />
-            <SelectValue>{runtimeModeOption.label}</SelectValue>
-          </TooltipTrigger>
-          <SelectPopup alignItemWithTrigger={false}>
-            {runtimeModeOptions.map((mode) => {
-              const option = runtimeModeConfig[mode];
-              const OptionIcon = option.icon;
-              return (
-                <SelectItem key={mode} value={mode} hideIndicator className="min-w-64 py-2">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <div className="grid min-w-0 flex-1 gap-0.5">
-                      <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
-                        <OptionIcon className="size-3.5 shrink-0 text-muted-foreground" />
-                        {option.label}
-                      </span>
-                      <span className="text-muted-foreground text-xs leading-4">
-                        {option.description}
-                      </span>
-                    </div>
+          <RuntimeModeIcon className="size-4" />
+          <SelectValue>{runtimeModeOption.label}</SelectValue>
+        </TooltipTrigger>
+        <SelectPopup alignItemWithTrigger={false}>
+          {runtimeModeOptions.map((mode) => {
+            const option = runtimeModeConfig[mode];
+            const OptionIcon = option.icon;
+            return (
+              <SelectItem key={mode} value={mode} hideIndicator className="min-w-64 py-2">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="grid min-w-0 flex-1 gap-0.5">
+                    <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
+                      <OptionIcon className="size-3.5 shrink-0 text-muted-foreground" />
+                      {option.label}
+                    </span>
+                    <span className="text-muted-foreground text-xs leading-4">
+                      {option.description}
+                    </span>
                   </div>
-                </SelectItem>
-              );
-            })}
-          </SelectPopup>
-        </Select>
-        <TooltipPopup side="top">{runtimeModeOption.description}</TooltipPopup>
-      </Tooltip>
+                </div>
+              </SelectItem>
+            );
+          })}
+        </SelectPopup>
+      </Select>
+      <TooltipPopup side="top">{runtimeModeOption.description}</TooltipPopup>
+    </Tooltip>
+  );
+});
 
-      {interactionModeToggle}
+const ComposerPlanSidebarToggle = memo(function ComposerPlanSidebarToggle(props: {
+  planSidebarLabel: string;
+  planSidebarOpen: boolean;
+  onTogglePlanSidebar: () => void;
+}) {
+  const tooltip = props.planSidebarOpen
+    ? `Hide ${props.planSidebarLabel.toLowerCase()} sidebar`
+    : `Show ${props.planSidebarLabel.toLowerCase()} sidebar`;
 
-      {props.showPlanToggle ? (
-        <>
-          <Separator orientation="vertical" className="mx-0.5 hidden h-4 sm:block" />
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  variant="ghost"
-                  className={cn(
-                    "shrink-0 whitespace-nowrap px-2 sm:px-3",
-                    props.planSidebarOpen
-                      ? "bg-blue-500/10 text-blue-400 hover:bg-blue-500/15 hover:text-blue-300"
-                      : "text-muted-foreground/70 hover:text-foreground/80",
-                  )}
-                  size="sm"
-                  type="button"
-                  onClick={props.onTogglePlanSidebar}
-                  aria-label={planSidebarTooltip}
-                />
-              }
-            >
-              <ListTodoIcon
-                className={props.planSidebarOpen ? "text-current opacity-100" : undefined}
-              />
-              <span className="sr-only sm:not-sr-only">{props.planSidebarLabel}</span>
-            </TooltipTrigger>
-            <TooltipPopup side="top">{planSidebarTooltip}</TooltipPopup>
-          </Tooltip>
-        </>
-      ) : null}
-    </>
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Button
+            variant="ghost"
+            className={cn(
+              "shrink-0 whitespace-nowrap font-normal",
+              props.planSidebarOpen ? "text-foreground" : COMPOSER_CONTROL_INK_CLASS_NAME,
+            )}
+            size="sm"
+            type="button"
+            onClick={props.onTogglePlanSidebar}
+            aria-label={tooltip}
+          />
+        }
+      >
+        <ListTodoIcon />
+        <span className="sr-only sm:not-sr-only">{props.planSidebarLabel}</span>
+      </TooltipTrigger>
+      <TooltipPopup side="top">{tooltip}</TooltipPopup>
+    </Tooltip>
   );
 });
 
 const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(props: {
   compact: boolean;
-  activeContextWindow: ReturnType<typeof deriveLatestContextWindowSnapshot>;
-  activeThreadProviderDisplayName: string | null;
   isPreparingWorktree: boolean;
   pendingAction: {
     questionIndex: number;
@@ -441,12 +486,6 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
 }) {
   return (
     <>
-      {props.activeContextWindow ? (
-        <ContextWindowMeter
-          usage={props.activeContextWindow}
-          providerDisplayName={props.activeThreadProviderDisplayName}
-        />
-      ) : null}
       {props.isPreparingWorktree ? (
         <span className="text-muted-foreground/70 text-xs">Preparing worktree...</span>
       ) : null}
@@ -570,7 +609,6 @@ export interface ChatComposerProps {
 
   // Mode
   runtimeMode: RuntimeMode;
-  interactionMode: ProviderInteractionMode;
 
   // Provider / model
   lockedProvider: ProviderDriverKind | null;
@@ -616,9 +654,7 @@ export interface ChatComposerProps {
 
   onProviderModelSelect: (instanceId: ProviderInstanceId, model: string) => void;
   getModelDisabledReason: (instanceId: ProviderInstanceId, model: string) => string | null;
-  toggleInteractionMode: () => void;
   handleRuntimeModeChange: (mode: RuntimeMode) => void;
-  handleInteractionModeChange: (mode: ProviderInteractionMode) => void;
   togglePlanSidebar: () => void;
 
   focusComposer: () => void;
@@ -666,7 +702,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     planSidebarLabel,
     planSidebarOpen,
     runtimeMode,
-    interactionMode,
     lockedProvider,
     providerStatuses,
     activeProjectDefaultModelSelection,
@@ -692,9 +727,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     onChangeActivePendingUserInputCustomAnswer,
     onProviderModelSelect,
     getModelDisabledReason,
-    toggleInteractionMode,
     handleRuntimeModeChange,
-    handleInteractionModeChange,
     togglePlanSidebar,
     focusComposer,
     scheduleComposerFocus,
@@ -910,15 +943,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
 
   const selectedPromptEffort = composerProviderState.promptEffort;
   const selectedModelOptionsForDispatch = composerProviderState.modelOptionsForDispatch;
-  const composerProviderControls = useMemo(
-    () => ({
-      showInteractionModeToggle: getProviderInteractionModeToggle(
-        providerStatuses,
-        selectedProvider,
-      ),
-    }),
-    [providerStatuses, selectedProvider],
-  );
   const selectedModelSelection = useMemo<ModelSelection>(
     () => createModelSelection(selectedInstanceId, selectedModel, selectedModelOptionsForDispatch),
     [selectedInstanceId, selectedModel, selectedModelOptionsForDispatch],
@@ -1071,20 +1095,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
           label: "/model",
           description: "Switch response model for this thread",
         },
-        {
-          id: "slash:plan",
-          type: "slash-command",
-          command: "plan",
-          label: "/plan",
-          description: "Switch this thread into plan mode",
-        },
-        {
-          id: "slash:default",
-          type: "slash-command",
-          command: "default",
-          label: "/default",
-          description: "Switch this thread back to normal build mode",
-        },
       ] satisfies ReadonlyArray<Extract<ComposerCommandItem, { type: "slash-command" }>>;
       const providerSlashCommandItems = (selectedProviderStatus?.slashCommands ?? []).map(
         (command) => ({
@@ -1213,7 +1223,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     [composerDraftTarget, promptRef, scheduleComposerFocus, setComposerDraftPrompt],
   );
 
-  const providerTraitsMenuContent = renderProviderTraitsMenuContent({
+  // Model and effort are one control: the qualifier labels the picker's trigger
+  // and the picker itself owns the controls that change it.
+  const providerTraitsInput = {
     provider: selectedProvider,
     instanceId: selectedInstanceId,
     ...(routeKind === "server" ? { threadRef: routeThreadRef } : {}),
@@ -1223,18 +1235,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     modelOptions: composerModelOptions?.[selectedInstanceId],
     prompt,
     onPromptChange: setPromptFromTraits,
-  });
-  const providerTraitsPicker = renderProviderTraitsPicker({
-    provider: selectedProvider,
-    instanceId: selectedInstanceId,
-    ...(routeKind === "server" ? { threadRef: routeThreadRef } : {}),
-    ...(routeKind === "draft" && draftId ? { draftId } : {}),
-    model: selectedModel,
-    models: selectedProviderModels,
-    modelOptions: composerModelOptions?.[selectedInstanceId],
-    prompt,
-    onPromptChange: setPromptFromTraits,
-  });
+  };
+  const providerTraitsPicker = renderProviderTraitsPicker(providerTraitsInput);
+  const providerTraitsQualifier = getProviderTraitsQualifier(providerTraitsInput);
   const pendingPrimaryAction = useMemo(
     () =>
       activePendingProgress
@@ -1693,23 +1696,13 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         return;
       }
       if (item.type === "slash-command") {
-        if (item.command === "model") {
-          const applied = applyPromptReplacement(trigger.rangeStart, trigger.rangeEnd, "", {
-            expectedText: snapshot.value.slice(trigger.rangeStart, trigger.rangeEnd),
-            focusEditorAfterReplace: false,
-          });
-          if (applied) {
-            setComposerHighlightedItemId(null);
-            setIsComposerModelPickerOpen(true);
-          }
-          return;
-        }
-        void handleInteractionModeChange(item.command === "plan" ? "plan" : "default");
         const applied = applyPromptReplacement(trigger.rangeStart, trigger.rangeEnd, "", {
           expectedText: snapshot.value.slice(trigger.rangeStart, trigger.rangeEnd),
+          focusEditorAfterReplace: false,
         });
         if (applied) {
           setComposerHighlightedItemId(null);
+          setIsComposerModelPickerOpen(true);
         }
         return;
       }
@@ -1750,7 +1743,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         return;
       }
     },
-    [applyPromptReplacement, handleInteractionModeChange, resolveActiveComposerTrigger],
+    [applyPromptReplacement, resolveActiveComposerTrigger],
   );
 
   const onComposerMenuItemHighlighted = useCallback(
@@ -1862,10 +1855,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     key: "ArrowDown" | "ArrowUp" | "Enter" | "Tab",
     event: KeyboardEvent,
   ) => {
-    if (key === "Tab" && event.shiftKey) {
-      toggleInteractionMode();
-      return true;
-    }
     const { trigger } = resolveActiveComposerTrigger();
     const menuIsActive = composerMenuOpenRef.current || trigger !== null;
     if (menuIsActive) {
@@ -2824,10 +2813,22 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
           <div
             ref={setComposerMenuAnchor}
             className={cn(
-              "relative px-3 pb-2 sm:px-4",
-              hasComposerHeader ? "pt-2.5 sm:pt-3" : "pt-3.5 sm:pt-4",
+              "relative",
+              COMPOSER_INPUT_PADDING_CLASS,
+              hasComposerHeader
+                ? COMPOSER_INPUT_PADDING_TOP_WITH_HEADER_CLASS
+                : COMPOSER_INPUT_PADDING_TOP_CLASS,
               isComposerCollapsedMobile && "hidden",
             )}
+            onMouseDown={(event) => {
+              // The editor is only as tall as its text, so the padding around it
+              // has to carry the click — otherwise a slim composer is a slim
+              // target. Only a press on the padding itself counts; anything
+              // inside keeps its own behaviour.
+              if (event.target !== event.currentTarget) return;
+              event.preventDefault();
+              focusComposer();
+            }}
           >
             <ComposerStashBadge
               count={stashQueue.length}
@@ -3008,7 +3009,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     : []
                 }
                 skills={selectedProviderStatus?.skills ?? []}
-                {...(showMobilePendingAnswerActions ? { className: "max-sm:pb-11" } : {})}
+                className={cn(
+                  COMPOSER_EDITOR_MIN_HEIGHT_CLASS,
+                  showMobilePendingAnswerActions && "max-sm:pb-11",
+                )}
                 onRemoveTerminalContext={removeComposerTerminalContextFromDraft}
                 onChange={onPromptChange}
                 onCommandKeyDown={onComposerCommandKey}
@@ -3062,7 +3066,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
 
           {/* Bottom toolbar */}
           {isComposerCollapsedMobile ? null : activePendingApproval ? (
-            <div className="flex items-center justify-end gap-2 px-2.5 pb-2.5 sm:px-3 sm:pb-3">
+            <div
+              className={cn("flex items-center justify-end gap-2", COMPOSER_FOOTER_PADDING_CLASS)}
+            >
               <ComposerPendingApprovalActions
                 requestId={activePendingApproval.requestId}
                 isResponding={respondingRequestIds.includes(activePendingApproval.requestId)}
@@ -3074,13 +3080,51 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
               data-chat-composer-footer="true"
               data-chat-composer-footer-compact={isComposerFooterCompact ? "true" : "false"}
               className={cn(
-                "flex min-w-0 flex-nowrap items-center justify-between gap-2 overflow-visible px-2.5 pb-2.5 sm:px-3 sm:pb-3",
-                pendingUserInputs.length > 0 && "pt-2",
-                isComposerFooterCompact ? "gap-1.5" : "gap-2 sm:gap-0",
+                "flex min-w-0 flex-nowrap items-center justify-between overflow-visible",
+                COMPOSER_FOOTER_PADDING_CLASS,
+                COMPOSER_CONTROL_ROW_GAP_CLASS,
+                pendingUserInputs.length > 0 && "pt-1.5",
                 showMobilePendingAnswerActions && "hidden sm:flex",
               )}
             >
-              <div className="-m-1 flex min-w-0 flex-1 items-center gap-1 overflow-x-auto p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <div
+                className={cn(
+                  "-m-1 flex min-w-0 flex-1 items-center overflow-x-auto p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+                  COMPOSER_CONTROL_ROW_GAP_CLASS,
+                )}
+              >
+                <ComposerAttachButton
+                  disabled={
+                    isConnecting || projectSelectionRequired || pendingUserInputs.length > 0
+                  }
+                  onFilesSelected={addComposerImages}
+                />
+
+                {isComposerFooterCompact ? (
+                  <CompactComposerControlsMenu
+                    activePlan={showPlanSidebarToggle}
+                    planSidebarLabel={planSidebarLabel}
+                    planSidebarOpen={planSidebarOpen}
+                    runtimeMode={runtimeMode}
+                    onTogglePlanSidebar={togglePlanSidebar}
+                    onRuntimeModeChange={handleRuntimeModeChange}
+                  />
+                ) : (
+                  <>
+                    <ComposerPermissionsPicker
+                      runtimeMode={runtimeMode}
+                      onRuntimeModeChange={handleRuntimeModeChange}
+                    />
+                    {showPlanSidebarToggle ? (
+                      <ComposerPlanSidebarToggle
+                        planSidebarLabel={planSidebarLabel}
+                        planSidebarOpen={planSidebarOpen}
+                        onTogglePlanSidebar={togglePlanSidebar}
+                      />
+                    ) : null}
+                  </>
+                )}
+
                 {noProviderAvailable ? (
                   <Button
                     type="button"
@@ -3104,6 +3148,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     keybindings={keybindings}
                     modelOptionsByInstance={modelOptionsByInstance}
                     terminalOpen={terminalOpen}
+                    triggerClassName={COMPOSER_MODEL_TRIGGER_CLASS_NAME}
+                    qualifier={providerTraitsQualifier}
+                    {...(providerTraitsPicker ? { optionsFooter: providerTraitsPicker } : {})}
+                    popupSide="top"
                     open={isComposerModelPickerOpen}
                     {...(composerProviderState.modelPickerIconClassName
                       ? {
@@ -3119,40 +3167,12 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                   />
                 )}
 
-                {isComposerFooterCompact ? (
-                  <CompactComposerControlsMenu
-                    activePlan={showPlanSidebarToggle}
-                    interactionMode={interactionMode}
-                    planSidebarLabel={planSidebarLabel}
-                    planSidebarOpen={planSidebarOpen}
-                    runtimeMode={runtimeMode}
-                    showInteractionModeToggle={composerProviderControls.showInteractionModeToggle}
-                    traitsMenuContent={providerTraitsMenuContent}
-                    onToggleInteractionMode={toggleInteractionMode}
-                    onTogglePlanSidebar={togglePlanSidebar}
-                    onRuntimeModeChange={handleRuntimeModeChange}
+                {activeContextWindow ? (
+                  <ContextWindowMeter
+                    usage={activeContextWindow}
+                    providerDisplayName={activeThreadProviderDisplayName}
                   />
-                ) : (
-                  <>
-                    {providerTraitsPicker ? (
-                      <>
-                        <Separator orientation="vertical" className="mx-0.5 hidden h-4 sm:block" />
-                        {providerTraitsPicker}
-                      </>
-                    ) : null}
-                    <ComposerFooterModeControls
-                      showInteractionModeToggle={composerProviderControls.showInteractionModeToggle}
-                      interactionMode={interactionMode}
-                      runtimeMode={runtimeMode}
-                      showPlanToggle={showPlanSidebarToggle}
-                      planSidebarLabel={planSidebarLabel}
-                      planSidebarOpen={planSidebarOpen}
-                      onToggleInteractionMode={toggleInteractionMode}
-                      onRuntimeModeChange={handleRuntimeModeChange}
-                      onTogglePlanSidebar={togglePlanSidebar}
-                    />
-                  </>
-                )}
+                ) : null}
               </div>
 
               {/* Right side: send / stop button */}
@@ -3165,8 +3185,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
               >
                 <ComposerFooterPrimaryActions
                   compact={isComposerPrimaryActionsCompact}
-                  activeContextWindow={activeContextWindow}
-                  activeThreadProviderDisplayName={activeThreadProviderDisplayName}
                   pendingAction={pendingPrimaryAction}
                   isRunning={phase === "running"}
                   showPlanFollowUpPrompt={pendingUserInputs.length === 0 && showPlanFollowUpPrompt}

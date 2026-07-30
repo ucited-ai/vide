@@ -310,6 +310,27 @@ const EMPTY_ACTIVITIES: OrchestrationThreadActivity[] = [];
 const EMPTY_PROVIDERS: ServerProvider[] = [];
 const EMPTY_PROVIDER_SKILLS: ServerProvider["skills"] = [];
 const EMPTY_PENDING_USER_INPUT_ANSWERS: Record<string, PendingUserInputDraftAnswer> = {};
+
+/*
+ * One dock for the composer, used by both the empty-draft screen and a thread
+ * with messages.
+ *
+ * The two states used to differ — the draft screen floated the composer a slice
+ * of the viewport higher — so sending the first message dropped the input under
+ * the cursor. Sharing the class is the guarantee: there is no second number to
+ * keep in sync, and the hero headline and suggestions hang above the composer
+ * rather than displacing it.
+ */
+const COMPOSER_DOCK_CLASS_NAME =
+  "pointer-events-none absolute inset-x-0 bottom-0 z-20 pt-1.5 sm:pt-2";
+
+/*
+ * Air between the draft suggestions and the composer. Double what it was: the
+ * cards sat close enough to the input to read as part of it, which pushed them
+ * up against the headline. The gap is also what lifts the headline and cards now
+ * that the composer no longer floats the whole block off the bottom edge.
+ */
+const DRAFT_HERO_STACK_GAP_CLASS_NAME = "pb-16";
 function useDraftHeroLayoutTransition(isDraftHeroState: boolean) {
   const transitionGroupRef = useRef<HTMLDivElement | null>(null);
   const composerAnchorRef = useRef<HTMLDivElement | null>(null);
@@ -2995,9 +3016,6 @@ function ChatViewContent(props: ChatViewProps) {
       setDraftThreadContext,
     ],
   );
-  const toggleInteractionMode = useCallback(() => {
-    handleInteractionModeChange(interactionMode === "plan" ? "default" : "plan");
-  }, [handleInteractionModeChange, interactionMode]);
   const dismissPlanSidebarForCurrentTurn = useCallback(() => {
     planSidebarDismissedForTurnRef.current =
       activePlan?.turnId ?? sidebarProposedPlan?.turnId ?? "__dismissed__";
@@ -5762,19 +5780,11 @@ function ChatViewContent(props: ChatViewProps) {
               )}
             </div>
 
-            {/* Input bar — centered hero while a draft has no messages, docked at the bottom otherwise */}
+            {/* Input bar — the draft hero grows above it, but it never moves */}
             <div
               ref={setComposerOverlayElement}
               data-chat-composer-overlay="true"
-              className={
-                isDraftHeroState
-                  ? // Sit the draft block low rather than centring it. Centring puts the
-                    // composer at eye level with nothing beneath it, which reads as an
-                    // unfinished page; anchoring near the bottom keeps the input where it
-                    // will stay once the thread fills in above it.
-                    "pointer-events-none absolute inset-0 z-20 flex items-end pb-[9vh]"
-                  : "pointer-events-none absolute inset-x-0 bottom-0 z-20 pt-1.5 sm:pt-2"
-              }
+              className={COMPOSER_DOCK_CLASS_NAME}
             >
               <div
                 ref={attachDraftHeroTransitionGroupRef}
@@ -5784,7 +5794,7 @@ function ChatViewContent(props: ChatViewProps) {
                   {isDraftHeroState ? (
                     <div className="absolute inset-x-0 bottom-full z-0">
                       <div
-                        className="pb-8"
+                        className={DRAFT_HERO_STACK_GAP_CLASS_NAME}
                         style={
                           forceExpandedMobileComposer
                             ? {
@@ -5812,12 +5822,38 @@ function ChatViewContent(props: ChatViewProps) {
                         : undefined
                     }
                   >
-                    <div
-                      className={cn(
-                        "chat-composer-glass-shell relative mx-auto w-full max-w-3xl",
-                        showComposerContextStrip && "chat-composer-glass-shell-with-context",
-                      )}
-                    >
+                    {/* Worktree, environment, and branch read as conditions the next
+                        message runs under, so they sit above the input — outside the
+                        glass shell, which would otherwise grow to enclose them. */}
+                    {showComposerContextStrip && (
+                      <div className="pointer-events-auto relative z-10 mx-auto w-full max-w-3xl">
+                        <BranchToolbar
+                          environmentId={activeThread.environmentId}
+                          threadId={activeThread.id}
+                          {...(routeKind === "draft" && draftId ? { draftId } : {})}
+                          onEnvModeChange={onEnvModeChange}
+                          startFromOrigin={startFromOrigin}
+                          onStartFromOriginChange={onStartFromOriginChange}
+                          {...(canOverrideServerThreadEnvMode
+                            ? { effectiveEnvModeOverride: envMode }
+                            : {})}
+                          {...(canOverrideServerThreadEnvMode
+                            ? {
+                                activeThreadBranchOverride: activeThreadBranch,
+                                onActiveThreadBranchOverrideChange: setPendingServerThreadBranch,
+                              }
+                            : {})}
+                          envLocked={envLocked}
+                          onComposerFocusRequest={scheduleComposerFocus}
+                          {...(canCheckoutPullRequestIntoThread
+                            ? { onCheckoutPullRequestRequest: openPullRequestDialog }
+                            : {})}
+                          {...(hasMultipleEnvironments ? { onEnvironmentChange } : {})}
+                          availableEnvironments={logicalProjectEnvironments}
+                        />
+                      </div>
+                    )}
+                    <div className="chat-composer-glass-shell relative mx-auto w-full max-w-3xl">
                       <div className="chat-composer-glass-host relative z-10 w-full rounded-[22px]">
                         <div ref={attachDraftHeroComposerAnchorRef} className="relative z-10">
                           <ChatComposer
@@ -5855,7 +5891,6 @@ function ChatViewContent(props: ChatViewProps) {
                             planSidebarLabel={planSidebarLabel}
                             planSidebarOpen={planSidebarOpen}
                             runtimeMode={runtimeMode}
-                            interactionMode={interactionMode}
                             lockedProvider={lockedProvider}
                             providerStatuses={providerStatuses as ServerProvider[]}
                             activeProjectDefaultModelSelection={
@@ -5888,51 +5923,13 @@ function ChatViewContent(props: ChatViewProps) {
                             }
                             onProviderModelSelect={onProviderModelSelect}
                             getModelDisabledReason={getModelDisabledReason}
-                            toggleInteractionMode={toggleInteractionMode}
                             handleRuntimeModeChange={handleRuntimeModeChange}
-                            handleInteractionModeChange={handleInteractionModeChange}
                             togglePlanSidebar={togglePlanSidebar}
                             focusComposer={focusComposer}
                             scheduleComposerFocus={scheduleComposerFocus}
                             setThreadError={setThreadError}
                             onExpandImage={onExpandTimelineImage}
                           />
-                        </div>
-                      </div>
-                      <div className="min-h-0">
-                        <div
-                          data-terminal-open={terminalUiState.terminalOpen ? "true" : undefined}
-                          className="relative z-0"
-                        >
-                          {showComposerContextStrip && (
-                            <div className="pointer-events-auto">
-                              <BranchToolbar
-                                environmentId={activeThread.environmentId}
-                                threadId={activeThread.id}
-                                {...(routeKind === "draft" && draftId ? { draftId } : {})}
-                                onEnvModeChange={onEnvModeChange}
-                                startFromOrigin={startFromOrigin}
-                                onStartFromOriginChange={onStartFromOriginChange}
-                                {...(canOverrideServerThreadEnvMode
-                                  ? { effectiveEnvModeOverride: envMode }
-                                  : {})}
-                                {...(canOverrideServerThreadEnvMode
-                                  ? {
-                                      activeThreadBranchOverride: activeThreadBranch,
-                                      onActiveThreadBranchOverrideChange:
-                                        setPendingServerThreadBranch,
-                                    }
-                                  : {})}
-                                envLocked={envLocked}
-                                onComposerFocusRequest={scheduleComposerFocus}
-                                {...(canCheckoutPullRequestIntoThread
-                                  ? { onCheckoutPullRequestRequest: openPullRequestDialog }
-                                  : {})}
-                                {...(hasMultipleEnvironments ? { onEnvironmentChange } : {})}
-                                availableEnvironments={logicalProjectEnvironments}
-                              />
-                            </div>
-                          )}
                         </div>
                       </div>
                     </div>

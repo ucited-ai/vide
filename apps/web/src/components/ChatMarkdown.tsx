@@ -41,6 +41,7 @@ import remarkBreaks from "remark-breaks";
 import remarkGfm from "remark-gfm";
 import { renderSkillInlineMarkdownChildren } from "./chat/SkillInlineText";
 import { CHAT_FILE_TAG_CHIP_CLASS_NAME, FileTagChipContent } from "./chat/FileTagChip";
+import { FilePathLabel } from "./chat/QualifiedLabel";
 import { PierreEntryIcon } from "./chat/PierreEntryIcon";
 import {
   resolveExternalWebLinkHost,
@@ -744,6 +745,7 @@ interface MarkdownFileLinkProps {
   workspaceRelativePath: string | null;
   line?: number | undefined;
   label: string;
+  qualifier: string;
   copyMarkdown: string;
   theme: "light" | "dark";
   threadRef?: ScopedThreadRef | undefined;
@@ -1012,6 +1014,7 @@ const MarkdownFileLink = memo(function MarkdownFileLink({
   workspaceRelativePath,
   line,
   label,
+  qualifier,
   copyMarkdown,
   theme,
   threadRef,
@@ -1204,7 +1207,13 @@ const MarkdownFileLink = memo(function MarkdownFileLink({
             }}
             onContextMenu={handleContextMenu}
           >
-            <FileTagChipContent path={iconPath} label={label} theme={theme} selectable />
+            <FileTagChipContent
+              path={iconPath}
+              label={label}
+              qualifier={qualifier}
+              theme={theme}
+              selectable
+            />
           </a>
         }
       />
@@ -1213,7 +1222,7 @@ const MarkdownFileLink = memo(function MarkdownFileLink({
         className="max-w-[min(40rem,calc(100vw-2rem))] font-mono text-[11px] leading-tight"
       >
         <div className="markdown-file-link-tooltip-scroll overflow-x-auto whitespace-nowrap">
-          {displayPath}
+          <FilePathLabel path={displayPath} workspaceRoot={undefined} />
         </div>
       </TooltipPopup>
     </Tooltip>
@@ -1232,6 +1241,7 @@ function areMarkdownFileLinkPropsEqual(
     previous.workspaceRelativePath === next.workspaceRelativePath &&
     previous.line === next.line &&
     previous.label === next.label &&
+    previous.qualifier === next.qualifier &&
     previous.copyMarkdown === next.copyMarkdown &&
     previous.theme === next.theme &&
     previous.threadRef === next.threadRef &&
@@ -1455,13 +1465,15 @@ function ChatMarkdown({
           );
         }
 
+        // The file name carries the link; where it lives and which line only
+        // qualify it, so they render as one muted trail behind the name.
         const parentSuffix = fileLinkParentSuffixByPath.get(fileLinkMeta.filePath);
-        const labelParts = [fileLinkMeta.basename];
+        const qualifierParts: string[] = [];
         if (typeof parentSuffix === "string" && parentSuffix.length > 0) {
-          labelParts.push(parentSuffix);
+          qualifierParts.push(parentSuffix);
         }
         if (fileLinkMeta.line) {
-          labelParts.push(
+          qualifierParts.push(
             `L${fileLinkMeta.line}${fileLinkMeta.column ? `:C${fileLinkMeta.column}` : ""}`,
           );
         }
@@ -1474,7 +1486,8 @@ function ChatMarkdown({
             displayPath={fileLinkMeta.displayPath}
             workspaceRelativePath={fileLinkMeta.workspaceRelativePath}
             line={fileLinkMeta.line}
-            label={labelParts.join(" · ")}
+            label={fileLinkMeta.basename}
+            qualifier={qualifierParts.join(" · ")}
             copyMarkdown={`[${fileLinkMeta.basename}](${normalizedHref})`}
             theme={resolvedTheme}
             threadRef={threadRef}
@@ -1544,7 +1557,9 @@ function ChatMarkdown({
   return (
     <div
       className={cn(
-        "chat-markdown w-full min-w-0 text-sm leading-relaxed text-foreground/80",
+        // The transcript is read rather than scanned, so it runs on the chat
+        // type size instead of the smaller size the surrounding chrome uses.
+        "chat-markdown w-full min-w-0 text-(length:--text-chat) leading-relaxed text-foreground/80",
         className,
       )}
       onCopy={handleCopy}

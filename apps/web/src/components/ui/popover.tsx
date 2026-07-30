@@ -48,12 +48,18 @@ function PopoverPopup({
         sideOffset={sideOffset}
       >
         <PopoverPrimitive.Popup
+          // The entrance lives on [data-popup-surface] in vide-theme.css, which
+          // transitions transform/opacity/width/height for every popup at once.
+          // Base UI's own `scale`/`opacity` starting-style utilities animated a
+          // different property and would snap against it, so they are gone.
           className={cn(
-            "dropdown-glass relative flex h-(--popup-height,auto) w-(--popup-width,auto) origin-(--transform-origin) rounded-lg text-popover-foreground outline-none transition-[width,height,scale,opacity] before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-lg)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)] has-data-[slot=calendar]:rounded-xl has-data-[slot=calendar]:before:rounded-[calc(var(--radius-xl)-1px)] data-starting-style:scale-98 data-starting-style:opacity-0 dark:before:shadow-[0_-1px_--theme(--color-white/6%)]",
+            "dropdown-glass relative flex h-(--popup-height,auto) w-(--popup-width,auto) origin-(--transform-origin) rounded-lg text-popover-foreground outline-none before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-lg)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)] has-data-[slot=calendar]:rounded-xl has-data-[slot=calendar]:before:rounded-[calc(var(--radius-xl)-1px)] dark:before:shadow-[0_-1px_--theme(--color-white/6%)]",
+            !tooltipStyle && "min-w-(--popup-min-width)",
             tooltipStyle &&
-              "w-fit text-balance rounded-md text-xs shadow-md/5 before:rounded-[calc(var(--radius-md)-1px)]",
+              "w-fit text-balance rounded-md text-(length:--text-caption) shadow-md/5 before:rounded-[calc(var(--radius-md)-1px)]",
             className,
           )}
+          data-popup-surface=""
           data-slot="popover-popup"
           {...props}
         >

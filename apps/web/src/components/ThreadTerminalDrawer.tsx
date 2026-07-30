@@ -5,6 +5,7 @@ import {
   squashAtomCommandFailure,
 } from "@vide/client-runtime/state/runtime";
 import {
+  MoreHorizontal,
   Plus,
   SquareSplitHorizontal,
   SquareSplitVertical,
@@ -30,6 +31,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { Menu, MenuItem, MenuPopup, MenuShortcut, MenuTrigger } from "~/components/ui/menu";
 import { Popover, PopoverPopup, PopoverTrigger } from "~/components/ui/popover";
 import { writeTextToClipboard } from "~/hooks/useCopyToClipboard";
 import { cn } from "~/lib/utils";
@@ -892,6 +894,76 @@ function TerminalActionButton({ label, className, onClick, children }: TerminalA
   );
 }
 
+interface TerminalActionsProps {
+  onNewTerminal: () => void;
+  onSplitTerminal: () => void;
+  onSplitTerminalVertical: () => void;
+  onCloseTerminal: () => void;
+  newTerminalLabel: string;
+  splitShortcutLabel: string | undefined;
+  splitVerticalShortcutLabel: string | undefined;
+  closeShortcutLabel: string | undefined;
+  splitLimitReached: boolean;
+}
+
+function TerminalMenuShortcut({ hint }: { hint: string | undefined }) {
+  if (!hint) return null;
+  return <MenuShortcut>{hint}</MenuShortcut>;
+}
+
+const TERMINAL_ACTION_BUTTON_CLASS =
+  "inline-flex items-center p-1 text-foreground/90 transition-colors duration-(--duration-fast) ease-(--ease-out) hover:bg-accent";
+
+/**
+ * The bottom panel's only chrome: add a terminal, and everything else behind
+ * one menu. This used to be four icon buttons duplicated in two places — once
+ * floating over the viewport, once in the session list header — which meant two
+ * sets of hover states to keep in sync and four targets to read past.
+ */
+function TerminalActions(props: TerminalActionsProps) {
+  const splitLimitHint = `Max ${MAX_TERMINALS_PER_GROUP} per group`;
+  return (
+    <div className="pointer-events-none absolute right-2 top-2 z-20">
+      <div className="pointer-events-auto inline-flex items-center overflow-hidden rounded-md border border-border/80 bg-background/70">
+        <TerminalActionButton
+          className={TERMINAL_ACTION_BUTTON_CLASS}
+          onClick={props.onNewTerminal}
+          label={props.newTerminalLabel}
+        >
+          <Plus className="size-3.25" />
+        </TerminalActionButton>
+        <div className="h-4 w-px bg-border/80" />
+        <Menu>
+          <MenuTrigger className={TERMINAL_ACTION_BUTTON_CLASS} aria-label="Terminal actions">
+            <MoreHorizontal className="size-3.25" />
+          </MenuTrigger>
+          <MenuPopup align="end" side="bottom" sideOffset={6} className="min-w-52">
+            <MenuItem disabled={props.splitLimitReached} onClick={props.onSplitTerminal}>
+              <SquareSplitHorizontal />
+              Split horizontally
+              <TerminalMenuShortcut
+                hint={props.splitLimitReached ? splitLimitHint : props.splitShortcutLabel}
+              />
+            </MenuItem>
+            <MenuItem disabled={props.splitLimitReached} onClick={props.onSplitTerminalVertical}>
+              <SquareSplitVertical />
+              Split vertically
+              <TerminalMenuShortcut
+                hint={props.splitLimitReached ? splitLimitHint : props.splitVerticalShortcutLabel}
+              />
+            </MenuItem>
+            <MenuItem onClick={props.onCloseTerminal}>
+              <Trash2 />
+              Close terminal
+              <TerminalMenuShortcut hint={props.closeShortcutLabel} />
+            </MenuItem>
+          </MenuPopup>
+        </Menu>
+      </div>
+    </div>
+  );
+}
+
 export default function ThreadTerminalDrawer({
   mode = "drawer",
   threadRef,
@@ -1090,22 +1162,9 @@ export default function ThreadTerminalDrawer({
     },
     [cwd, runtimeEnv, terminalLaunchLocationsById, worktreePath],
   );
-  const splitTerminalActionLabel = hasReachedSplitLimit
-    ? `Split Terminal Horizontally (max ${MAX_TERMINALS_PER_GROUP} per group)`
-    : splitShortcutLabel
-      ? `Split Terminal Horizontally (${splitShortcutLabel})`
-      : "Split Terminal Horizontally";
-  const splitTerminalVerticalActionLabel = hasReachedSplitLimit
-    ? `Split Terminal Vertically (max ${MAX_TERMINALS_PER_GROUP} per group)`
-    : splitVerticalShortcutLabel
-      ? `Split Terminal Vertically (${splitVerticalShortcutLabel})`
-      : "Split Terminal Vertically";
   const newTerminalActionLabel = newShortcutLabel
     ? `New Terminal (${newShortcutLabel})`
     : "New Terminal";
-  const closeTerminalActionLabel = closeShortcutLabel
-    ? `Close Terminal (${closeShortcutLabel})`
-    : "Close Terminal";
   const onSplitTerminalAction = useCallback(() => {
     if (hasReachedSplitLimit) return;
     onSplitTerminal();
@@ -1274,55 +1333,20 @@ export default function ThreadTerminalDrawer({
         />
       ) : null}
 
-      {!hasTerminalSidebar && (
-        <div className="pointer-events-none absolute right-2 top-2 z-20">
-          <div className="pointer-events-auto inline-flex items-center overflow-hidden rounded-md border border-border/80 bg-background/70">
-            <TerminalActionButton
-              className={`p-1 text-foreground/90 transition-colors ${
-                hasReachedSplitLimit
-                  ? "cursor-not-allowed opacity-45 hover:bg-transparent"
-                  : "hover:bg-accent"
-              }`}
-              onClick={onSplitTerminalAction}
-              label={splitTerminalActionLabel}
-            >
-              <SquareSplitHorizontal className="size-3.25" />
-            </TerminalActionButton>
-            <div className="h-4 w-px bg-border/80" />
-            <TerminalActionButton
-              className={`p-1 text-foreground/90 transition-colors ${
-                hasReachedSplitLimit
-                  ? "cursor-not-allowed opacity-45 hover:bg-transparent"
-                  : "hover:bg-accent"
-              }`}
-              onClick={onSplitTerminalVerticalAction}
-              label={splitTerminalVerticalActionLabel}
-            >
-              <SquareSplitVertical className="size-3.25" />
-            </TerminalActionButton>
-            <div className="h-4 w-px bg-border/80" />
-            <TerminalActionButton
-              className="p-1 text-foreground/90 transition-colors hover:bg-accent"
-              onClick={onNewTerminalAction}
-              label={newTerminalActionLabel}
-            >
-              <Plus className="size-3.25" />
-            </TerminalActionButton>
-            <div className="h-4 w-px bg-border/80" />
-            <TerminalActionButton
-              className="p-1 text-foreground/90 transition-colors hover:bg-accent"
-              onClick={() => onCloseTerminal(resolvedActiveTerminalId)}
-              label={closeTerminalActionLabel}
-            >
-              <Trash2 className="size-3.25" />
-            </TerminalActionButton>
-          </div>
-        </div>
-      )}
-
       <div className="min-h-0 w-full flex-1">
         <div className={`flex h-full min-h-0 ${hasTerminalSidebar ? "gap-1.5" : ""}`}>
-          <div className="min-w-0 flex-1">
+          <div className="relative min-w-0 flex-1">
+            <TerminalActions
+              onNewTerminal={onNewTerminalAction}
+              onSplitTerminal={onSplitTerminalAction}
+              onSplitTerminalVertical={onSplitTerminalVerticalAction}
+              onCloseTerminal={() => onCloseTerminal(resolvedActiveTerminalId)}
+              newTerminalLabel={newTerminalActionLabel}
+              splitShortcutLabel={splitShortcutLabel}
+              splitVerticalShortcutLabel={splitVerticalShortcutLabel}
+              closeShortcutLabel={closeShortcutLabel}
+              splitLimitReached={hasReachedSplitLimit}
+            />
             {isSplitView ? (
               <div
                 className="grid h-full w-full min-w-0 gap-0 overflow-hidden"
@@ -1339,9 +1363,11 @@ export default function ThreadTerminalDrawer({
                 {visibleTerminalIds.map((terminalId) => {
                   const terminalLaunchLocation = resolveTerminalLaunchLocation(terminalId);
                   return (
+                    // A new pane fades in on its own mount, so a split reads as
+                    // one pane arriving rather than the grid snapping.
                     <div
                       key={terminalId}
-                      className={`min-h-0 min-w-0 ${
+                      className={`vide-fade-in min-h-0 min-w-0 ${
                         splitDirection === "vertical"
                           ? "border-t first:border-t-0"
                           : "border-l first:border-l-0"
@@ -1411,47 +1437,6 @@ export default function ThreadTerminalDrawer({
 
           {hasTerminalSidebar && (
             <aside className="flex w-36 min-w-36 flex-col border border-border/70 bg-muted/10">
-              <div className="flex h-[22px] items-stretch justify-end border-b border-border/70">
-                <div className="inline-flex h-full items-stretch">
-                  <TerminalActionButton
-                    className={`inline-flex h-full items-center px-1 text-foreground/90 transition-colors ${
-                      hasReachedSplitLimit
-                        ? "cursor-not-allowed opacity-45 hover:bg-transparent"
-                        : "hover:bg-accent/70"
-                    }`}
-                    onClick={onSplitTerminalAction}
-                    label={splitTerminalActionLabel}
-                  >
-                    <SquareSplitHorizontal className="size-3.25" />
-                  </TerminalActionButton>
-                  <TerminalActionButton
-                    className={`inline-flex h-full items-center border-l border-border/70 px-1 text-foreground/90 transition-colors ${
-                      hasReachedSplitLimit
-                        ? "cursor-not-allowed opacity-45 hover:bg-transparent"
-                        : "hover:bg-accent/70"
-                    }`}
-                    onClick={onSplitTerminalVerticalAction}
-                    label={splitTerminalVerticalActionLabel}
-                  >
-                    <SquareSplitVertical className="size-3.25" />
-                  </TerminalActionButton>
-                  <TerminalActionButton
-                    className="inline-flex h-full items-center border-l border-border/70 px-1 text-foreground/90 transition-colors hover:bg-accent/70"
-                    onClick={onNewTerminalAction}
-                    label={newTerminalActionLabel}
-                  >
-                    <Plus className="size-3.25" />
-                  </TerminalActionButton>
-                  <TerminalActionButton
-                    className="inline-flex h-full items-center border-l border-border/70 px-1 text-foreground/90 transition-colors hover:bg-accent/70"
-                    onClick={() => onCloseTerminal(resolvedActiveTerminalId)}
-                    label={closeTerminalActionLabel}
-                  >
-                    <Trash2 className="size-3.25" />
-                  </TerminalActionButton>
-                </div>
-              </div>
-
               <div className="min-h-0 flex-1 overflow-y-auto px-1 py-1">
                 {resolvedTerminalGroups.map((terminalGroup, groupIndex) => {
                   const isGroupActive =
@@ -1507,30 +1492,13 @@ export default function ThreadTerminalDrawer({
                                 </span>
                               </button>
                               {normalizedTerminalIds.length > 1 && (
-                                <Popover>
-                                  <PopoverTrigger
-                                    openOnHover
-                                    render={
-                                      <button
-                                        type="button"
-                                        className="inline-flex size-3.5 items-center justify-center rounded text-xs font-medium leading-none text-muted-foreground opacity-0 transition hover:bg-accent hover:text-foreground group-hover:opacity-100"
-                                        onClick={() => onCloseTerminal(terminalId)}
-                                        aria-label={closeTerminalLabel}
-                                      />
-                                    }
-                                  >
-                                    <XIcon className="size-2.5" />
-                                  </PopoverTrigger>
-                                  <PopoverPopup
-                                    tooltipStyle
-                                    side="bottom"
-                                    sideOffset={6}
-                                    align="center"
-                                    className="pointer-events-none select-none"
-                                  >
-                                    {closeTerminalLabel}
-                                  </PopoverPopup>
-                                </Popover>
+                                <TerminalActionButton
+                                  className="inline-flex size-3.5 items-center justify-center rounded text-xs font-medium leading-none text-muted-foreground opacity-0 transition-opacity duration-(--duration-fast) ease-(--ease-out) hover:bg-accent hover:text-foreground group-hover:opacity-100"
+                                  onClick={() => onCloseTerminal(terminalId)}
+                                  label={closeTerminalLabel}
+                                >
+                                  <XIcon className="size-2.5" />
+                                </TerminalActionButton>
                               )}
                             </div>
                           );

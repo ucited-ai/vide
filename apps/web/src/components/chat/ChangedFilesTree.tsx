@@ -17,6 +17,7 @@ import {
 import { cn } from "~/lib/utils";
 import { DiffStatLabel, hasNonZeroStat } from "./DiffStatLabel";
 import { PierreEntryIcon } from "./PierreEntryIcon";
+import { QualifiedLabel } from "./QualifiedLabel";
 import { Button } from "../ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import {
@@ -304,8 +305,8 @@ export const ChangedFilesTree = memo(function ChangedFilesTree(props: {
           theme={resolvedTheme}
           className="size-3.5 text-muted-foreground/70"
         />
-        <span className="truncate font-mono text-[11px] text-muted-foreground/80 group-hover:text-foreground/90">
-          {node.name}
+        <span className="truncate font-mono text-[11px]">
+          <QualifiedLabel name={node.name} />
         </span>
         {node.stat && (
           <span className="ml-auto shrink-0 font-mono text-[10px] tabular-nums">

@@ -3,7 +3,7 @@
 const COMMAND_PALETTE_OPEN_EVENT = "vide:open-command-palette";
 
 export interface CommandPaletteOpenDetail {
-  readonly open?: "add-project" | "new-thread-in";
+  readonly open?: "new-thread-in";
 }
 
 export function openCommandPalette(detail?: CommandPaletteOpenDetail): void {

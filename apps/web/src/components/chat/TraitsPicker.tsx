@@ -419,6 +419,35 @@ export function buildTraitsTriggerDisplay(input: {
   return { label: labels.join(" · "), showFastModeIcon: input.fastModeEnabled };
 }
 
+/**
+ * The traits label on its own, for callers that render the model and its
+ * qualifier as one control.
+ *
+ * Returns null when the model exposes no options at all — effort is provider
+ * driven, so a model with no descriptors must degrade to a bare model name
+ * rather than printing an empty qualifier.
+ */
+export function getTraitsTriggerLabel(input: {
+  provider: ProviderDriverKind;
+  models: ReadonlyArray<ServerProviderModel>;
+  model: string | null | undefined;
+  prompt: string;
+  modelOptions: ProviderOptions | null | undefined;
+  allowPromptInjectedEffort?: boolean;
+}): string | null {
+  const visibility = getTraitsSectionVisibility(input);
+  if (!visibility.hasAnyControls) {
+    return null;
+  }
+  const { label } = buildTraitsTriggerDisplay({
+    descriptors: visibility.descriptors,
+    primarySelectDescriptorId: visibility.primarySelectDescriptor?.id ?? null,
+    ultrathinkPromptControlled: visibility.ultrathinkPromptControlled,
+    fastModeEnabled: visibility.fastModeEnabled,
+  });
+  return label.length > 0 ? label : null;
+}
+
 export const TraitsPicker = memo(function TraitsPicker({
   provider,
   instanceId,

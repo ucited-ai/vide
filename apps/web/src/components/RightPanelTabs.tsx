@@ -1,6 +1,15 @@
 import type { ContextMenuItem, PreviewSessionSnapshot } from "@vide/contracts";
 import { getTerminalLabel } from "@vide/shared/terminalLabels";
-import { ClipboardList, FileDiff, Files, Globe2, Plus, TerminalSquare, X } from "lucide-react";
+import {
+  ClipboardList,
+  FileDiff,
+  Files,
+  Globe2,
+  type LucideIcon,
+  Plus,
+  TerminalSquare,
+  X,
+} from "lucide-react";
 import {
   type MouseEvent as ReactMouseEvent,
   type ReactElement,
@@ -86,6 +95,43 @@ function SurfaceMenuItem(props: {
   return <DisabledReasonTooltip reason={props.disabledReason} trigger={item} />;
 }
 
+/**
+ * One row of the empty state. Stacked rather than tiled: the panel is a column,
+ * so two cards side by side squeeze both the label and its description into a
+ * third of the width they could have had.
+ */
+function SurfaceCard(props: {
+  icon: LucideIcon;
+  label: string;
+  description: string;
+  available: boolean;
+  disabledReason: string | null;
+  onClick: () => void;
+}) {
+  const Icon = props.icon;
+  const card = (
+    <button
+      type="button"
+      {...(props.available ? { onClick: props.onClick } : { "aria-disabled": true })}
+      className={cn(
+        "flex w-full items-center gap-4 rounded-lg border border-border bg-card px-5 py-4 text-left",
+        "transition-colors duration-(--duration-fast) ease-(--ease-out)",
+        props.available ? "hover:bg-accent" : "cursor-not-allowed opacity-40",
+      )}
+    >
+      <Icon className="size-5 shrink-0 text-muted-foreground" />
+      <span className="flex min-w-0 flex-col gap-1">
+        <span className="text-(length:--text-ui) font-medium text-foreground">{props.label}</span>
+        <span className="text-(length:--text-caption) leading-relaxed text-muted-foreground">
+          {props.description}
+        </span>
+      </span>
+    </button>
+  );
+  if (props.available || props.disabledReason === null) return card;
+  return <DisabledReasonTooltip reason={props.disabledReason} trigger={card} />;
+}
+
 function RightPanelEmptyState(props: {
   onAddBrowser: () => void;
   onAddTerminal: () => void;
@@ -131,55 +177,28 @@ function RightPanelEmptyState(props: {
   ] as const;
 
   return (
-    <div className="flex min-h-0 flex-1 items-center justify-center p-6">
-      <div className="w-full max-w-xl">
-        <div className="mb-5 text-center">
-          <h3 className="text-sm font-medium text-foreground">Open a surface</h3>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Choose what to show in the right panel.
+    <div className="vide-fade-in flex min-h-0 flex-1 flex-col overflow-y-auto px-6 py-10">
+      {/* `m-auto` rather than `justify-center`: an overflowing centred flex
+          child is clipped at the top and cannot be scrolled back to. */}
+      <div className="m-auto flex w-full flex-col gap-6">
+        <div>
+          <h3 className="text-(length:--text-title) font-medium text-foreground">Open a surface</h3>
+          <p className="mt-1 text-(length:--text-ui) text-muted-foreground">
+            Choose what to show in this panel.
           </p>
         </div>
-        <div className="grid grid-cols-2 gap-2">
-          {actions.map((action) => {
-            const Icon = action.icon;
-            const content = (
-              <>
-                <Icon className="mb-3 size-5" />
-                <span className="text-sm font-medium">{action.label}</span>
-                <span className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                  {action.description}
-                </span>
-              </>
-            );
-            if (action.available) {
-              return (
-                <button
-                  key={action.label}
-                  type="button"
-                  onClick={action.onClick}
-                  className="flex min-h-28 w-full flex-col items-start rounded-lg border border-border/80 bg-card p-4 text-left transition hover:border-border hover:bg-accent/60 dark:border-transparent dark:shadow-none dark:inset-ring-1 dark:inset-ring-white/5"
-                >
-                  {content}
-                </button>
-              );
-            }
-            const disabledCard = (
-              <button
-                type="button"
-                className="flex min-h-28 w-full cursor-not-allowed flex-col items-start rounded-lg border border-border/80 bg-card p-4 text-left opacity-40 dark:border-transparent dark:shadow-none dark:inset-ring-1 dark:inset-ring-white/5"
-                aria-disabled="true"
-              >
-                {content}
-              </button>
-            );
-            return (
-              <DisabledReasonTooltip
-                key={action.label}
-                reason={action.disabledReason}
-                trigger={disabledCard}
-              />
-            );
-          })}
+        <div className="flex flex-col gap-2">
+          {actions.map((action) => (
+            <SurfaceCard
+              key={action.label}
+              icon={action.icon}
+              label={action.label}
+              description={action.description}
+              available={action.available}
+              disabledReason={action.disabledReason}
+              onClick={action.onClick}
+            />
+          ))}
         </div>
       </div>
     </div>

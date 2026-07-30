@@ -55,3 +55,33 @@ export function formatWorkspaceRelativePath(
   if (!line) return displayPath;
   return `${displayPath}:${line}${column ? `:${column}` : ""}`;
 }
+
+export type WorkspaceRelativePathParts = {
+  /** Everything up to and including the final separator. Empty at the root. */
+  readonly directory: string;
+  /** The file or folder itself, plus any `:line:column` suffix. */
+  readonly fileName: string;
+};
+
+/**
+ * The same display path, split where the eye needs it.
+ *
+ * A caller that renders the folder muted and the file name in ink cannot do that
+ * from one string, and re-deriving the split from a formatted path would put the
+ * workspace-relative rules in two places. This shares
+ * `formatWorkspaceRelativePath` and only decides where to cut.
+ */
+export function splitWorkspaceRelativePath(
+  pathWithPosition: string,
+  workspaceRoot: string | undefined,
+): WorkspaceRelativePathParts {
+  const displayPath = formatWorkspaceRelativePath(pathWithPosition, workspaceRoot);
+  const separatorIndex = displayPath.lastIndexOf("/");
+  if (separatorIndex < 0) {
+    return { directory: "", fileName: displayPath };
+  }
+  return {
+    directory: displayPath.slice(0, separatorIndex + 1),
+    fileName: displayPath.slice(separatorIndex + 1),
+  };
+}

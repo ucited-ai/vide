@@ -5,7 +5,16 @@ import {
 } from "@vide/contracts";
 import { resolveSelectableModel } from "@vide/shared/model";
 import { LegendList, type LegendListRef } from "@legendapp/list/react";
-import { memo, useMemo, useState, useCallback, useEffect, useLayoutEffect, useRef } from "react";
+import {
+  memo,
+  type ReactNode,
+  useMemo,
+  useState,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+} from "react";
 import { SearchIcon } from "lucide-react";
 import { ModelListRow } from "./ModelListRow";
 import { ModelPickerSidebar } from "./ModelPickerSidebar";
@@ -85,6 +94,12 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
    */
   modelOptionsByInstance: ReadonlyMap<ProviderInstanceId, ReadonlyArray<ModelEsque>>;
   terminalOpen: boolean;
+  /**
+   * Controls for the selected model's options, docked under the list. They live
+   * here rather than beside the composer's picker so model and effort are one
+   * choice in one surface.
+   */
+  footer?: ReactNode;
   onRequestClose?: () => void;
   getModelDisabledReason?: (instanceId: ProviderInstanceId, model: string) => string | null;
   onInstanceModelChange: (instanceId: ProviderInstanceId, model: string) => void;
@@ -669,6 +684,11 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
             <ComboboxEmpty className="not-empty:py-6 empty:h-0 text-xs font-normal leading-snug">
               No models found
             </ComboboxEmpty>
+            {props.footer ? (
+              <div className="flex shrink-0 items-center gap-(--popup-item-gap) border-t border-border/60 px-2 py-1.5">
+                {props.footer}
+              </div>
+            ) : null}
           </div>
         </Combobox>
       </div>

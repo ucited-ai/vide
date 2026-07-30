@@ -4,11 +4,15 @@ import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
 } from "@vide/client-runtime/state/runtime";
-import { PRIMARY_LOCAL_ENVIRONMENT_ID, type DesktopWslState } from "@vide/contracts";
+import {
+  PRIMARY_LOCAL_ENVIRONMENT_ID,
+  type DesktopWslState,
+  type SourceControlDiscoveryResult,
+  type SourceControlProviderKind,
+} from "@vide/contracts";
 import { FolderGit2Icon, FolderIcon, LinkIcon } from "lucide-react";
 import { memo, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 
-import { openCommandPalette } from "../commandPaletteBus";
 import { desktopLocalBackendId } from "../connection/desktopLocal";
 import { useDesktopLocalBootstraps } from "../connection/useDesktopLocalBootstraps";
 import { useAddProjectToEnvironment } from "../hooks/useAddProjectToEnvironment";
@@ -20,6 +24,7 @@ import {
   resolveProjectPathForDispatch,
 } from "../lib/projectPaths";
 import { readLocalApi } from "../localApi";
+import { useEnvironmentQuery } from "../state/query";
 import { useAtomCommand } from "../state/use-atom-command";
 import { useEnvironments, usePrimaryEnvironmentId } from "../state/environments";
 import { sourceControlEnvironment } from "../state/sourceControl";
@@ -29,8 +34,9 @@ import {
   resolveProjectPickerTarget,
   resolveWslProjectSelection,
 } from "../wslPaths";
+import { AzureDevOpsIcon, BitbucketIcon, GitHubIcon, GitLabIcon, type Icon } from "./Icons";
 import { Input } from "./ui/input";
-import { Menu, MenuItem, MenuPopup, MenuSub, MenuSubPopup } from "./ui/menu";
+import { Menu, MenuItem, MenuPopup, MenuSub, MenuSubPopup, MenuSubTrigger } from "./ui/menu";
 import { stackedThreadToast, toastManager } from "./ui/toast";
 
 const MENU_POPUP_WIDTH_CLASS = "w-72";
@@ -43,6 +49,58 @@ function errorMessage(error: unknown): string {
 }
 
 /**
+ * Providers that can resolve a repository path ("owner/repo") into a clone URL
+ * on the server -- see `SourceControlCloneRepositoryInput`, which takes either a
+ * raw `remoteUrl` or a `provider` + `repository` pair. Everything else (a plain
+ * Git URL, a local folder) is handled by the other two rows of this menu.
+ */
+type AddProjectProviderKind = Extract<
+  SourceControlProviderKind,
+  "github" | "gitlab" | "bitbucket" | "azure-devops"
+>;
+
+interface AddProjectProviderOption {
+  readonly kind: AddProjectProviderKind;
+  readonly label: string;
+  /** How this provider spells a repository path, used as the input placeholder. */
+  readonly pathHint: string;
+  readonly Icon: Icon;
+}
+
+/**
+ * Listed in a fixed order rather than sorted by readiness: a dropdown people
+ * reach for repeatedly should keep its rows where they were last time.
+ */
+const ADD_PROJECT_PROVIDER_OPTIONS: ReadonlyArray<AddProjectProviderOption> = [
+  { kind: "github", label: "GitHub", pathHint: "owner/repo", Icon: GitHubIcon },
+  { kind: "gitlab", label: "GitLab", pathHint: "group/project", Icon: GitLabIcon },
+  { kind: "bitbucket", label: "Bitbucket", pathHint: "workspace/repository", Icon: BitbucketIcon },
+  {
+    kind: "azure-devops",
+    label: "Azure DevOps",
+    pathHint: "project/repository",
+    Icon: AzureDevOpsIcon,
+  },
+];
+
+/**
+ * A provider is usable from here only when its CLI is installed *and* signed
+ * in, because the clone resolves the repository through that CLI. Same shape as
+ * the publish flow's readiness check in GitActionsControl.
+ */
+function isProviderConnected(
+  discovery: SourceControlDiscoveryResult | null,
+  kind: AddProjectProviderKind,
+): boolean {
+  const provider = discovery?.sourceControlProviders.find((candidate) => candidate.kind === kind);
+  return (
+    provider !== undefined &&
+    provider.status === "available" &&
+    provider.auth.status !== "unauthenticated"
+  );
+}
+
+/**
  * Shared state and handlers behind the three "add project" entry points
  * (native folder picker, Git URL clone, and the provider repository picker).
  * Used by both {@link AddProjectMenu} (the top-level trigger) and
@@ -52,6 +110,8 @@ function errorMessage(error: unknown): string {
 function useAddProjectMenuState(open: boolean, onRequestClose: () => void) {
   const [showUrlInput, setShowUrlInput] = useState(false);
   const [gitUrl, setGitUrl] = useState("");
+  const [providerKind, setProviderKind] = useState<AddProjectProviderKind | null>(null);
+  const [isProviderMenuOpen, setIsProviderMenuOpen] = useState(false);
   const [isPickingFolder, setIsPickingFolder] = useState(false);
   const [isCloning, setIsCloning] = useState(false);
   const urlInputRef = useRef<HTMLInputElement>(null);
@@ -60,14 +120,26 @@ function useAddProjectMenuState(open: boolean, onRequestClose: () => void) {
     if (!open) {
       setShowUrlInput(false);
       setGitUrl("");
+      setProviderKind(null);
+      setIsProviderMenuOpen(false);
     }
   }, [open]);
 
+  // Also refocuses when the same input switches between a Git URL and a
+  // provider repository path, which reads as the field being handed over.
+  // Deferred a frame because picking a provider closes the submenu, and Base UI
+  // returns focus to that submenu's trigger on the way out.
   useEffect(() => {
-    if (showUrlInput) {
-      urlInputRef.current?.focus();
+    if (!showUrlInput) {
+      return;
     }
-  }, [showUrlInput]);
+    const frame = requestAnimationFrame(() => {
+      urlInputRef.current?.focus();
+    });
+    return () => {
+      cancelAnimationFrame(frame);
+    };
+  }, [showUrlInput, providerKind]);
 
   const { environments } = useEnvironments();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
@@ -81,6 +153,20 @@ function useAddProjectMenuState(open: boolean, onRequestClose: () => void) {
   const cloneRepository = useAtomCommand(sourceControlEnvironment.cloneRepository, {
     reportFailure: false,
   });
+  // Only while the menu is open: discovery shells out to each provider CLI, and
+  // this component stays mounted for the lifetime of its trigger.
+  const sourceControlDiscovery = useEnvironmentQuery(
+    !open || primaryEnvironmentId === null
+      ? null
+      : sourceControlEnvironment.discovery({
+          environmentId: primaryEnvironmentId,
+          input: {},
+        }),
+  );
+  // Until the first scan lands every provider reads as unconnected, which would
+  // flash four "Not connected" rows. Dim them, but stay quiet about why.
+  const isDiscoveryPending =
+    sourceControlDiscovery.data === null && sourceControlDiscovery.isPending;
 
   const isPickerAvailable =
     primaryEnvironmentId !== null &&
@@ -202,27 +288,43 @@ function useAddProjectMenuState(open: boolean, onRequestClose: () => void) {
   ]);
 
   const revealUrlInput = useCallback(() => {
+    setProviderKind(null);
     setShowUrlInput(true);
   }, []);
 
-  const confirmGitUrlClone = useCallback(async () => {
-    const remoteUrl = gitUrl.trim();
-    if (remoteUrl.length === 0 || isCloning || primaryEnvironmentId === null) {
+  const revealProviderInput = useCallback((kind: AddProjectProviderKind) => {
+    setIsProviderMenuOpen(false);
+    setProviderKind(kind);
+    setGitUrl("");
+    setShowUrlInput(true);
+  }, []);
+
+  const confirmClone = useCallback(async () => {
+    const repositoryInput = gitUrl.trim();
+    if (repositoryInput.length === 0 || isCloning || primaryEnvironmentId === null) {
       return;
     }
 
     const baseDirectory = ensureBrowseDirectoryPath(
       primaryEnvironment?.serverConfig?.settings?.addProjectBaseDirectory?.trim() || "~/",
     );
+    // Handles a bare "owner/repo" as happily as it handles a clone URL: both
+    // end in the segment the checkout should be named after.
     const destinationPath = resolveProjectPathForDispatch(
-      appendBrowsePathSegment(baseDirectory, inferRepositoryFolderNameFromRemoteUrl(remoteUrl)),
+      appendBrowsePathSegment(
+        baseDirectory,
+        inferRepositoryFolderNameFromRemoteUrl(repositoryInput),
+      ),
       null,
     );
 
     setIsCloning(true);
     const cloneResult = await cloneRepository({
       environmentId: primaryEnvironmentId,
-      input: { remoteUrl, destinationPath },
+      input:
+        providerKind === null
+          ? { remoteUrl: repositoryInput, destinationPath }
+          : { provider: providerKind, repository: repositoryInput, destinationPath },
     });
     setIsCloning(false);
     if (cloneResult._tag === "Failure") {
@@ -256,24 +358,25 @@ function useAddProjectMenuState(open: boolean, onRequestClose: () => void) {
     primaryEnvironment,
     primaryEnvironmentId,
     primaryEnvironmentPlatform,
+    providerKind,
   ]);
 
-  const openExistingRepositoryPicker = useCallback(() => {
-    onRequestClose();
-    openCommandPalette({ open: "add-project" });
-  }, [onRequestClose]);
-
   return {
-    confirmGitUrlClone,
+    confirmClone,
     gitUrl,
     isCloning,
+    isDiscoveryPending,
     isPickerAvailable,
     isPickingFolder,
-    openExistingRepositoryPicker,
+    isProviderMenuOpen,
     openLocalFolderPicker,
+    providerKind,
+    revealProviderInput,
     revealUrlInput,
     setGitUrl,
+    setIsProviderMenuOpen,
     showUrlInput,
+    sourceControlDiscovery,
     urlInputRef,
   };
 }
@@ -286,18 +389,26 @@ function AddProjectMenuItems({
   readonly onRequestClose: () => void;
 }) {
   const {
-    confirmGitUrlClone,
+    confirmClone,
     gitUrl,
     isCloning,
+    isDiscoveryPending,
     isPickerAvailable,
     isPickingFolder,
-    openExistingRepositoryPicker,
+    isProviderMenuOpen,
     openLocalFolderPicker,
+    providerKind,
+    revealProviderInput,
     revealUrlInput,
     setGitUrl,
+    setIsProviderMenuOpen,
     showUrlInput,
+    sourceControlDiscovery,
     urlInputRef,
   } = useAddProjectMenuState(open, onRequestClose);
+
+  const activeProvider =
+    ADD_PROJECT_PROVIDER_OPTIONS.find((option) => option.kind === providerKind) ?? null;
 
   return (
     <>
@@ -320,31 +431,66 @@ function AddProjectMenuItems({
         <LinkIcon />
         Clone from Git URL
       </MenuItem>
+      <MenuSub open={isProviderMenuOpen} onOpenChange={setIsProviderMenuOpen}>
+        <MenuSubTrigger>
+          <FolderGit2Icon />
+          Add existing repository
+        </MenuSubTrigger>
+        <MenuSubPopup>
+          {ADD_PROJECT_PROVIDER_OPTIONS.map((option) => {
+            const connected = isProviderConnected(sourceControlDiscovery.data, option.kind);
+            return (
+              <MenuItem
+                key={option.kind}
+                closeOnClick={false}
+                disabled={!connected}
+                onClick={(event) => {
+                  event.preventDefault();
+                  revealProviderInput(option.kind);
+                }}
+              >
+                <option.Icon />
+                {option.label}
+                {connected || isDiscoveryPending ? null : (
+                  <span className="ms-auto text-(length:--text-caption) text-muted-foreground">
+                    Not connected
+                  </span>
+                )}
+              </MenuItem>
+            );
+          })}
+        </MenuSubPopup>
+      </MenuSub>
+      {/* Shared by both clone sources: a Git URL, or a repository path resolved
+          through the provider picked above. */}
       <div
         className="grid transition-[grid-template-rows] duration-150 ease-out"
         style={{ gridTemplateRows: showUrlInput ? "1fr" : "0fr" }}
       >
         <div className="overflow-hidden">
           <div className="flex items-center gap-1.5 px-2 pt-1 pb-1.5">
+            {activeProvider ? (
+              <activeProvider.Icon aria-hidden className="size-4 shrink-0" />
+            ) : null}
             <Input
               ref={urlInputRef}
               size="sm"
-              placeholder="Enter Git clone URL"
+              placeholder={activeProvider ? activeProvider.pathHint : "Enter Git clone URL"}
               value={gitUrl}
               onChange={(event) => setGitUrl(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === "Enter") {
                   event.preventDefault();
-                  void confirmGitUrlClone();
+                  void confirmClone();
                 }
               }}
             />
             <button
               type="button"
               disabled={gitUrl.trim().length === 0 || isCloning}
-              className="inline-flex h-7 shrink-0 cursor-pointer items-center rounded-md bg-accent px-2.5 text-foreground text-xs transition-colors hover:bg-accent/80 disabled:pointer-events-none disabled:opacity-64"
+              className="inline-flex h-7 shrink-0 cursor-pointer items-center rounded-md bg-accent px-2.5 text-foreground text-(length:--text-caption) transition-colors hover:bg-accent/80 disabled:pointer-events-none disabled:opacity-64"
               onClick={() => {
-                void confirmGitUrlClone();
+                void confirmClone();
               }}
             >
               {isCloning ? "Cloning…" : "Clone"}
@@ -352,10 +498,6 @@ function AddProjectMenuItems({
           </div>
         </div>
       </div>
-      <MenuItem onClick={openExistingRepositoryPicker}>
-        <FolderGit2Icon />
-        Add existing repository
-      </MenuItem>
     </>
   );
 }
@@ -366,9 +508,9 @@ function AddProjectMenuItems({
  * repository from a connected provider (GitHub/GitLab/Bitbucket/Azure
  * DevOps). All three funnel into the same `projectEnvironment.create` /
  * `sourceControlEnvironment.cloneRepository` calls as the rest of the app
- * (see {@link useAddProjectToEnvironment}); the provider picker reopens the
- * command palette's existing "add-project" flow, now pruned to just that
- * provider-repository step (see CommandPalette.tsx).
+ * (see {@link useAddProjectToEnvironment}). The provider choice is a submenu
+ * here rather than a separate screen, so adding a project never leaves the
+ * dropdown.
  *
  * `children` must render a trigger element containing a `MenuTrigger` (see
  * the call sites for the Tooltip + MenuTrigger composition pattern used
