@@ -36,6 +36,9 @@
 :root:root:root {
   /* Light. Content pane is the tinted floor; chrome lifts toward white. */
   --surface-content: #f6f6f7;
+  /* Between the pane and chrome: for a surface that sits under a raised one,
+     like the context strip beneath the composer. */
+  --surface-recessed: #f1f1f2;
   --surface-chrome: #fdfdfd;
   --surface-raised-1: #ffffff;
   --surface-raised-2: #ffffff;
@@ -101,6 +104,7 @@
    * establish the order and small enough that the seam disappears.
    */
   --surface-content: #131416;
+  --surface-recessed: #17181b;
   --surface-chrome: #1b1c20;
 
   /*
@@ -219,6 +223,28 @@
   font-weight: 500;
   letter-spacing: 0.01em;
   color: var(--ink-tertiary);
+}
+
+/* ------------------------------------------------- the context strip */
+
+/*
+ * The strip's chips are read, not skimmed: they answer "where is this about to
+ * run", which is the one question worth interrupting yourself over. Their
+ * triggers inherit `xs` button sizing, which is right for a toolbar and too
+ * quiet here, so the type is set once for the whole strip rather than on each
+ * chip in each of the four files that render one.
+ */
+:root:root:root [data-composer-context-strip] {
+  font-size: var(--text-ui);
+}
+
+:root:root:root [data-composer-context-strip] button {
+  font-size: var(--text-ui);
+  color: var(--ink-secondary);
+}
+
+:root:root:root [data-composer-context-strip] button:hover {
+  color: var(--ink);
 }
 
 /* -------------------------------------------------------- the transcript */

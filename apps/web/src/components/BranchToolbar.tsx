@@ -319,13 +319,18 @@ export const BranchToolbar = memo(function BranchToolbar({
 
   if (!hasActiveThread || !activeProject) return null;
 
-  // The strip carries the composer's own surface and meets it edge to edge —
+  // The strip sits a shade below the composer rather than sharing its surface:
+  // reading as one continuous block made the input hard to find, and this is a
+  // caption on the composer, not part of it. It still meets it edge to edge —
   // the negative bottom margin covers the composer's top hairline, so the two
   // read as one shape rather than a tray parked on top of the input. It is
   // narrower than the composer, which is what keeps the seam inside the
   // composer's flat top instead of landing on its rounded corners.
   return (
-    <div className="-mb-px mx-auto flex w-[calc(100%-2.75rem)] items-center justify-start gap-1 rounded-t-2xl bg-card px-2.5 pt-1.5 pb-2">
+    <div
+      className="-mb-px mx-auto flex w-[calc(100%-2.75rem)] items-center justify-start gap-1 rounded-t-2xl bg-(--surface-recessed) px-2.5 pt-1.5 pb-2"
+      data-composer-context-strip=""
+    >
       <ProjectPickerMenu picker={projectPicker}>
         <MenuTrigger
           render={<Button variant="ghost" size="xs" />}
