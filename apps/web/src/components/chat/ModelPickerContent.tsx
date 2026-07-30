@@ -27,7 +27,7 @@ import {
 import { useClientSettings, useUpdateClientSettings } from "~/hooks/useSettings";
 import { cn } from "~/lib/utils";
 import { TooltipProvider } from "../ui/tooltip";
-import { isProviderInstancePickerReady, type ProviderInstanceEntry } from "../../providerInstances";
+import { type ProviderInstanceEntry } from "../../providerInstances";
 import { providerModelKey, sortProviderModelItems } from "../../modelOrdering";
 
 type ModelPickerItem = {
@@ -156,8 +156,8 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
 
   /**
    * Lookup table keyed by `instanceId`. Used for display name + driver
-   * kind enrichment and for `ready`/enabled filtering before flattening
-   * models into the search list.
+   * kind enrichment and for enabled filtering before flattening models into
+   * the search list.
    */
   const entryByInstanceId = useMemo(
     () => new Map(instanceEntries.map((entry) => [entry.instanceId, entry])),
@@ -173,14 +173,24 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
     [props.lockedContinuationGroupKey, props.lockedProvider],
   );
 
-  const readyInstanceSet = useMemo(() => {
-    const ready = new Set<ProviderInstanceId>();
+  /**
+   * Which instances contribute models to the flattened list: every enabled,
+   * configured instance, not just the one currently active. This used to be
+   * `isProviderInstancePickerReady` (enabled + available + a live "ready"
+   * probe), which is why search only ever found the active provider — a
+   * configured, enabled instance the thread isn't currently using can sit at
+   * a probe status other than "ready" indefinitely, and that excluded it
+   * entirely. Availability still gates an instance out (no credentials, not
+   * installed); the live probe state does not.
+   */
+  const searchableInstanceSet = useMemo(() => {
+    const searchable = new Set<ProviderInstanceId>();
     for (const entry of instanceEntries) {
-      if (isProviderInstancePickerReady(entry)) {
-        ready.add(entry.instanceId);
+      if (entry.enabled && entry.isAvailable) {
+        searchable.add(entry.instanceId);
       }
     }
-    return ready;
+    return searchable;
   }, [instanceEntries]);
 
   // Flatten models into a searchable array. One pass over the
@@ -196,7 +206,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
         // its models — stale options shouldn't appear in the picker.
         continue;
       }
-      if (!readyInstanceSet.has(instanceId)) {
+      if (!searchableInstanceSet.has(instanceId)) {
         continue;
       }
       for (const model of models) {
@@ -216,18 +226,26 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
       }
     }
     return out;
-  }, [modelOptionsByInstance, entryByInstanceId, readyInstanceSet]);
+  }, [modelOptionsByInstance, entryByInstanceId, searchableInstanceSet]);
 
   const isLocked = props.lockedProvider !== null;
-  const instanceOrder = useMemo(
-    () => instanceEntries.map((entry) => entry.instanceId),
-    [instanceEntries],
-  );
+  // Favorites bubble up first (see `sortProviderModelItems`'s
+  // `groupFavorites`); below that, the thread's current instance leads so
+  // switching providers is the exception, not the sort order, and everything
+  // else follows in its configured order.
+  const instanceOrder = useMemo(() => {
+    const activeInstanceId = props.activeInstanceId;
+    const rest = instanceEntries
+      .map((entry) => entry.instanceId)
+      .filter((instanceId) => instanceId !== activeInstanceId);
+    return [activeInstanceId, ...rest];
+  }, [instanceEntries, props.activeInstanceId]);
 
-  // Every ready model, everywhere: with no provider rail this is the only
-  // list there is, and `matchesLockedProvider` (a no-op when there is no
-  // lock) is the only narrowing left. Favorites bubble to the top; below
-  // that, instances keep their configured order.
+  // Every model from every enabled, configured instance: with no provider
+  // rail this is the only list there is, and `matchesLockedProvider` (a
+  // no-op when there is no lock) is the only narrowing left. Grouping (see
+  // `instanceOrder` above) does the rest: favorites, then the current
+  // instance, then everyone else.
   const filteredModels = useMemo(() => {
     // Apply tokenized fuzzy search across the combined provider/model search fields.
     if (searchQuery.trim()) {
