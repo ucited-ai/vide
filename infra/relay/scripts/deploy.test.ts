@@ -199,24 +199,14 @@ describe("serializeRelayClientTracingEnvironment", () => {
   });
 });
 
-describe("release workflow tracing config propagation", () => {
-  it.effect("uses an artifact instead of a masked cross-job token output", () =>
-    Effect.gen(function* () {
-      const fileSystem = yield* FileSystem.FileSystem;
-      const path = yield* Path.Path;
-      const workflowPath = yield* path.fromFileUrl(
-        new URL("../../../.github/workflows/release.yml", import.meta.url),
-      );
-      const workflow = yield* fileSystem.readFileString(workflowPath);
-
-      expect(workflow).not.toContain("client_tracing_token:");
-      expect(workflow).not.toContain("needs.relay_public_config.outputs.client_tracing_token");
-      expect(workflow).toContain('--github-env-file "$RUNNER_TEMP/relay-client-tracing.env"');
-      expect(workflow).toContain("name: relay-client-tracing-config");
-      expect(workflow).toContain('cat "$config_path" >> "$GITHUB_ENV"');
-    }).pipe(Effect.provide(NodeServices.layer)),
-  );
-});
+/*
+ * The release-workflow assertions that used to live here are gone with the
+ * workflow. This fork removed .github/ entirely — upstream's release pipeline
+ * needs secrets, an EAS account and a relay deployment that do not exist here —
+ * so a test reading .github/workflows/release.yml could only ever fail. The
+ * env-var propagation it guarded is still covered above, at the function that
+ * produces those values.
+ */
 
 describe("publicConfigFromOutput", () => {
   it("reads the complete public tracing config from persisted Alchemy output", () => {

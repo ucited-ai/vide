@@ -84,11 +84,10 @@ describe("brand-assets", () => {
   });
 
   it("keeps development, nightly, and production icon families separate", () => {
-    expect([]).toEqual([
-      "assets/dev/app-icon.icon",
-      "assets/nightly/app-icon.icon",
-      "assets/prod/app-icon.icon",
-    ]);
+    // The Icon Composer projects this used to assert on are gone: they needed
+    // Xcode 26 to build and carried upstream's mark. Icons now come from
+    // assets/brand/build-icons.py, so what matters is that each channel keeps
+    // its own prefix — which the three checks below cover.
     expect(BRAND_ASSET_PATHS.developmentDesktopIconPng).toMatch(/^assets\/dev\/blueprint-/);
     expect(BRAND_ASSET_PATHS.nightlyMacIconPng).toMatch(/^assets\/nightly\/nightly-/);
     expect(BRAND_ASSET_PATHS.productionMacIconPng).toMatch(/^assets\/prod\/black-/);
