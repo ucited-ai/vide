@@ -3869,8 +3869,11 @@ function ChatViewContent(props: ChatViewProps) {
       }
     }
     planSidebarDismissedForTurnRef.current = null;
-    // activeThreadRef resets transitively with the active thread.
-  }, [activeThread?.id]);
+    // Keyed on the scoped key, not the bare id: a thread's identity is
+    // (environmentId, id), so the same id in a second environment is a different
+    // thread. Depending on the id alone skipped this reset on that switch and
+    // carried the previous thread's dialog and scroll state across.
+  }, [activeThreadKey]);
 
   // Auto-open the plan sidebar when plan/todo steps arrive for the current turn.
   // Don't auto-open for plans carried over from a previous turn (the user can open manually).
@@ -5665,9 +5668,10 @@ function ChatViewContent(props: ChatViewProps) {
     return <NoActiveThreadState />;
   }
 
-  // Mirrors ChatHeader's own gate for the trigger button: no messages or no
-  // project means there is nothing yet for the column to report on.
-  const showEnvironmentColumn = timelineEntries.length > 0 && Boolean(activeProject?.title);
+  // Mirrors ChatHeader's project gate exactly. Draft threads need the column
+  // before their first message too: repository initialisation is one of the
+  // actions exposed here.
+  const showEnvironmentColumn = Boolean(activeProject?.title);
 
   const panelToggleControls = (
     <PanelLayoutControls
@@ -5682,7 +5686,7 @@ function ChatViewContent(props: ChatViewProps) {
     />
   );
   const panelLayoutControls = (
-    <div className="workspace-titlebar-controls z-50 gap-1 [-webkit-app-region:no-drag]">
+    <div className="workspace-titlebar-controls z-50 gap-(--header-control-gap) [-webkit-app-region:no-drag]">
       {rightPanelOpen && !shouldUsePlanSidebarSheet ? (
         <RightPanelMaximizeControl
           maximized={rightPanelMaximized}
@@ -5777,7 +5781,7 @@ function ChatViewContent(props: ChatViewProps) {
 
   return (
     <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden bg-background">
-      {rightPanelOpen && !shouldUsePlanSidebarSheet ? panelLayoutControls : null}
+      {panelLayoutControls}
       <div
         className={cn(
           "flex min-h-0 min-w-0 flex-col overflow-x-hidden",
@@ -5793,7 +5797,10 @@ function ChatViewContent(props: ChatViewProps) {
         <header
           data-chat-header
           className={cn(
-            "bg-background transition-[padding-left] duration-200 ease-linear motion-reduce:transition-none",
+            // The header's inset follows the sidebar, so it has to travel on the
+            // sidebar's duration and curve. A linear 200ms against the panel's
+            // soft 220ms let the two separate visibly mid-slide.
+            "bg-background transition-[padding-left] duration-(--duration-base) ease-(--ease-soft) motion-reduce:transition-none",
             isElectron
               ? cn(
                   "workspace-topbar drag-region relative px-3 sm:px-5",
@@ -5805,7 +5812,6 @@ function ChatViewContent(props: ChatViewProps) {
             COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS,
           )}
         >
-          {!rightPanelOpen ? panelLayoutControls : null}
           <ChatHeader
             activeThreadEnvironmentId={activeThread.environmentId}
             activeThreadTitle={activeThread.title}
@@ -5887,7 +5893,7 @@ function ChatViewContent(props: ChatViewProps) {
                     aria-label="Scroll to end"
                     title="Scroll to end"
                     onClick={() => scrollToEnd(true)}
-                    className="pointer-events-auto flex items-center gap-1.5 rounded-full border border-border/60 bg-card px-3 py-1 text-muted-foreground text-xs shadow-sm transition-colors hover:border-border hover:text-foreground hover:cursor-pointer"
+                    className="pointer-events-auto flex items-center gap-1.5 rounded-full border border-border/60 bg-card px-3 py-1 text-(length:--text-caption) text-muted-foreground shadow-sm transition-colors hover:border-border hover:text-foreground hover:cursor-pointer"
                   >
                     <ChevronDownIcon className="size-3.5" />
                     Scroll to end

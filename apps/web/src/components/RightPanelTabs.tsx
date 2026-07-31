@@ -25,6 +25,7 @@ import type { RightPanelSurface } from "~/rightPanelStore";
 import { cn } from "~/lib/utils";
 import { readLocalApi } from "~/localApi";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
+import { Button } from "~/components/ui/button";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "~/components/ui/menu";
 import { ScrollArea } from "~/components/ui/scroll-area";
 import { faviconUrlForOrigin } from "~/lib/favicon";
@@ -409,7 +410,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
                   onAuxClick={(event) => handleTabAuxClick(event, surface)}
                   onContextMenu={(event) => void handleTabContextMenu(event, surface)}
                   className={cn(
-                    "group flex h-7 min-w-25 max-w-44 shrink-0 items-center gap-1.5 rounded-md px-2 text-sm",
+                    "group flex h-7 min-w-25 max-w-44 shrink-0 items-center gap-1.5 rounded-md px-2 text-(length:--text-ui)",
                     active
                       ? "bg-accent text-foreground"
                       : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
@@ -458,46 +459,55 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
                 </div>
               );
             })}
-            {props.surfaces.length > 0 ? (
-              <Menu>
-                <MenuTrigger
-                  className="relative inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
-                  aria-label="Add panel surface"
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 shrink-0 gap-1.5 px-2 text-(length:--text-ui) font-normal text-muted-foreground"
+              onClick={props.onAddFiles}
+              disabled={!props.filesAvailable}
+              aria-label="Open file"
+            >
+              <Files className="size-3.5" />
+              <span>Open file</span>
+            </Button>
+            <Menu>
+              <MenuTrigger
+                className="relative inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+                aria-label="Add panel surface"
+              >
+                <Plus className="size-4" />
+              </MenuTrigger>
+              <MenuPopup align="start" side="bottom" sideOffset={6} className="min-w-44">
+                <SurfaceMenuItem
+                  available={props.browserAvailable}
+                  disabledReason={SURFACE_DISABLED_REASONS.browser}
+                  onClick={props.onAddBrowser}
                 >
-                  <Plus className="size-4" />
-                </MenuTrigger>
-                <MenuPopup align="start" side="bottom" sideOffset={6} className="min-w-44">
-                  <SurfaceMenuItem
-                    available={props.browserAvailable}
-                    disabledReason={SURFACE_DISABLED_REASONS.browser}
-                    onClick={props.onAddBrowser}
-                  >
-                    <Globe2 />
-                    Browser
-                  </SurfaceMenuItem>
-                  <SurfaceMenuItem available onClick={props.onAddTerminal}>
-                    <TerminalSquare />
-                    Terminal
-                  </SurfaceMenuItem>
-                  <SurfaceMenuItem
-                    available={props.filesAvailable}
-                    disabledReason={SURFACE_DISABLED_REASONS.files}
-                    onClick={props.onAddFiles}
-                  >
-                    <Files />
-                    Files
-                  </SurfaceMenuItem>
-                  <SurfaceMenuItem
-                    available={props.diffAvailable}
-                    disabledReason={SURFACE_DISABLED_REASONS.diff}
-                    onClick={props.onAddDiff}
-                  >
-                    <FileDiff />
-                    Diff
-                  </SurfaceMenuItem>
-                </MenuPopup>
-              </Menu>
-            ) : null}
+                  <Globe2 />
+                  Browser
+                </SurfaceMenuItem>
+                <SurfaceMenuItem available onClick={props.onAddTerminal}>
+                  <TerminalSquare />
+                  Terminal
+                </SurfaceMenuItem>
+                <SurfaceMenuItem
+                  available={props.filesAvailable}
+                  disabledReason={SURFACE_DISABLED_REASONS.files}
+                  onClick={props.onAddFiles}
+                >
+                  <Files />
+                  Files
+                </SurfaceMenuItem>
+                <SurfaceMenuItem
+                  available={props.diffAvailable}
+                  disabledReason={SURFACE_DISABLED_REASONS.diff}
+                  onClick={props.onAddDiff}
+                >
+                  <FileDiff />
+                  Diff
+                </SurfaceMenuItem>
+              </MenuPopup>
+            </Menu>
           </div>
         </ScrollArea>
         {props.layoutControls}

@@ -16,6 +16,26 @@ function makeThread(overrides: Partial<TestThread> = {}): TestThread {
 }
 
 describe("sortThreads", () => {
+  it("orders pinned threads before more recent unpinned threads", () => {
+    const sorted = sortThreads(
+      [
+        makeThread({
+          id: "recent-unpinned",
+          pinned: false,
+          updatedAt: "2026-03-09T12:00:00.000Z",
+        }),
+        makeThread({
+          id: "old-pinned",
+          pinned: true,
+          updatedAt: "2026-03-09T08:00:00.000Z",
+        }),
+      ],
+      "updated_at",
+    );
+
+    expect(sorted.map((thread) => thread.id)).toEqual(["old-pinned", "recent-unpinned"]);
+  });
+
   it("falls back to updatedAt and createdAt when latestUserMessageAt is invalid and there are no messages", () => {
     const sorted = sortThreads(
       [

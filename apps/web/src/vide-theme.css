@@ -41,7 +41,6 @@
   --surface-recessed: #f1f1f2;
   --surface-chrome: #fdfdfd;
   --surface-raised-1: #ffffff;
-  --surface-raised-2: #ffffff;
 
   --ink: #17171a;
   --ink-secondary: #5f5f68;
@@ -85,15 +84,110 @@
   --text-title: 15px;
 
   /*
-   * Popup geometry. Upstream's menus are narrow and tight, which is most of why
-   * they read as cramped next to a native menu. One set of numbers here keeps
-   * every popup in the app on the same rhythm.
+   * Popup geometry.
+   *
+   * One set of numbers for every dropdown, dropup, submenu, select, combobox and
+   * autocomplete in the app. Nothing in components/ui may carry a popup
+   * measurement of its own: the whole point is that retuning a popup here
+   * retunes all of them, and that a popup cannot quietly drift away from its
+   * neighbours.
+   *
+   * These started as a correction. Upstream's menus inherit a 128px width floor
+   * and 4px rows, which read as cramped next to a native menu. That correction
+   * overshot — 15rem wide, 32px rows and 10px of inline padding is *chunky*, and
+   * chunky is the single word for what separated this app from the Codex desktop
+   * app it is modelled on. This is the third pass: a native contextual menu,
+   * measured.
+   *
+   * The three that carry the look:
+   *
+   * - 28px rows. --text-ui at its 1.45 line height is 19.6px, so 28 is one line
+   *   of UI text plus four points above and below. 32 left a visible band of
+   *   dead space under every label; 24 was tried and put descenders against the
+   *   bottom of the highlight.
+   * - 8px inline padding, not 10. Added to the 4px of popup padding the label
+   *   lands 12px from the surface edge, which is where macOS puts it.
+   * - a 13rem floor, not 15. A floor is only ever for the small menus — the big
+   *   ones size to their content — and 240px forced a three-item menu to be as
+   *   wide as the project picker.
+   *
+   * The two radii are concentric on purpose. An item inset by --popup-padding
+   * inside a --popup-radius surface only looks like it belongs to that surface
+   * if its own radius is the outer one minus the inset: 10 - 4 = 6. This is also
+   * what makes the highlight read as an inset pill rather than a full-bleed
+   * band — the inset is real, and 6px is enough curvature to see it.
    */
-  --popup-min-width: 15rem;
-  --popup-padding: 0.375rem;
-  --popup-item-height: 32px;
-  --popup-item-padding-inline: 0.625rem;
-  --popup-item-gap: 0.625rem;
+  --popup-min-width: 13rem;
+  --popup-radius: 10px;
+  --popup-padding: 0.25rem;
+
+  /* The ceiling a popup surface may grow to. Base UI publishes
+     --available-height on the positioner and the surface inherits it; the
+     fallback only matters for the frame before it has measured. */
+  --popup-max-height: var(--available-height, 100vh);
+  /* A list you type into is capped tighter than a menu you only click: the
+     field has to stay within reach of the trigger it dropped out of. */
+  --popup-list-max-height: min(var(--popup-max-height), 22rem);
+
+  --popup-item-height: 28px;
+  --popup-item-radius: 6px;
+  --popup-item-padding-inline: 0.5rem;
+  --popup-item-gap: 0.5rem;
+  /* Row glyphs. Lucide at 16px and stroke 2 competes with the label beside it;
+     14 sits underneath it, which is the reading order Codex has. */
+  --popup-icon-size: 14px;
+  /* What a row without a glyph needs so its label still lines up with the rows
+     that have one. Also the checkmark column's width plus its gap. */
+  --popup-item-inset-padding-inline: calc(
+    var(--popup-item-padding-inline) + var(--popup-icon-size) + var(--popup-item-gap)
+  );
+  /* Group captions ("Branches", "Projects") sit tighter than a row: they are
+     signposts between groups, not entries in one. */
+  --popup-label-padding-block: 0.25rem;
+
+  /*
+   * A search field inside a popup is chrome, not a control: a magnifier, the
+   * placeholder, a hairline beneath. No box — the box is what made Vide's
+   * pickers look like a form stuck inside a menu.
+   *
+   * Two points taller than a row so it reads as a header rather than the first
+   * result. Its inline padding is the popup's own padding plus a row's, so the
+   * placeholder lands on the same vertical as every label below it. That
+   * alignment is the entire effect; without it the field looks bolted on.
+   */
+  --popup-search-height: 30px;
+  --popup-search-padding-inline: calc(var(--popup-padding) + var(--popup-item-padding-inline));
+
+  /* A popover holds content rather than rows — a note, a small form — so it
+     needs real padding where a menu needs almost none. 16px was the upstream
+     value and read as a card; 12px is enough to keep text off the edge. */
+  --popover-padding: 0.75rem;
+
+  /*
+   * Dialog geometry.
+   *
+   * A dialog is a popup that lost its anchor, so it runs on the same rhythm
+   * rather than inventing a second one. Upstream's 24px padding, 16px radius and
+   * 20px title is a marketing modal; nothing here is one. Every dialog in this
+   * app is a picker, a confirm or a small form, read at the same distance as the
+   * menus — "worktree auswählen" should not feel heavier than the menu that
+   * offered it.
+   *
+   * Titles are not sized here on purpose: a dialog title is --text-title, the
+   * same as any other title in the app. A dialog-only size would be a knob
+   * nobody should reach for.
+   */
+  --dialog-radius: 12px;
+  --dialog-padding: 1.25rem;
+  /* Title to description. */
+  --dialog-gap: 0.375rem;
+  /* Where two dialog regions meet, the seam is smaller than the outer padding —
+     a header sitting on its own body should read as one block. --dialog-seam is
+     the side that owns the gap, --dialog-seam-inner the side that only needs
+     enough room not to clip a focus ring. */
+  --dialog-seam: 0.75rem;
+  --dialog-seam-inner: 0.25rem;
+  --dialog-footer-padding-block: 0.75rem;
 }
 
 .dark.dark.dark {
@@ -114,7 +208,6 @@
    * temporarily on top of everything and has to read that way at a glance.
    */
   --surface-raised-1: #2c2d33;
-  --surface-raised-2: #36373e;
 
   --ink: #ededf0;
   --ink-secondary: #9a9aa4;
@@ -312,14 +405,20 @@
 }
 
 /*
- * Popups are opaque, like every other surface in the ladder.
+ * Popups and dialogs are opaque, like every other surface in the ladder.
  *
  * `.dropdown-glass` in index.css paints them at ~84% over a 16px backdrop blur,
  * which dissolved --surface-raised-1 the moment it was mapped to --popover. The
  * composer's glass was neutralised when the ladder went in; this one was missed,
  * so the theme claimed nothing was transparent while every menu still was.
+ *
+ * `.dialog-glass` was the last one left. It mixes --background rather than
+ * --popover, so a dialog was both translucent *and* on the wrong rung: the
+ * content pane showing through a surface that is supposed to be two steps above
+ * it. Pointing it at --popover puts dialogs on the same surface as the menus.
  */
-:root:root:root .dropdown-glass {
+:root:root:root .dropdown-glass,
+:root:root:root .dialog-glass {
   background: var(--popover);
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
@@ -430,12 +529,19 @@
    * The sidebar panel and the content pane both animate their width on collapse.
    * Upstream drives that with a linear ease; the shared curve makes the panel
    * settle instead of stopping dead.
+   *
+   * --ease-soft, not --ease-out: this is a panel, and every other collapsing
+   * surface in the app — right panel, environment column, terminal drawer, file
+   * explorer — moves on the soft curve. The sidebar ran on --ease-out for a
+   * while, which is the curve for small state changes; against a drawer opening
+   * beside it the two arrived differently and the app read as two animations
+   * rather than one layout settling.
    */
   [data-slot="sidebar-container"],
   [data-slot="sidebar-gap"],
   [data-slot="sidebar-inset"] {
     transition-duration: var(--duration-base) !important;
-    transition-timing-function: var(--ease-out) !important;
+    transition-timing-function: var(--ease-soft) !important;
   }
 
   /*
@@ -500,4 +606,155 @@
   [data-slot="sidebar-inset"] {
     transition-duration: 0ms !important;
   }
+}
+
+/* ---------------------------------------------- right-panel refinement tokens */
+
+/*
+ * The editor, tree, and diff used to choose their own density and then patch
+ * over the mismatch locally. Pierre's 13/20 mono default was especially heavy
+ * beside the app type, while making the explorer a raised card only amplified
+ * the split. These roles keep the whole panel on one floor and make its compact
+ * rhythm adjustable without reaching back into either library's shadow DOM.
+ *
+ * The diff surface steps retain the old visual ordering, but the percentages
+ * live here now. Collapsing them all to --surface-content was tried first and
+ * made additions, deletions, headers, and empty buffers indistinguishable.
+ */
+:root:root:root {
+  --code-font-size: 12.5px;
+  --code-line-height: 18px;
+
+  --tree-font-size: 12.5px;
+  --tree-padding-inline: 0.5rem;
+  --tree-level-gap: 0.75rem;
+  --tree-search-icon-size: 0.875rem;
+  --tree-search-icon-inset: 0.875rem;
+  --tree-search-input-start: 1.75rem;
+  --tree-search-radius: 0px;
+  --tree-search-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='11' cy='11' r='8' fill='none' stroke='black' stroke-width='2'/%3E%3Cpath d='m21 21-4.3-4.3' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E");
+
+  --panel-subheader-height: 2.5rem;
+  --panel-hairline: 1px;
+  --panel-inline-width: 42vw;
+  --panel-inline-min-width: 360px;
+  --panel-inline-max-width: 560px;
+  --panel-titlebar-safe-padding: 1em;
+  --panel-compact-input-height: 1.625rem;
+  --panel-raw-patch-max-height: 72vh;
+
+  /*
+   * The explorer's width beside an open file, as one value because two elements
+   * need it: the wrapper that animates from zero, and the pane inside it that has
+   * to keep its measured width so the tree does not re-wrap on every frame.
+   *
+   * `cqw`, not `%`. A percentage resolves against each element's own parent, so
+   * the inner pane would have shrunk along with the collapsing wrapper — which is
+   * the reflow this structure exists to prevent. A container unit resolves against
+   * the row, which never moves, so both elements read the same number throughout.
+   */
+  --file-explorer-width: max(16rem, min(22rem, 46cqw));
+
+  --panel-diff-viewport-surface: color-mix(
+    in srgb,
+    var(--surface-content) 94%,
+    var(--surface-chrome)
+  );
+  --panel-diff-file-surface: color-mix(in srgb, var(--surface-chrome) 92%, var(--surface-content));
+  --panel-diff-code-surface: color-mix(in srgb, var(--surface-chrome) 90%, var(--surface-content));
+  --panel-diff-context-surface: color-mix(in srgb, var(--surface-content) 97%, var(--ink));
+  --panel-diff-hover-surface: color-mix(in srgb, var(--surface-content) 94%, var(--ink));
+  --panel-diff-separator-surface: color-mix(in srgb, var(--surface-content) 95%, var(--ink));
+  --panel-diff-buffer-surface: color-mix(in srgb, var(--surface-content) 90%, var(--ink));
+  --panel-diff-header-surface: color-mix(in srgb, var(--surface-chrome) 94%, var(--ink));
+
+  --panel-diff-addition-surface: color-mix(in srgb, var(--surface-content) 92%, var(--success));
+  --panel-diff-addition-number-surface: color-mix(
+    in srgb,
+    var(--surface-content) 88%,
+    var(--success)
+  );
+  --panel-diff-addition-hover-surface: color-mix(
+    in srgb,
+    var(--surface-content) 85%,
+    var(--success)
+  );
+  --panel-diff-addition-emphasis-surface: color-mix(
+    in srgb,
+    var(--surface-content) 80%,
+    var(--success)
+  );
+  --panel-diff-deletion-surface: color-mix(in srgb, var(--surface-content) 92%, var(--destructive));
+  --panel-diff-deletion-number-surface: color-mix(
+    in srgb,
+    var(--surface-content) 88%,
+    var(--destructive)
+  );
+  --panel-diff-deletion-hover-surface: color-mix(
+    in srgb,
+    var(--surface-content) 85%,
+    var(--destructive)
+  );
+  --panel-diff-deletion-emphasis-surface: color-mix(
+    in srgb,
+    var(--surface-content) 80%,
+    var(--destructive)
+  );
+
+  --panel-diff-header-height: 2rem;
+  --panel-diff-header-padding-block: 0.375rem;
+  --panel-diff-title-underline-offset: 0.125rem;
+  --panel-diff-title-hover-ink: var(--ink);
+  --panel-control-surface: color-mix(in srgb, var(--surface-content) 96%, var(--ink));
+  --panel-notice-surface: color-mix(in srgb, var(--surface-content) 98%, var(--ink));
+  --panel-raw-patch-surface: color-mix(in srgb, var(--surface-content) 70%, var(--surface-chrome));
+  --panel-loading-surface: color-mix(in srgb, var(--surface-content) 75%, var(--surface-chrome));
+  --panel-muted-ink: color-mix(in srgb, var(--ink-secondary) 70%, var(--surface-content));
+  --panel-edge-muted: var(--edge);
+  --panel-loading-edge: var(--edge);
+  --panel-loading-divider: var(--edge);
+}
+
+/* ------------------------------------- chat shell and picker proportions */
+
+:root:root:root {
+  /*
+   * The chat header is one visual run even though its last controls belong to
+   * the window rather than the chat column. One shared measure keeps the seam
+   * between those ownership zones invisible; the reserve is exactly two window
+   * controls plus the two gaps around and between them.
+   */
+  --header-control-size: 1.75rem;
+  --header-control-icon-size: 0.875rem;
+  --header-control-gap: 0.25rem;
+  --header-panel-controls-reserve: calc(
+    var(--header-control-size) + var(--header-control-size) + var(--header-control-gap) +
+      var(--header-control-gap)
+  );
+
+  /*
+   * The environment overview still consumes layout width, but its painted
+   * surface sits inside that width. Clipping a fixed inner surface through the
+   * animated shell preserves the closing motion without leaving a margin behind.
+   */
+  --envcol-width: 18rem;
+  --envcol-inset: 0.5rem;
+  --envcol-radius: var(--radius);
+  --envcol-header-height: 2.25rem;
+  --envcol-surface: var(--surface-chrome);
+
+  /*
+   * Chat pickers share a compact footprint and icon rhythm. The ref picker gets
+   * a little extra width for remote names, while list height remains bounded so
+   * search and footer controls never leave the viewport.
+   */
+  --chat-picker-width: 18rem;
+  --chat-ref-picker-width: 20rem;
+  --chat-picker-list-max-height: 16rem;
+  --chat-ref-list-max-height: 14rem;
+  --chat-picker-icon-size: 0.875rem;
+
+  /* The empty-chat question is display copy, not a fifth general UI text role. */
+  --chat-hero-title-size: 1.5rem;
+  --chat-hero-title-size-wide: 1.875rem;
 }

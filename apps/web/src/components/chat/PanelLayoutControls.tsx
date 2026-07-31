@@ -23,7 +23,7 @@ function withShortcut(label: string, shortcut: string | null): string {
 
 /** Both expand icons occupy the same cell so the swap can cross-fade. */
 const MAXIMIZE_ICON_CLASS =
-  "absolute size-3.5 transition-opacity duration-(--duration-fast) ease-(--ease-out)";
+  "absolute size-(--header-control-icon-size) transition-opacity duration-(--duration-fast) ease-(--ease-out)";
 
 /**
  * The one button the right-hand chrome is built from.
@@ -46,7 +46,7 @@ function PanelToggle(props: {
       <TooltipTrigger
         render={
           <Toggle
-            className="shrink-0 [-webkit-app-region:no-drag]"
+            className="size-(--header-control-size)! shrink-0 [-webkit-app-region:no-drag]"
             pressed={props.pressed}
             onPressedChange={props.onToggle}
             aria-label={props.label}
@@ -75,7 +75,7 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
 }: PanelLayoutControlsProps) {
   return (
     <div
-      className="flex h-full shrink-0 items-center gap-1 [-webkit-app-region:no-drag]"
+      className="flex h-full shrink-0 items-center gap-(--header-control-gap) [-webkit-app-region:no-drag]"
       data-panel-layout-controls
     >
       <PanelToggle
@@ -92,7 +92,7 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
         }
         onToggle={onToggleTerminal}
       >
-        <PanelBottomIcon className="size-3.5" />
+        <PanelBottomIcon className="size-(--header-control-icon-size)" />
       </PanelToggle>
       <PanelToggle
         pressed={rightPanelOpen}
@@ -108,7 +108,7 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
         }
         onToggle={onToggleRightPanel}
       >
-        <PanelRightIcon className="size-3.5" />
+        <PanelRightIcon className="size-(--header-control-icon-size)" />
       </PanelToggle>
     </div>
   );
@@ -134,7 +134,7 @@ export const RightPanelMaximizeControl = memo(function RightPanelMaximizeControl
       tooltip={label}
       onToggle={onToggle}
     >
-      <span className="relative inline-flex size-3.5 items-center justify-center">
+      <span className="relative inline-flex size-(--header-control-icon-size) items-center justify-center">
         <Maximize2Icon
           className={cn(MAXIMIZE_ICON_CLASS, maximized ? "opacity-0" : "opacity-100")}
         />

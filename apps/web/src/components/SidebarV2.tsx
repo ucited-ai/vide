@@ -23,6 +23,7 @@ import {
   GitBranchIcon,
   EllipsisIcon,
   MessageSquareIcon,
+  PinIcon,
   PlusIcon,
   SearchIcon,
   ServerIcon,
@@ -734,6 +735,12 @@ const SidebarV2Row = memo(function SidebarV2Row(props: {
         #{pr.number}
       </button>
     ) : null;
+  const pinIndicator = thread.pinned ? (
+    <PinIcon
+      aria-label="Pinned thread"
+      className="size-[var(--text-caption)] shrink-0 text-sidebar-muted-foreground"
+    />
+  ) : null;
 
   if (variant === "slim") {
     return (
@@ -774,6 +781,7 @@ const SidebarV2Row = memo(function SidebarV2Row(props: {
                 fallbackIcon={MessageSquareIcon}
               />
             </span>
+            {pinIndicator}
             {title}
             {/* The PR badge stays outside the hover-fading slot: it must
               remain visible AND clickable while the row is hovered. Only
@@ -964,7 +972,10 @@ const SidebarV2Row = memo(function SidebarV2Row(props: {
                 ) : null}
               </span>
             </div>
-            <div className="mt-1 flex min-w-0">{title}</div>
+            <div className="mt-1 flex min-w-0 items-center gap-1">
+              {pinIndicator}
+              {title}
+            </div>
             <div className={cn("mt-0.5 flex min-w-0 items-center gap-1.5", SIDEBAR_ROW_META_CLASS)}>
               {thread.branch ? (
                 <span className="min-w-0 flex-1 truncate whitespace-nowrap">{thread.branch}</span>
@@ -1027,8 +1038,15 @@ export default function SidebarV2() {
   const confirmThreadDelete = useClientSettings((s) => s.confirmThreadDelete);
   const sidebarProjectSortOrder = useClientSettings((s) => s.sidebarProjectSortOrder);
   const projectGroupingSettings = useClientSettings(selectProjectGroupingSettings);
-  const { settleThread, unsettleThread, snoozeThread, unsnoozeThread, deleteThread } =
-    useThreadActions();
+  const {
+    pinThread,
+    unpinThread,
+    settleThread,
+    unsettleThread,
+    snoozeThread,
+    unsnoozeThread,
+    deleteThread,
+  } = useThreadActions();
   const updateThreadMetadata = useAtomCommand(threadEnvironment.updateMetadata, {
     reportFailure: false,
   });
@@ -1763,6 +1781,24 @@ export default function SidebarV2() {
     },
     [unsettleThread],
   );
+  const attemptSetPinned = useCallback(
+    (threadRef: ScopedThreadRef, pinned: boolean) => {
+      void (async () => {
+        const result = await (pinned ? pinThread(threadRef) : unpinThread(threadRef));
+        if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+          const error = squashAtomCommandFailure(result);
+          toastManager.add(
+            stackedThreadToast({
+              type: "error",
+              title: pinned ? "Failed to pin thread" : "Failed to unpin thread",
+              description: error instanceof Error ? error.message : "An error occurred.",
+            }),
+          );
+        }
+      })();
+    },
+    [pinThread, unpinThread],
+  );
   const attemptUnsnooze = useCallback(
     (threadRef: ScopedThreadRef) => {
       void (async () => {
@@ -2016,6 +2052,10 @@ export default function SidebarV2() {
                     },
                   ]
                 : []),
+              {
+                id: thread.pinned ? "unpin" : "pin",
+                label: thread.pinned ? "Unpin thread" : "Pin thread",
+              },
               ...(supportsSettlement
                 ? [
                     isSettled
@@ -2077,6 +2117,12 @@ export default function SidebarV2() {
             }
             return;
           }
+          case "pin":
+            attemptSetPinned(threadRef, true);
+            return;
+          case "unpin":
+            attemptSetPinned(threadRef, false);
+            return;
           case "settle":
             attemptSettle(threadRef);
             return;
@@ -2125,6 +2171,7 @@ export default function SidebarV2() {
     },
     [
       attemptSettle,
+      attemptSetPinned,
       attemptSnooze,
       attemptUnsettle,
       attemptUnsnooze,

@@ -40,7 +40,7 @@ import { Menu, MenuItem, MenuPopup, MenuSub, MenuSubPopup, MenuSubTrigger } from
 import { stackedThreadToast, toastManager } from "./ui/toast";
 import { keepPrintableKeysInField } from "~/lib/menuTypeahead";
 
-const MENU_POPUP_WIDTH_CLASS = "w-72";
+const MENU_POPUP_WIDTH_CLASS = "w-(--chat-picker-width)";
 
 function errorMessage(error: unknown): string {
   if (error instanceof Error && error.message.trim().length > 0) {
@@ -465,7 +465,7 @@ function AddProjectMenuItems({
       {/* Shared by both clone sources: a Git URL, or a repository path resolved
           through the provider picked above. */}
       <div
-        className="grid transition-[grid-template-rows] duration-150 ease-out"
+        className="grid transition-[grid-template-rows] duration-(--duration-popup) ease-(--ease-out)"
         style={{ gridTemplateRows: showUrlInput ? "1fr" : "0fr" }}
       >
         <div className="overflow-hidden">
@@ -491,7 +491,7 @@ function AddProjectMenuItems({
             <button
               type="button"
               disabled={gitUrl.trim().length === 0 || isCloning}
-              className="inline-flex h-7 shrink-0 cursor-pointer items-center rounded-md bg-accent px-2.5 text-foreground text-(length:--text-caption) transition-colors hover:bg-accent/80 disabled:pointer-events-none disabled:opacity-64"
+              className="inline-flex h-(--popup-item-height) shrink-0 cursor-pointer items-center rounded-md bg-accent px-(--popup-item-padding-inline) text-(length:--text-caption) text-foreground transition-colors hover:bg-accent/80 disabled:pointer-events-none disabled:opacity-64"
               onClick={() => {
                 void confirmClone();
               }}

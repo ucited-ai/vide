@@ -9,6 +9,8 @@ import { RefreshCw, Search } from "lucide-react";
 import { useEffect, useMemo, useRef } from "react";
 
 import { QualifiedLabel } from "~/components/chat/QualifiedLabel";
+import { Button } from "~/components/ui/button";
+import { Separator } from "~/components/ui/separator";
 import { toastManager } from "~/components/ui/toast";
 import { useComposerHandleContext } from "~/composerHandleContext";
 import { writeTextToClipboard } from "~/hooks/useCopyToClipboard";
@@ -44,11 +46,11 @@ const TREE_UNSAFE_CSS = `
   :host {
     --trees-accent-override: var(--ink-tertiary);
 
-    --trees-bg-override: transparent;
+    --trees-bg-override: var(--surface-content);
     --trees-bg-muted-override: var(--wash-hover);
     --trees-selected-bg-override: var(--wash-selected);
     --trees-selected-fg-override: var(--ink);
-    --trees-search-bg-override: var(--surface-raised-1);
+    --trees-search-bg-override: var(--surface-content);
     --trees-search-fg-override: var(--ink);
 
     --trees-fg-override: var(--ink);
@@ -59,11 +61,35 @@ const TREE_UNSAFE_CSS = `
     --trees-scrollbar-thumb-override: var(--edge-strong);
 
     --trees-font-family-override: var(--font-sans);
-    --trees-font-size-override: var(--text-ui);
+    --trees-font-size-override: var(--tree-font-size);
     --trees-border-radius-override: var(--radius);
 
-    --trees-padding-inline-override: 0.5rem;
-    --trees-level-gap-override: 0.75rem;
+    --trees-padding-inline-override: var(--tree-padding-inline);
+    --trees-level-gap-override: var(--tree-level-gap);
+  }
+
+  [data-file-tree-search-container] {
+    position: relative;
+  }
+
+  [data-file-tree-search-container]::before {
+    position: absolute;
+    z-index: 1;
+    inset-inline-start: var(--tree-search-icon-inset);
+    inset-block-start: 50%;
+    width: var(--tree-search-icon-size);
+    height: var(--tree-search-icon-size);
+    background-color: var(--ink-tertiary);
+    content: "";
+    pointer-events: none;
+    transform: translateY(-50%);
+    mask: var(--tree-search-icon) center / contain no-repeat;
+  }
+
+  [data-file-tree-search-input] {
+    padding-inline-start: var(--tree-search-input-start);
+    border-color: var(--surface-content);
+    border-radius: var(--tree-search-radius);
   }
 
   /* A directory only locates the file beneath it, so it recedes and the file
@@ -85,10 +111,6 @@ const TREE_UNSAFE_CSS = `
       color var(--duration-fast) var(--ease-out);
   }
 `;
-
-/** Header affordances read as chrome, so they only take ink and a wash on hover. */
-const HEADER_BUTTON_CLASS =
-  "shrink-0 rounded-(--radius) p-1.5 text-muted-foreground transition-colors duration-(--duration-fast) ease-(--ease-out) hover:bg-(--wash-hover) hover:text-foreground";
 
 function treePath(entry: ProjectEntry): string {
   return entry.kind === "directory" ? `${entry.path}/` : entry.path;
@@ -210,9 +232,9 @@ export default function FileBrowserPanel({
     // Rows only need to be draggable so entries can be dropped into the chat
     // composer; rearranging files inside the tree stays off.
     dragAndDrop: { canDrop: () => false },
-    // 30px rows, the same height the sidebar gives its menu buttons. The tree
-    // is an index like the sidebar is, and both are scanned rather than read.
-    density: "default",
+    // The explorer is denser than the app sidebar: it is a path index and often
+    // needs to expose several nested levels in a narrow pane.
+    density: "compact",
     fileTreeSearchMode: "hide-non-matches",
     flattenEmptyDirectories: true,
     initialExpansion: 1,
@@ -280,30 +302,31 @@ export default function FileBrowserPanel({
   return (
     <div
       ref={panelRef}
-      className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-(--radius) bg-(--surface-chrome)"
+      className="flex min-h-0 flex-1 flex-col overflow-hidden bg-(--surface-content)"
       data-file-browser-panel={`${environmentId}:${cwd}`}
     >
-      <div className="surface-subheader gap-2 border-border bg-(--surface-chrome) px-3">
+      <div className="surface-subheader gap-2 px-3">
         <div className="min-w-0 flex-1 truncate text-(length:--text-ui)">
           <QualifiedLabel name={projectName} trail={indexLabel} separator=" · " />
         </div>
-        <button
-          type="button"
-          className={HEADER_BUTTON_CLASS}
+        <Button
+          variant="ghost"
+          size="icon-xs"
           aria-label="Search workspace files"
           onClick={() => model.openSearch()}
         >
-          <Search className="size-3.5" />
-        </button>
-        <button
-          type="button"
-          className={HEADER_BUTTON_CLASS}
+          <Search />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon-xs"
           aria-label="Refresh workspace files"
           onClick={entriesQuery.refresh}
         >
-          <RefreshCw className={cn("size-3.5", entriesQuery.isPending && "animate-spin")} />
-        </button>
+          <RefreshCw className={cn(entriesQuery.isPending && "animate-spin")} />
+        </Button>
       </div>
+      <Separator />
       {entriesQuery.error && entriesQuery.data === null ? (
         <div className="p-4 text-(length:--text-ui) leading-relaxed text-destructive">
           {entriesQuery.error}

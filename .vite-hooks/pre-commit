@@ -1,1 +1,12 @@
 vp staged
+
+# Dead-code gate. Reports the repo's known dead code and fails the commit only when
+# this commit created some. Roughly 0.6s on a normal staged change; see
+# DEAD-CODE-CHECK-DESIGN.md. Bypass one commit with VIDE_SKIP_DEAD_CODE=1.
+#
+# Guarded because core.hooksPath is absolute and shared: a commit made in a linked
+# worktree runs the main checkout's copy of this file with the worktree as cwd, so
+# the script legitimately may not exist there yet.
+if [ -f scripts/dead-code/check.ts ]; then
+  node scripts/dead-code/check.ts --staged
+fi

@@ -121,7 +121,7 @@ export function PullRequestThreadDialog({
       case "merged":
         return "text-violet-600 dark:text-violet-300/90";
       case "closed":
-        return "text-zinc-500 dark:text-zinc-400/80";
+        return "text-muted-foreground";
       case "open":
         return "text-emerald-600 dark:text-emerald-300/90";
       default:
@@ -207,7 +207,7 @@ export function PullRequestThreadDialog({
         </DialogHeader>
         <DialogPanel className="space-y-4">
           <label className="grid gap-1.5">
-            <span className="text-xs font-medium text-foreground capitalize">
+            <span className="text-(length:--text-caption) font-medium text-foreground capitalize">
               {terminology.singular}
             </span>
             <Input
@@ -231,16 +231,20 @@ export function PullRequestThreadDialog({
           </label>
 
           {resolvedPullRequest ? (
-            <div className="rounded-xl border border-border/70 bg-muted/24 p-3">
+            <div className="rounded-xl border border-border bg-card p-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="truncate font-medium text-sm">{resolvedPullRequest.title}</p>
-                  <p className="truncate text-muted-foreground text-xs">
+                  <p className="truncate text-(length:--text-ui) font-medium">
+                    {resolvedPullRequest.title}
+                  </p>
+                  <p className="truncate text-(length:--text-caption) text-muted-foreground">
                     #{resolvedPullRequest.number} · {resolvedPullRequest.headBranch} to{" "}
                     {resolvedPullRequest.baseBranch}
                   </p>
                 </div>
-                <span className={cn("shrink-0 text-xs capitalize", statusTone)}>
+                <span
+                  className={cn("shrink-0 text-(length:--text-caption) capitalize", statusTone)}
+                >
                   {resolvedPullRequest.state}
                 </span>
               </div>
@@ -248,13 +252,15 @@ export function PullRequestThreadDialog({
           ) : null}
 
           {isResolving ? (
-            <div className="flex items-center gap-2 text-muted-foreground text-xs">
+            <div className="flex items-center gap-2 text-(length:--text-caption) text-muted-foreground">
               <Spinner className="size-3.5" />
               Resolving {terminology.singular}...
             </div>
           ) : null}
 
-          {errorMessage ? <p className="text-destructive text-xs">{errorMessage}</p> : null}
+          {errorMessage ? (
+            <p className="text-(length:--text-caption) text-destructive">{errorMessage}</p>
+          ) : null}
         </DialogPanel>
         <DialogFooter>
           <Button

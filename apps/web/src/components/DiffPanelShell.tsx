@@ -4,6 +4,7 @@ import { isElectron } from "~/env";
 import { cn } from "~/lib/utils";
 
 import { Skeleton } from "./ui/skeleton";
+import { Separator } from "./ui/separator";
 
 export type DiffPanelMode = "inline" | "sheet" | "sidebar" | "embedded";
 
@@ -12,7 +13,7 @@ function getDiffPanelHeaderRowClassName(mode: DiffPanelMode) {
   return cn(
     "flex items-center justify-between gap-2 px-4",
     shouldUseDragRegion
-      ? "drag-region h-[52px] border-b border-border wco:h-[env(titlebar-area-height)] wco:pr-[calc(100vw-env(titlebar-area-width)-env(titlebar-area-x)+1em)]"
+      ? "drag-region h-(--workspace-topbar-height) wco:h-[env(titlebar-area-height)] wco:pr-[calc(100vw-env(titlebar-area-width)-env(titlebar-area-x)+var(--panel-titlebar-safe-padding))]"
       : "surface-subheader",
   );
 }
@@ -29,7 +30,7 @@ export function DiffPanelShell(props: {
       className={cn(
         "flex h-full min-w-0 flex-col bg-background",
         props.mode === "inline"
-          ? "w-[42vw] min-w-[360px] max-w-[560px] shrink-0 border-l border-border"
+          ? "w-(--panel-inline-width) min-w-(--panel-inline-min-width) max-w-(--panel-inline-max-width) shrink-0 border-l border-border"
           : "w-full",
       )}
     >
@@ -40,6 +41,7 @@ export function DiffPanelShell(props: {
           {props.header}
         </div>
       )}
+      <Separator />
       {props.children}
     </div>
   );
@@ -63,12 +65,12 @@ export function DiffPanelLoadingState(props: { label: string }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col p-2">
       <div
-        className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-border/60 bg-card/25"
+        className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-(--panel-loading-edge) bg-(--panel-loading-surface)"
         role="status"
         aria-live="polite"
         aria-label={props.label}
       >
-        <div className="flex items-center gap-2 border-b border-border/50 px-3 py-2">
+        <div className="flex items-center gap-2 border-b border-(--panel-loading-divider) px-3 py-2">
           <Skeleton className="h-4 w-32 rounded-full" />
           <Skeleton className="ml-auto h-4 w-20 rounded-full" />
         </div>

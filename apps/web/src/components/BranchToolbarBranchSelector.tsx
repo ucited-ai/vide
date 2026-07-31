@@ -6,10 +6,10 @@ import {
 import type { ContextMenuItem, EnvironmentId, VcsRef, ThreadId } from "@vide/contracts";
 import { LegendList, type LegendListRef } from "@legendapp/list/react";
 import {
+  CheckIcon,
   ChevronDownIcon,
   GitBranchIcon,
   GitBranchPlusIcon,
-  RefreshCwIcon,
   SearchIcon,
 } from "lucide-react";
 import {
@@ -60,6 +60,8 @@ import { Switch } from "./ui/switch";
 import {
   Combobox,
   ComboboxEmpty,
+  ComboboxGroup,
+  ComboboxGroupLabel,
   ComboboxInput,
   ComboboxItem,
   ComboboxListVirtualized,
@@ -770,12 +772,14 @@ export function BranchToolbarBranchSelector({
           }}
         >
           <div className="flex min-w-0 items-center gap-2 py-1">
-            <SourceControlIcon className="size-3.5 shrink-0 text-muted-foreground" />
+            <SourceControlIcon className="size-(--chat-picker-icon-size) shrink-0 text-muted-foreground" />
             <span className="flex min-w-0 flex-col items-start">
               <span className="truncate font-medium">
                 Checkout {sourceControlPresentation.terminology.singular}
               </span>
-              <span className="truncate text-muted-foreground text-xs">{prReference}</span>
+              <span className="truncate text-(length:--text-caption) text-muted-foreground">
+                {prReference}
+              </span>
             </span>
           </div>
         </ComboboxItem>
@@ -791,7 +795,13 @@ export function BranchToolbarBranchSelector({
           className="pe-1.5"
           onClick={() => createRef(trimmedBranchQuery)}
         >
-          <span className="truncate">Create new ref &quot;{trimmedBranchQuery}&quot;</span>
+          <div className="flex min-w-0 items-center gap-(--popup-item-gap)">
+            <GitBranchPlusIcon
+              aria-hidden
+              className="size-(--chat-picker-icon-size) shrink-0 text-muted-foreground"
+            />
+            <span className="truncate">Create new ref &quot;{trimmedBranchQuery}&quot;</span>
+          </div>
         </ComboboxItem>
       );
     }
@@ -801,15 +811,13 @@ export function BranchToolbarBranchSelector({
 
     const hasSecondaryWorktree =
       refName.worktreePath && activeProjectCwd && refName.worktreePath !== activeProjectCwd;
-    const badge = refName.current
-      ? "current"
-      : hasSecondaryWorktree
-        ? "worktree"
-        : refName.isRemote
-          ? "remote"
-          : refName.isDefault
-            ? "default"
-            : null;
+    const badge = hasSecondaryWorktree
+      ? "worktree"
+      : refName.isRemote
+        ? "remote"
+        : refName.isDefault
+          ? "default"
+          : null;
     return (
       <ComboboxItem
         hideIndicator
@@ -820,9 +828,22 @@ export function BranchToolbarBranchSelector({
         onClick={() => selectBranch(refName)}
         onContextMenu={(event) => handleBranchContextMenu(event, itemValue)}
       >
-        <div className="flex w-full min-w-0 items-center justify-between gap-2">
+        <div className="flex w-full min-w-0 items-center gap-(--popup-item-gap)">
+          <GitBranchIcon
+            aria-hidden
+            className="size-(--chat-picker-icon-size) shrink-0 text-muted-foreground"
+          />
           <span className="min-w-0 flex-1 truncate">{itemValue}</span>
-          {badge && <span className="shrink-0 text-[10px] text-muted-foreground/45">{badge}</span>}
+          {refName.current ? (
+            <CheckIcon
+              aria-hidden
+              className="size-(--chat-picker-icon-size) shrink-0 text-muted-foreground"
+            />
+          ) : badge ? (
+            <span className="shrink-0 text-(length:--text-caption) text-muted-foreground">
+              {badge}
+            </span>
+          ) : null}
         </div>
       </ComboboxItem>
     );
@@ -857,7 +878,7 @@ export function BranchToolbarBranchSelector({
                   aria-label={branchPrTooltip}
                   onClick={(event) => openPrLink(event, branchPrStatus.url)}
                   className={cn(
-                    "inline-flex shrink-0 items-center gap-0.5 rounded px-1 py-0.5 text-[11px] font-medium tabular-nums transition-colors hover:bg-muted/60",
+                    "inline-flex shrink-0 items-center gap-0.5 rounded px-1 py-0.5 text-(length:--text-caption) font-medium tabular-nums transition-colors hover:bg-muted/60",
                     branchPrStatus.colorClass,
                   )}
                 />
@@ -887,16 +908,16 @@ export function BranchToolbarBranchSelector({
           </ComboboxTrigger>
         </span>
       </div>
-      <ComboboxPopup align="end" side="top" className="flex w-80 flex-col">
-        <div className="shrink-0 px-3 pt-2.5">
+      <ComboboxPopup align="end" side="top" className="flex w-(--chat-ref-picker-width) flex-col">
+        <div className="shrink-0 px-(--popup-item-padding-inline) pt-(--popup-padding)">
           <div className="relative -translate-y-px border-b border-border/70 pb-1.5 transition-colors focus-within:border-ring">
             <SearchIcon
               aria-hidden="true"
-              className="pointer-events-none absolute top-1.5 left-0 size-4 shrink-0 text-muted-foreground/55"
+              className="pointer-events-none absolute top-1.5 left-0 size-(--chat-picker-icon-size) shrink-0 text-muted-foreground/55"
             />
             <ComboboxInput
               className="[&_input]:h-6.5 [&_input]:ps-5 [&_input]:font-sans [&_input]:leading-6.5"
-              inputClassName="rounded-none bg-transparent text-sm"
+              inputClassName="rounded-none bg-transparent text-(length:--text-ui)"
               placeholder="Search refs..."
               showTrigger={false}
               size="sm"
@@ -908,55 +929,59 @@ export function BranchToolbarBranchSelector({
         </div>
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <ComboboxEmpty>No refs found.</ComboboxEmpty>
-          <div className="relative min-h-0 w-full max-h-56 flex-1 overflow-hidden">
-            <ComboboxListVirtualized className="size-full min-w-0 p-0">
-              <LegendList<string>
-                ref={branchListRef}
-                data={filteredBranchPickerItems}
-                keyExtractor={(item) => item}
-                getItemType={(item) =>
-                  item === checkoutPullRequestItemValue
-                    ? "checkout-pull-request"
-                    : item === createBranchItemValue
-                      ? "create-branch"
-                      : "branch"
-                }
-                renderItem={({ item, index }) => renderPickerItem(item, index)}
-                estimatedItemSize={28}
-                drawDistance={336}
-                onEndReached={() => {
-                  if (hasNextPage && !isFetchingNextPage) {
-                    fetchNextBranchPage();
+          <ComboboxGroup className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            <ComboboxGroupLabel className="shrink-0 px-(--popup-item-padding-inline) pt-2 pb-1 text-(length:--text-caption)">
+              Branches
+            </ComboboxGroupLabel>
+            <div className="relative min-h-0 w-full max-h-(--chat-ref-list-max-height) flex-1 overflow-hidden">
+              <ComboboxListVirtualized className="size-full min-w-0 p-0">
+                <LegendList<string>
+                  ref={branchListRef}
+                  data={filteredBranchPickerItems}
+                  keyExtractor={(item) => item}
+                  getItemType={(item) =>
+                    item === checkoutPullRequestItemValue
+                      ? "checkout-pull-request"
+                      : item === createBranchItemValue
+                        ? "create-branch"
+                        : "branch"
                   }
-                }}
-                onLayout={() => {
-                  updateBranchListScrollFades();
-                  maybeFetchNextBranchPage();
-                }}
-                onScroll={() => {
-                  updateBranchListScrollFades();
-                  maybeFetchNextBranchPage();
-                }}
-                className={cn(
-                  "scrollbar-gutter-stable overflow-x-hidden overscroll-y-contain ps-1 pe-0 pt-2 pb-1 [--fade-size:1.5rem]",
-                  showTopBranchScrollFade && "mask-t-from-[calc(100%-var(--fade-size))]",
-                  showBottomBranchScrollFade && "mask-b-from-[calc(100%-var(--fade-size))]",
-                )}
-                style={{ maxHeight: "14rem" }}
-              />
-            </ComboboxListVirtualized>
-          </div>
+                  renderItem={({ item, index }) => renderPickerItem(item, index)}
+                  estimatedItemSize={28}
+                  drawDistance={336}
+                  onEndReached={() => {
+                    if (hasNextPage && !isFetchingNextPage) {
+                      fetchNextBranchPage();
+                    }
+                  }}
+                  onLayout={() => {
+                    updateBranchListScrollFades();
+                    maybeFetchNextBranchPage();
+                  }}
+                  onScroll={() => {
+                    updateBranchListScrollFades();
+                    maybeFetchNextBranchPage();
+                  }}
+                  className={cn(
+                    "scrollbar-gutter-stable overflow-x-hidden overscroll-y-contain px-(--popup-padding) pt-1 pb-(--popup-padding) [--fade-size:1.5rem]",
+                    showTopBranchScrollFade && "mask-t-from-[calc(100%-var(--fade-size))]",
+                    showBottomBranchScrollFade && "mask-b-from-[calc(100%-var(--fade-size))]",
+                  )}
+                  style={{ maxHeight: "var(--chat-ref-list-max-height)" }}
+                />
+              </ComboboxListVirtualized>
+            </div>
+          </ComboboxGroup>
           {isSelectingWorktreeBase ? (
             <Tooltip>
               <TooltipTrigger
                 render={
                   <label
                     htmlFor={startFromOriginSwitchId}
-                    className="flex cursor-pointer items-center justify-between gap-3 border-t border-border/60 px-3 py-2 text-xs"
+                    className="mx-(--popup-padding) flex cursor-pointer items-center justify-between gap-(--popup-item-gap) border-t border-border px-(--popup-item-padding-inline) py-(--popup-padding) text-(length:--text-caption)"
                   >
-                    <span className="flex min-w-0 items-center gap-1.5 font-medium text-muted-foreground">
-                      <RefreshCwIcon aria-hidden="true" className="size-3 shrink-0 opacity-70" />
-                      <span className="truncate">Start from origin</span>
+                    <span className="min-w-0 truncate text-muted-foreground">
+                      Start from origin
                     </span>
                     <Switch
                       id={startFromOriginSwitchId}
@@ -974,7 +999,11 @@ export function BranchToolbarBranchSelector({
               </TooltipPopup>
             </Tooltip>
           ) : null}
-          {branchStatusText ? <ComboboxStatus>{branchStatusText}</ComboboxStatus> : null}
+          {branchStatusText ? (
+            <ComboboxStatus className="py-(--popup-padding) text-(length:--text-caption)">
+              {branchStatusText}
+            </ComboboxStatus>
+          ) : null}
         </div>
       </ComboboxPopup>
     </Combobox>

@@ -6,6 +6,7 @@ import * as Order from "effect/Order";
 export interface ThreadSortInput {
   readonly createdAt: string;
   readonly updatedAt: string;
+  readonly pinned?: boolean | undefined;
   readonly latestUserMessageAt?: string | null;
   readonly messages?: ReadonlyArray<{
     readonly createdAt: string;
@@ -77,10 +78,12 @@ export function sortThreads<T extends { readonly id: string } & ThreadSortInput>
     threads,
     Order.mapInput(
       Order.Struct({
+        pinned: Order.flip(Order.Boolean),
         timestamp: Order.flip(Order.Number),
         id: Order.flip(Order.String),
       }),
       (thread: T) => ({
+        pinned: thread.pinned === true,
         timestamp: getThreadSortTimestamp(thread, sortOrder),
         id: thread.id,
       }),

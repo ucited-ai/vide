@@ -17,6 +17,7 @@ import {
 } from "react";
 
 import { Button } from "~/components/ui/button";
+import { Separator } from "~/components/ui/separator";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "~/components/ui/input-group";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 import { cn } from "~/lib/utils";
@@ -307,6 +308,7 @@ export function PreviewChromeRow({
         ) : null}
         {trailingActions}
       </form>
+      <Separator />
       {loadProgress > 0 ? (
         <div
           aria-hidden

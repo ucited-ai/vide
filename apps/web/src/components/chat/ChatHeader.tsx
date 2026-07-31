@@ -97,7 +97,9 @@ export const ChatHeader = memo(function ChatHeader({
                     cwd={activeProjectCwd ?? ""}
                     className="size-3.5"
                   />
-                  <span className="max-w-40 truncate text-sm font-medium">{activeProjectName}</span>
+                  <span className="max-w-40 truncate text-(length:--text-ui) font-medium">
+                    {activeProjectName}
+                  </span>
                 </TooltipTrigger>
                 <TooltipPopup side="top">New thread in {activeProjectName}</TooltipPopup>
               </Tooltip>
@@ -111,7 +113,7 @@ export const ChatHeader = memo(function ChatHeader({
               render={
                 <h2
                   aria-label={activeThreadTitle}
-                  className="min-w-0 flex-1 truncate text-sm font-medium text-foreground"
+                  className="min-w-0 flex-1 truncate text-(length:--text-ui) font-medium text-foreground"
                 >
                   {activeThreadTitle}
                 </h2>
@@ -124,8 +126,8 @@ export const ChatHeader = memo(function ChatHeader({
       <div
         data-chat-header-actions
         className={cn(
-          "flex shrink-0 items-center justify-end gap-2 @3xl/header-actions:gap-3",
-          rightPanelOpen ? "pr-0" : "pr-16",
+          "flex shrink-0 items-center justify-end gap-(--header-control-gap)",
+          !rightPanelOpen && !environmentColumnOpen && "pr-(--header-panel-controls-reserve)",
         )}
       >
         {showOpenInPicker && (
@@ -146,10 +148,11 @@ export const ChatHeader = memo(function ChatHeader({
                   onPressedChange={onToggleEnvironmentColumn}
                   variant="ghost"
                   size="sm"
+                  className="size-(--header-control-size)!"
                 />
               }
             >
-              <BoxIcon aria-hidden="true" className="size-4" />
+              <BoxIcon aria-hidden="true" className="size-(--header-control-icon-size)" />
             </TooltipTrigger>
             <TooltipPopup side="bottom">Environment overview</TooltipPopup>
           </Tooltip>

@@ -269,29 +269,34 @@ export const OpenInPicker = memo(function OpenInPicker({
         variant="outline"
         disabled={!preferredEditor || !openInCwd}
         onClick={() => openInEditor(preferredEditor)}
+        className="h-(--header-control-size)!"
       >
         {primaryOption?.Icon && (
           <primaryOption.Icon
             aria-hidden="true"
-            className={cn("size-3.5", getOpenInIconClass(primaryOption.kind))}
+            className={cn(
+              "size-(--header-control-icon-size)",
+              getOpenInIconClass(primaryOption.kind),
+            )}
           />
         )}
-        <span
-          className={
-            compact
-              ? "sr-only"
-              : "sr-only @3xl/header-actions:not-sr-only @3xl/header-actions:ml-0.5"
-          }
-        >
+        <span className={compact ? "sr-only" : "sr-only @3xl/header-actions:not-sr-only"}>
           {primaryOption?.label ?? "Open"}
         </span>
       </Button>
       <GroupSeparator {...(!compact ? { className: "hidden @3xl/header-actions:block" } : {})} />
       <Menu>
         <MenuTrigger
-          render={<Button aria-label="Choose editor" size="icon-xs" variant="outline" />}
+          render={
+            <Button
+              aria-label="Choose editor"
+              size="icon-xs"
+              variant="outline"
+              className="size-(--header-control-size)!"
+            />
+          }
         >
-          <ChevronDownIcon aria-hidden="true" className="size-4" />
+          <ChevronDownIcon aria-hidden="true" className="size-(--header-control-icon-size)" />
         </MenuTrigger>
         <MenuPopup align="end">
           {options.length === 0 && <MenuItem disabled>No installed editors found</MenuItem>}

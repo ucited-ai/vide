@@ -91,6 +91,7 @@ projectionRepositoriesLayer("Projection repositories", (it) => {
         createdAt: "2026-03-24T00:00:00.000Z",
         updatedAt: "2026-03-24T00:00:00.000Z",
         archivedAt: null,
+        pinned: 0,
         settledOverride: null,
         settledAt: null,
         snoozedUntil: null,
@@ -133,7 +134,7 @@ projectionRepositoriesLayer("Projection repositories", (it) => {
     }),
   );
 
-  it.effect("round-trips non-null settlement values through the thread row", () =>
+  it.effect("round-trips pin and settlement values through the thread row", () =>
     Effect.gen(function* () {
       const threads = yield* ProjectionThreadRepository;
 
@@ -153,6 +154,7 @@ projectionRepositoriesLayer("Projection repositories", (it) => {
         createdAt: "2026-03-24T00:00:00.000Z",
         updatedAt: "2026-03-25T00:00:00.000Z",
         archivedAt: null,
+        pinned: 1,
         settledOverride: "settled",
         settledAt: "2026-03-25T00:00:00.000Z",
         snoozedUntil: "2026-03-26T09:00:00.000Z",
@@ -175,11 +177,13 @@ projectionRepositoriesLayer("Projection repositories", (it) => {
       assert.strictEqual(row.settledAt, "2026-03-25T00:00:00.000Z");
       assert.strictEqual(row.snoozedUntil, "2026-03-26T09:00:00.000Z");
       assert.strictEqual(row.snoozedAt, "2026-03-25T00:00:00.000Z");
+      assert.strictEqual(row.pinned, 1);
 
       // Un-settle to the keep-active pin and wake the snooze; confirm the
       // flips persist.
       yield* threads.upsert({
         ...row,
+        pinned: 0,
         settledOverride: "active",
         settledAt: null,
         snoozedUntil: null,
@@ -193,6 +197,7 @@ projectionRepositoriesLayer("Projection repositories", (it) => {
       assert.strictEqual(updated?.settledAt, null);
       assert.strictEqual(updated?.snoozedUntil, null);
       assert.strictEqual(updated?.snoozedAt, null);
+      assert.strictEqual(updated?.pinned, 0);
     }),
   );
 });

@@ -59,9 +59,12 @@ export const ProjectPickerMenu = memo(function ProjectPickerMenu({
   return (
     <Menu open={open} onOpenChange={setOpen}>
       {children}
-      <MenuPopup className="w-72">
+      <MenuPopup className="w-(--chat-picker-width)">
         <div className="flex items-center gap-2 border-border/70 border-b px-(--popup-item-padding-inline) pb-1.5 transition-colors focus-within:border-ring">
-          <SearchIcon aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground/55" />
+          <SearchIcon
+            aria-hidden="true"
+            className="size-(--chat-picker-icon-size) shrink-0 text-muted-foreground/55"
+          />
           <Input
             ref={searchInputRef}
             unstyled
@@ -74,7 +77,7 @@ export const ProjectPickerMenu = memo(function ProjectPickerMenu({
             onKeyDown={keepPrintableKeysInField}
           />
         </div>
-        <div className="max-h-64 overflow-y-auto overscroll-contain pt-1">
+        <div className="max-h-(--chat-picker-list-max-height) overflow-y-auto overscroll-contain pt-1">
           {filteredEntries.length === 0 ? (
             <div className="px-(--popup-item-padding-inline) py-2 text-(length:--text-ui) text-muted-foreground">
               No projects found.
@@ -87,10 +90,10 @@ export const ProjectPickerMenu = memo(function ProjectPickerMenu({
               {filteredEntries.map(({ group }) => (
                 <MenuRadioItem key={group.projectKey} value={group.projectKey} closeOnClick>
                   <span className="flex min-w-0 items-center gap-(--popup-item-gap)">
-                    <FolderIcon className="size-4 shrink-0 text-muted-foreground" />
+                    <FolderIcon className="size-(--chat-picker-icon-size) shrink-0 text-muted-foreground" />
                     <span className="min-w-0 flex-1 truncate">{group.displayName}</span>
                     {group.projectKey === picker.activeProjectKey ? (
-                      <CheckIcon className="size-4 shrink-0 text-muted-foreground" />
+                      <CheckIcon className="size-(--chat-picker-icon-size) shrink-0 text-muted-foreground" />
                     ) : null}
                   </span>
                 </MenuRadioItem>

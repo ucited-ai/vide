@@ -678,6 +678,15 @@ describe("sortThreadsForSidebarV2", () => {
 
     expect(sorted.map((thread) => thread.id)).toEqual(["a", "b"]);
   });
+
+  it("orders pinned threads before newer unpinned threads", () => {
+    const sorted = sortThreadsForSidebarV2([
+      { ...sortable({ id: "new-unpinned", createdAt: "2026-03-09T12:00:00.000Z" }), pinned: false },
+      { ...sortable({ id: "old-pinned", createdAt: "2026-03-09T08:00:00.000Z" }), pinned: true },
+    ]);
+
+    expect(sorted.map((thread) => thread.id)).toEqual(["old-pinned", "new-unpinned"]);
+  });
 });
 
 describe("sortSettledThreadsForSidebarV2", () => {

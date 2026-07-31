@@ -584,10 +584,10 @@ function PublishRepositoryDialog(props: PublishRepositoryDialogProps) {
                     >
                       {isComplete ? <CheckIcon className="size-3" /> : null}
                     </span>
-                    <span className="text-[10px] font-medium uppercase text-muted-foreground">
+                    <span className="text-(length:--text-caption) font-medium uppercase text-muted-foreground">
                       Step {index + 1}
                     </span>
-                    <span className="truncate text-xs font-semibold text-foreground">
+                    <span className="truncate text-(length:--text-caption) font-semibold text-foreground">
                       {label}
                       {isComplete && publishWizardStepSummaries[index]
                         ? `: ${publishWizardStepSummaries[index]}`
@@ -604,7 +604,7 @@ function PublishRepositoryDialog(props: PublishRepositoryDialogProps) {
               <div className={cn("space-y-2", publishWizardStep !== 0 && "hidden")}>
                 <span
                   id="publish-provider-cards-label"
-                  className="text-xs font-medium text-foreground"
+                  className="text-(length:--text-caption) font-medium text-foreground"
                 >
                   Provider
                 </span>
@@ -630,7 +630,7 @@ function PublishRepositoryDialog(props: PublishRepositoryDialogProps) {
                             className="size-5 shrink-0 text-muted-foreground"
                             aria-hidden
                           />
-                          <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+                          <span className="min-w-0 flex-1 truncate text-(length:--text-ui) font-medium text-foreground">
                             {option.label}
                           </span>
                           <Tooltip>
@@ -639,7 +639,7 @@ function PublishRepositoryDialog(props: PublishRepositoryDialogProps) {
                                 <Button
                                   variant="outline"
                                   size="xs"
-                                  className="h-5 rounded-[.25rem] px-1.5 text-[10px] text-warning-foreground"
+                                  className="h-5 rounded-[.25rem] px-1.5 text-(length:--text-caption) text-warning-foreground"
                                   onClick={(event) => {
                                     event.preventDefault();
                                     event.stopPropagation();
@@ -672,7 +672,7 @@ function PublishRepositoryDialog(props: PublishRepositoryDialogProps) {
                         )}
                       >
                         <option.Icon className="size-5 shrink-0" aria-hidden />
-                        <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+                        <span className="min-w-0 flex-1 truncate text-(length:--text-ui) font-medium text-foreground">
                           {option.label}
                         </span>
                       </RadioPrimitive.Root>
@@ -685,12 +685,12 @@ function PublishRepositoryDialog(props: PublishRepositoryDialogProps) {
                 <div className="space-y-2">
                   <label
                     htmlFor="publish-repository-path"
-                    className="text-xs font-medium text-foreground"
+                    className="text-(length:--text-caption) font-medium text-foreground"
                   >
                     Repository
                   </label>
                   <div className="flex items-stretch overflow-hidden rounded-md border border-input bg-background focus-within:outline-2 focus-within:-outline-offset-1 focus-within:outline-ring">
-                    <span className="flex shrink-0 items-center gap-1.5 border-r border-input bg-muted/50 px-2.5 font-mono text-xs text-muted-foreground">
+                    <span className="flex shrink-0 items-center gap-1.5 border-r border-input bg-muted/50 px-2.5 font-mono text-(length:--text-caption) text-muted-foreground">
                       <currentPublishProvider.Icon className="size-3.5" />
                       {publishHost}/
                     </span>
@@ -709,7 +709,7 @@ function PublishRepositoryDialog(props: PublishRepositoryDialogProps) {
                       }}
                       placeholder={publishPathPlaceholder}
                       disabled={publishRepositoryAction.isPending}
-                      className="w-full bg-transparent px-3 py-2 font-mono text-sm placeholder:text-muted-foreground/60 focus:outline-none"
+                      className="w-full bg-transparent px-3 py-2 font-mono text-(length:--text-ui) placeholder:text-muted-foreground/60 focus:outline-none"
                     />
                   </div>
                 </div>
@@ -717,7 +717,7 @@ function PublishRepositoryDialog(props: PublishRepositoryDialogProps) {
                 <div className="space-y-2">
                   <span
                     id="publish-visibility-cards-label"
-                    className="text-xs font-medium text-foreground"
+                    className="text-(length:--text-caption) font-medium text-foreground"
                   >
                     Visibility
                   </span>
@@ -762,10 +762,10 @@ function PublishRepositoryDialog(props: PublishRepositoryDialogProps) {
                             aria-hidden
                           />
                           <span className="min-w-0 flex-1">
-                            <span className="block text-sm font-medium text-foreground">
+                            <span className="block text-(length:--text-ui) font-medium text-foreground">
                               {option.label}
                             </span>
-                            <span className="block text-xs text-muted-foreground">
+                            <span className="block text-(length:--text-caption) text-muted-foreground">
                               {option.description}
                             </span>
                           </span>
@@ -780,7 +780,7 @@ function PublishRepositoryDialog(props: PublishRepositoryDialogProps) {
                     type="button"
                     onClick={() => setPublishAdvancedOpen((prev) => !prev)}
                     aria-expanded={publishAdvancedOpen}
-                    className="flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+                    className="flex items-center gap-1 text-(length:--text-caption) font-medium text-muted-foreground transition-colors hover:text-foreground"
                   >
                     <ChevronDownIcon
                       className={cn(
@@ -793,7 +793,9 @@ function PublishRepositoryDialog(props: PublishRepositoryDialogProps) {
                   {publishAdvancedOpen ? (
                     <div className="mt-3 grid gap-3 sm:grid-cols-2">
                       <label className="space-y-1.5" htmlFor="publish-remote-name">
-                        <span className="text-xs font-medium text-foreground">Remote</span>
+                        <span className="text-(length:--text-caption) font-medium text-foreground">
+                          Remote
+                        </span>
                         <Input
                           id="publish-remote-name"
                           value={publishRemoteName}
@@ -805,7 +807,7 @@ function PublishRepositoryDialog(props: PublishRepositoryDialogProps) {
                       <div className="space-y-1.5">
                         <span
                           id="publish-protocol-label"
-                          className="text-xs font-medium text-foreground"
+                          className="text-(length:--text-caption) font-medium text-foreground"
                         >
                           Protocol
                         </span>
@@ -825,7 +827,7 @@ function PublishRepositoryDialog(props: PublishRepositoryDialogProps) {
                                 key={value}
                                 value={value}
                                 className={cn(
-                                  "rounded-md border px-3 py-1.5 text-center text-sm font-medium outline-none transition",
+                                  "rounded-md border px-3 py-1.5 text-center text-(length:--text-ui) font-medium outline-none transition",
                                   "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background",
                                   isSelected
                                     ? "border-primary bg-background ring-2 ring-primary/35 text-foreground dark:border-transparent dark:bg-primary/10 dark:ring-1 dark:ring-primary/30"
@@ -846,7 +848,7 @@ function PublishRepositoryDialog(props: PublishRepositoryDialogProps) {
                   <div
                     role="status"
                     aria-live="polite"
-                    className="flex items-center gap-2 rounded-md border border-input bg-muted/40 px-3 py-2 text-xs text-muted-foreground dark:border-transparent dark:bg-white/[0.035]"
+                    className="flex items-center gap-2 rounded-md border border-input bg-muted/40 px-3 py-2 text-(length:--text-caption) text-muted-foreground dark:border-transparent dark:bg-white/[0.035]"
                   >
                     <Spinner className="size-3.5" aria-hidden />
                     Publishing repository to {publishProviderLabel}...
@@ -855,7 +857,7 @@ function PublishRepositoryDialog(props: PublishRepositoryDialogProps) {
                 {publishError && !publishRepositoryAction.isPending ? (
                   <div
                     role="alert"
-                    className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive"
+                    className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-(length:--text-caption) text-destructive"
                   >
                     <p className="font-medium">Publish failed</p>
                     <p className="mt-0.5 text-destructive/90">{publishError}</p>
@@ -870,12 +872,12 @@ function PublishRepositoryDialog(props: PublishRepositoryDialogProps) {
                       <span className="grid size-8 place-items-center rounded-full bg-success/15 text-success">
                         <CheckIcon className="size-4" aria-hidden />
                       </span>
-                      <h3 className="text-sm font-semibold text-foreground">
+                      <h3 className="text-(length:--text-ui) font-semibold text-foreground">
                         {publishResult.status === "pushed"
                           ? "Repository published"
                           : "Repository created"}
                       </h3>
-                      <p className="max-w-xs text-pretty text-xs text-muted-foreground">
+                      <p className="max-w-xs text-pretty text-(length:--text-caption) text-muted-foreground">
                         {publishResult.status === "pushed"
                           ? `${publishResult.branch} is now live on ${publishProviderLabel}.`
                           : `Remote "${publishResult.remoteName}" is set up. Make a commit and push it to share your code.`}
@@ -883,7 +885,7 @@ function PublishRepositoryDialog(props: PublishRepositoryDialogProps) {
                     </div>
                     <div className="flex items-center gap-2 rounded-lg border border-input bg-muted/40 px-3 py-2 dark:border-transparent dark:bg-white/[0.035]">
                       <currentPublishProvider.Icon className="size-3.5 shrink-0 text-muted-foreground" />
-                      <span className="min-w-0 flex-1 truncate font-mono text-xs text-foreground">
+                      <span className="min-w-0 flex-1 truncate font-mono text-(length:--text-caption) text-foreground">
                         {publishResult.repository.nameWithOwner}
                       </span>
                     </div>
@@ -902,7 +904,7 @@ function PublishRepositoryDialog(props: PublishRepositoryDialogProps) {
                     </Button>
                   </>
                 ) : (
-                  <div className="rounded-md border border-input bg-background px-3 py-2 text-xs text-muted-foreground dark:border-transparent dark:bg-white/[0.035]">
+                  <div className="rounded-md border border-input bg-background px-3 py-2 text-(length:--text-caption) text-muted-foreground dark:border-transparent dark:bg-white/[0.035]">
                     Publish result unavailable.
                   </div>
                 )}
@@ -1710,7 +1712,7 @@ export function useGitActions({ gitCwd, activeThreadRef, draftId }: GitActionsIn
               <DialogDescription>{COMMIT_DIALOG_DESCRIPTION}</DialogDescription>
             </DialogHeader>
             <DialogPanel className="space-y-4">
-              <div className="space-y-3 rounded-xl bg-zinc-25 p-3 text-sm ring-1 ring-black/5 dark:bg-white/[0.035] dark:ring-white/5">
+              <div className="space-y-3 rounded-xl bg-card p-3 text-(length:--text-ui) ring-1 ring-border">
                 <div className="grid grid-cols-[auto_1fr] items-center gap-x-2 gap-y-1">
                   <span className="text-muted-foreground">Branch</span>
                   <span className="flex items-center justify-between gap-2">
@@ -1823,7 +1825,7 @@ export function useGitActions({ gitCwd, activeThreadRef, draftId }: GitActionsIn
                 </div>
               </div>
               <div className="space-y-1">
-                <p className="text-sm font-medium">Commit message (optional)</p>
+                <p className="text-(length:--text-ui) font-medium">Commit message (optional)</p>
                 <Textarea
                   value={dialogCommitMessage}
                   onChange={(event) => setDialogCommitMessage(event.target.value)}

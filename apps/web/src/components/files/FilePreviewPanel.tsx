@@ -29,6 +29,7 @@ import { cn } from "~/lib/utils";
 import { isPreviewSupportedInRuntime } from "~/previewStateStore";
 import { resolvePathLinkTarget } from "~/terminal-links";
 import { ScrollArea } from "~/components/ui/scroll-area";
+import { Separator } from "~/components/ui/separator";
 import { Toggle } from "~/components/ui/toggle";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 import { stackedThreadToast, toastManager } from "~/components/ui/toast";
@@ -108,6 +109,9 @@ const FILE_UNSAFE_CSS = `
    */
   :host {
     --diffs-bg: var(--surface-content);
+    --diffs-font-family: var(--font-mono);
+    --diffs-font-size: var(--code-font-size);
+    --diffs-line-height: var(--code-line-height);
     background-color: var(--surface-content);
   }
 
@@ -768,122 +772,138 @@ export default function FilePreviewPanel({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
-      {relativePath ? (
-        <div className="surface-subheader gap-2 px-3" data-surface-subheader>
-          <ScrollArea
-            ref={breadcrumbRef}
-            hideScrollbars
-            scrollFade
-            className="min-w-0 flex-1 rounded-none"
-            data-file-breadcrumbs
-          >
-            <div className="flex h-full w-max min-w-full items-center text-(length:--text-ui)">
-              {breadcrumbs.map((crumb, index) => (
-                <div
-                  key={crumb.path || "project"}
-                  className="flex min-w-0 shrink-0 items-center"
-                  data-current-file-crumb={crumb.kind === "file"}
-                >
-                  {index > 0 ? (
-                    <ChevronRight className={cn("mx-1 size-3.5 shrink-0", QUALIFIER_CLASS_NAME)} />
-                  ) : null}
-                  {/* The trail only locates the file, so it recedes at the same
-                      step QualifiedLabel uses and the name alone carries ink. */}
-                  <span
-                    className={cn(
-                      "max-w-40 truncate",
-                      crumb.kind === "file" ? "font-medium text-foreground" : QUALIFIER_CLASS_NAME,
-                    )}
-                    title={crumb.path || projectName}
+      <div className="surface-subheader gap-2 px-3" data-surface-subheader>
+        {relativePath ? (
+          <>
+            <ScrollArea
+              ref={breadcrumbRef}
+              hideScrollbars
+              scrollFade
+              className="min-w-0 flex-1 rounded-none"
+              data-file-breadcrumbs
+            >
+              <div className="flex h-full w-max min-w-full items-center text-(length:--text-ui)">
+                {breadcrumbs.map((crumb, index) => (
+                  <div
+                    key={crumb.path || "project"}
+                    className="flex min-w-0 shrink-0 items-center"
+                    data-current-file-crumb={crumb.kind === "file"}
                   >
-                    {crumb.label}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </ScrollArea>
-          {absolutePath && environmentId === primaryEnvironmentId ? (
-            <OpenInPicker
-              environmentId={environmentId}
-              keybindings={keybindings}
-              availableEditors={availableEditors}
-              openInCwd={absolutePath}
-              compact
-              enableShortcut={false}
-            />
-          ) : null}
-          {isMarkdown ? (
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <Toggle
-                    className="shrink-0"
-                    pressed={renderMarkdown}
-                    onPressedChange={(pressed) => {
-                      setMarkdownView({
-                        path: pressed ? relativePath : null,
-                        revealRequestId: pressed ? revealRequestId : null,
-                      });
-                    }}
-                    aria-label={renderMarkdown ? "Show markdown source" : "Show rendered markdown"}
-                    variant="ghost"
-                    size="sm"
-                  >
-                    {renderMarkdown ? <Code2 className="size-3.5" /> : <Eye className="size-3.5" />}
-                  </Toggle>
-                }
+                    {index > 0 ? (
+                      <ChevronRight
+                        className={cn("mx-1 size-3.5 shrink-0", QUALIFIER_CLASS_NAME)}
+                      />
+                    ) : null}
+                    {/* The trail only locates the file, so it recedes at the same
+                        step QualifiedLabel uses and the name alone carries ink. */}
+                    <span
+                      className={cn(
+                        "max-w-40 truncate",
+                        crumb.kind === "file"
+                          ? "font-medium text-foreground"
+                          : QUALIFIER_CLASS_NAME,
+                      )}
+                      title={crumb.path || projectName}
+                    >
+                      {crumb.label}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+            {absolutePath && environmentId === primaryEnvironmentId ? (
+              <OpenInPicker
+                environmentId={environmentId}
+                keybindings={keybindings}
+                availableEditors={availableEditors}
+                openInCwd={absolutePath}
+                compact
+                enableShortcut={false}
               />
-              <TooltipPopup>
-                {renderMarkdown ? "Show markdown source" : "Show rendered markdown"}
-              </TooltipPopup>
-            </Tooltip>
-          ) : null}
-          {canOpenInBrowser ? (
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <Toggle
-                    className="shrink-0"
-                    pressed={false}
-                    onPressedChange={handleOpenInBrowser}
-                    aria-label="Open file in preview browser"
-                    variant="ghost"
-                    size="sm"
-                  >
-                    <Globe2 className="size-3.5" />
-                  </Toggle>
-                }
-              />
-              <TooltipPopup>Open file in preview browser</TooltipPopup>
-            </Tooltip>
-          ) : null}
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Toggle
-                  className="shrink-0"
-                  pressed={explorerOpen}
-                  onPressedChange={toggleExplorer}
-                  aria-label={explorerOpen ? "Hide file explorer" : "Show file explorer"}
-                  variant="ghost"
-                  size="sm"
-                >
-                  <FolderTree className="size-3.5" />
-                </Toggle>
-              }
-            />
-            <TooltipPopup>
-              {explorerOpen ? "Hide file explorer" : "Show file explorer"}
-            </TooltipPopup>
-          </Tooltip>
-        </div>
-      ) : null}
+            ) : null}
+            {isMarkdown ? (
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Toggle
+                      className="shrink-0"
+                      pressed={renderMarkdown}
+                      onPressedChange={(pressed) => {
+                        setMarkdownView({
+                          path: pressed ? relativePath : null,
+                          revealRequestId: pressed ? revealRequestId : null,
+                        });
+                      }}
+                      aria-label={
+                        renderMarkdown ? "Show markdown source" : "Show rendered markdown"
+                      }
+                      variant="ghost"
+                      size="sm"
+                    >
+                      {renderMarkdown ? (
+                        <Code2 className="size-3.5" />
+                      ) : (
+                        <Eye className="size-3.5" />
+                      )}
+                    </Toggle>
+                  }
+                />
+                <TooltipPopup>
+                  {renderMarkdown ? "Show markdown source" : "Show rendered markdown"}
+                </TooltipPopup>
+              </Tooltip>
+            ) : null}
+            {canOpenInBrowser ? (
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Toggle
+                      className="shrink-0"
+                      pressed={false}
+                      onPressedChange={handleOpenInBrowser}
+                      aria-label="Open file in preview browser"
+                      variant="ghost"
+                      size="sm"
+                    >
+                      <Globe2 className="size-3.5" />
+                    </Toggle>
+                  }
+                />
+                <TooltipPopup>Open file in preview browser</TooltipPopup>
+              </Tooltip>
+            ) : null}
+          </>
+        ) : (
+          <div className="min-w-0 flex-1 truncate text-(length:--text-ui) text-muted-foreground">
+            {projectName}
+          </div>
+        )}
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Toggle
+                className="shrink-0"
+                pressed={explorerOpen}
+                onPressedChange={toggleExplorer}
+                aria-label={explorerOpen ? "Hide file explorer" : "Show file explorer"}
+                variant="ghost"
+                size="sm"
+              >
+                <FolderTree className="size-3.5" />
+              </Toggle>
+            }
+          />
+          <TooltipPopup>{explorerOpen ? "Hide file explorer" : "Show file explorer"}</TooltipPopup>
+        </Tooltip>
+      </div>
+      <Separator />
       {relativePath && file.data?.truncated ? (
         <div className="shrink-0 border-b border-border bg-(--wash-hover) px-3 py-1.5 text-(length:--text-caption) text-muted-foreground">
           Preview limited to the first 1 MB of a {file.data.byteLength.toLocaleString()} byte file.
         </div>
       ) : null}
-      <div className="flex min-h-0 flex-1 overflow-hidden">
+      {/* The container `--file-explorer-width` measures against. */}
+      <div className="@container flex min-h-0 flex-1 overflow-hidden">
         <div
           className={cn(
             "min-w-0 flex-1 flex-col overflow-hidden",
@@ -962,14 +982,41 @@ export default function FilePreviewPanel({
             )
           ) : null}
         </div>
-        {explorerOpen || relativePath === null ? (
-          // The explorer is chrome sitting on the content floor rather than a
-          // second pane butted against it, so it gets a gutter instead of a
-          // divider and the pane's surface runs behind its rounded corners.
+        {/*
+         * The explorer collapses the way every other panel does — permanently
+         * mounted, width animated — instead of unmounting, so it slides rather
+         * than popping. Same mechanism as the right panel and the environment
+         * column, and the same reason: an unmounted element has nothing left to
+         * transition.
+         *
+         * Only meaningful beside an open file. With no file open the explorer *is*
+         * the panel's content, so it stays at full width and is never collapsible
+         * — hiding it there would leave an empty panel with no way back.
+         *
+         * One `FileBrowserPanel`, not one per branch: a second instance in a
+         * different tree position would remount on opening a file and throw away
+         * the tree's expansion state.
+         */}
+        <div
+          inert={relativePath ? !explorerOpen : undefined}
+          className={cn(
+            "flex min-h-0 overflow-hidden",
+            relativePath
+              ? cn(
+                  "shrink-0 transition-[width] duration-(--duration-base) ease-(--ease-soft)",
+                  explorerOpen ? "w-(--file-explorer-width)" : "w-0",
+                )
+              : "min-w-0 flex-1",
+          )}
+        >
+          {/* The explorer and file share one surface; only a hairline marks the
+              boundary when both panes are present. */}
           <aside
             className={cn(
-              "flex min-h-0 shrink-0 p-1.5",
-              relativePath ? "w-[min(22rem,46%)] min-w-64" : "min-w-0 flex-1",
+              "flex min-h-0",
+              relativePath
+                ? "w-(--file-explorer-width) shrink-0 border-l border-(--edge)"
+                : "min-w-0 flex-1",
             )}
           >
             <FileBrowserPanel
@@ -980,7 +1027,7 @@ export default function FilePreviewPanel({
               onOpenFile={onOpenFile}
             />
           </aside>
-        ) : null}
+        </div>
       </div>
     </div>
   );

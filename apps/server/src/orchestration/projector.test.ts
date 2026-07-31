@@ -6,6 +6,7 @@ import {
   ThreadId,
   type OrchestrationEvent,
 } from "@vide/contracts";
+import { it as effectIt } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -89,6 +90,7 @@ describe("orchestration projector", () => {
         createdAt: now,
         updatedAt: now,
         archivedAt: null,
+        pinned: false,
         settledOverride: null,
         settledAt: null,
         snoozedUntil: null,
@@ -208,6 +210,63 @@ describe("orchestration projector", () => {
     );
     expect(unarchived.threads[0]?.archivedAt).toBeNull();
   });
+
+  effectIt.effect("applies thread.pinned and thread.unpinned events", () =>
+    Effect.gen(function* () {
+      const now = "2026-01-01T00:00:00.000Z";
+      const created = yield* projectEvent(
+        createEmptyReadModel(now),
+        makeEvent({
+          sequence: 1,
+          type: "thread.created",
+          aggregateKind: "thread",
+          aggregateId: "thread-1",
+          occurredAt: now,
+          commandId: "cmd-thread-create",
+          payload: {
+            threadId: "thread-1",
+            projectId: "project-1",
+            title: "demo",
+            modelSelection: { provider: "codex", model: "gpt-5-codex" },
+            runtimeMode: "full-access",
+            interactionMode: "default",
+            branch: null,
+            worktreePath: null,
+            createdAt: now,
+            updatedAt: now,
+          },
+        }),
+      );
+
+      const pinned = yield* projectEvent(
+        created,
+        makeEvent({
+          sequence: 2,
+          type: "thread.pinned",
+          aggregateKind: "thread",
+          aggregateId: "thread-1",
+          occurredAt: now,
+          commandId: "cmd-thread-pin",
+          payload: { threadId: "thread-1", updatedAt: now },
+        }),
+      );
+      expect(pinned.threads[0]?.pinned).toBe(true);
+
+      const unpinned = yield* projectEvent(
+        pinned,
+        makeEvent({
+          sequence: 3,
+          type: "thread.unpinned",
+          aggregateKind: "thread",
+          aggregateId: "thread-1",
+          occurredAt: now,
+          commandId: "cmd-thread-unpin",
+          payload: { threadId: "thread-1", updatedAt: now },
+        }),
+      );
+      expect(unpinned.threads[0]?.pinned).toBe(false);
+    }),
+  );
 
   it("keeps projector forward-compatible for unhandled event types", async () => {
     const now = "2026-01-01T00:00:00.000Z";

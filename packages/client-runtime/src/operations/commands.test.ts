@@ -24,9 +24,11 @@ import type { WsRpcProtocolClient } from "../rpc/protocol.ts";
 import {
   archiveThread,
   createProject,
+  pinThread,
   settleThread,
   stopThreadSession,
   unsettleThread,
+  unpinThread,
 } from "./commands.ts";
 
 const TEST_CRYPTO_LAYER = Layer.succeed(
@@ -167,6 +169,35 @@ describe("environment commands", () => {
           commandId: "unsettle-command",
           threadId: "thread-1",
           reason: "user",
+        },
+      ]);
+    }).pipe(Effect.provide(TEST_CRYPTO_LAYER)),
+  );
+
+  it.effect("dispatches pin and unpin commands without timestamps", () =>
+    Effect.gen(function* () {
+      const dispatched: ClientOrchestrationCommand[] = [];
+      const supervisor = yield* makeSupervisor(dispatched);
+
+      yield* pinThread({
+        commandId: CommandId.make("pin-command"),
+        threadId: ThreadId.make("thread-1"),
+      }).pipe(Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor));
+      yield* unpinThread({
+        commandId: CommandId.make("unpin-command"),
+        threadId: ThreadId.make("thread-1"),
+      }).pipe(Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor));
+
+      expect(dispatched).toEqual([
+        {
+          type: "thread.pin",
+          commandId: "pin-command",
+          threadId: "thread-1",
+        },
+        {
+          type: "thread.unpin",
+          commandId: "unpin-command",
+          threadId: "thread-1",
         },
       ]);
     }).pipe(Effect.provide(TEST_CRYPTO_LAYER)),

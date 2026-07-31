@@ -91,36 +91,34 @@ const DIFF_PANEL_UNSAFE_CSS = `
 [data-virtualizer-buffer] {
   --diffs-header-font-family: var(--font-sans) !important;
   --diffs-font-family: var(--font-mono) !important;
-  --diffs-bg: color-mix(in srgb, var(--card) 90%, var(--background)) !important;
-  --diffs-light-bg: color-mix(in srgb, var(--card) 90%, var(--background)) !important;
-  --diffs-dark-bg: color-mix(in srgb, var(--card) 90%, var(--background)) !important;
+  --diffs-font-size: var(--code-font-size);
+  --diffs-line-height: var(--code-line-height);
+  --diffs-bg: var(--panel-diff-code-surface) !important;
+  --diffs-light-bg: var(--panel-diff-code-surface) !important;
+  --diffs-dark-bg: var(--panel-diff-code-surface) !important;
   --diffs-token-light-bg: transparent;
   --diffs-token-dark-bg: transparent;
 
-  --diffs-bg-context-override: color-mix(in srgb, var(--background) 97%, var(--foreground));
-  --diffs-bg-hover-override: color-mix(in srgb, var(--background) 94%, var(--foreground));
-  --diffs-bg-separator-override: color-mix(in srgb, var(--background) 95%, var(--foreground));
-  --diffs-bg-buffer-override: color-mix(in srgb, var(--background) 90%, var(--foreground));
+  --diffs-bg-context-override: var(--panel-diff-context-surface);
+  --diffs-bg-hover-override: var(--panel-diff-hover-surface);
+  --diffs-bg-separator-override: var(--panel-diff-separator-surface);
+  --diffs-bg-buffer-override: var(--panel-diff-buffer-surface);
 
-  --diffs-bg-addition-override: color-mix(in srgb, var(--background) 92%, var(--success));
-  --diffs-bg-addition-number-override: color-mix(in srgb, var(--background) 88%, var(--success));
-  --diffs-bg-addition-hover-override: color-mix(in srgb, var(--background) 85%, var(--success));
-  --diffs-bg-addition-emphasis-override: color-mix(in srgb, var(--background) 80%, var(--success));
+  --diffs-bg-addition-override: var(--panel-diff-addition-surface);
+  --diffs-bg-addition-number-override: var(--panel-diff-addition-number-surface);
+  --diffs-bg-addition-hover-override: var(--panel-diff-addition-hover-surface);
+  --diffs-bg-addition-emphasis-override: var(--panel-diff-addition-emphasis-surface);
 
-  --diffs-bg-deletion-override: color-mix(in srgb, var(--background) 92%, var(--destructive));
-  --diffs-bg-deletion-number-override: color-mix(in srgb, var(--background) 88%, var(--destructive));
-  --diffs-bg-deletion-hover-override: color-mix(in srgb, var(--background) 85%, var(--destructive));
-  --diffs-bg-deletion-emphasis-override: color-mix(
-    in srgb,
-    var(--background) 80%,
-    var(--destructive)
-  );
+  --diffs-bg-deletion-override: var(--panel-diff-deletion-surface);
+  --diffs-bg-deletion-number-override: var(--panel-diff-deletion-number-surface);
+  --diffs-bg-deletion-hover-override: var(--panel-diff-deletion-hover-surface);
+  --diffs-bg-deletion-emphasis-override: var(--panel-diff-deletion-emphasis-surface);
 
   background-color: var(--diffs-bg) !important;
 }
 
 [data-file-info] {
-  background-color: color-mix(in srgb, var(--card) 94%, var(--foreground)) !important;
+  background-color: var(--panel-diff-header-surface) !important;
   border-block-color: var(--border) !important;
   color: var(--foreground) !important;
 }
@@ -129,14 +127,14 @@ const DIFF_PANEL_UNSAFE_CSS = `
   position: sticky !important;
   top: 0;
   z-index: 4;
-  background-color: color-mix(in srgb, var(--card) 94%, var(--foreground)) !important;
-  border-bottom: 1px solid var(--border) !important;
+  background-color: var(--panel-diff-header-surface) !important;
+  border-bottom: var(--panel-hairline) solid var(--border) !important;
   align-items: center !important;
   font-family: var(--font-sans) !important;
-  font-size: 12px !important;
+  font-size: var(--text-caption) !important;
   line-height: 1 !important;
-  min-height: 32px !important;
-  padding-block: 6px !important;
+  min-height: var(--panel-diff-header-height) !important;
+  padding-block: var(--panel-diff-header-padding-block) !important;
 }
 
 [data-diffs-header] [data-header-content] {
@@ -153,7 +151,7 @@ const DIFF_PANEL_UNSAFE_CSS = `
 [data-diffs-header] [data-additions-count],
 [data-diffs-header] [data-deletions-count] {
   font-family: var(--font-mono) !important;
-  font-size: 11px !important;
+  font-size: var(--text-caption) !important;
   font-variant-numeric: tabular-nums;
   line-height: 1 !important;
 }
@@ -167,16 +165,16 @@ const DIFF_PANEL_UNSAFE_CSS = `
 [data-title] {
   cursor: pointer;
   transition:
-    color 120ms ease,
-    text-decoration-color 120ms ease;
+    color var(--duration-fast) var(--ease-out),
+    text-decoration-color var(--duration-fast) var(--ease-out);
   text-decoration: underline;
   text-decoration-color: transparent;
-  text-underline-offset: 2px;
+  text-underline-offset: var(--panel-diff-title-underline-offset);
   font-family: var(--font-sans) !important;
 }
 
 [data-title]:hover {
-  color: color-mix(in srgb, var(--foreground) 84%, var(--primary)) !important;
+  color: var(--panel-diff-title-hover-ink) !important;
   text-decoration-color: currentColor;
 }
 `;
@@ -535,7 +533,7 @@ export default function DiffPanel({
       <div className="flex min-w-0 flex-1 items-center gap-3 [-webkit-app-region:no-drag]">
         <DropdownMenu>
           <DropdownMenuTrigger
-            className="inline-flex h-6 max-w-full items-center gap-1 rounded-md bg-muted/70 px-2 text-xs font-medium text-foreground outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+            className="inline-flex h-6 max-w-full items-center gap-1 rounded-md bg-(--panel-control-surface) px-2 text-(length:--text-caption) font-medium text-foreground outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
             aria-label={`Diff scope: ${selectedScopeLabel}`}
           >
             <span className="truncate">{selectedScopeLabel}</span>
@@ -545,7 +543,7 @@ export default function DiffPanel({
             <DropdownMenuItem
               className={
                 selectedTurnId === null && selectedGitScope === "unstaged"
-                  ? "bg-foreground/[0.08]"
+                  ? "bg-(--wash-selected)"
                   : undefined
               }
               onClick={() => selectGitScope("unstaged")}
@@ -555,7 +553,7 @@ export default function DiffPanel({
             <DropdownMenuItem
               className={
                 selectedTurnId === null && selectedGitScope === "branch"
-                  ? "bg-foreground/[0.08]"
+                  ? "bg-(--wash-selected)"
                   : undefined
               }
               onClick={() => selectGitScope("branch")}
@@ -565,7 +563,7 @@ export default function DiffPanel({
             <DropdownMenuItem
               className={
                 selectedTurnId !== null && selectedTurn?.turnId === latestTurn?.turnId
-                  ? "bg-foreground/[0.08]"
+                  ? "bg-(--wash-selected)"
                   : undefined
               }
               onClick={() => {
@@ -586,12 +584,12 @@ export default function DiffPanel({
                     <DropdownMenuItem
                       key={summary.turnId}
                       className={
-                        summary.turnId === selectedTurn?.turnId ? "bg-foreground/[0.08]" : undefined
+                        summary.turnId === selectedTurn?.turnId ? "bg-(--wash-selected)" : undefined
                       }
                       onClick={() => selectTurn(summary.turnId)}
                     >
                       <span>Turn {turnCount}</span>
-                      <span className="ml-auto text-xs tabular-nums text-muted-foreground">
+                      <span className="ml-auto text-(length:--text-caption) tabular-nums text-muted-foreground">
                         {formatShortTimestamp(summary.completedAt, settings.timestampFormat)}
                       </span>
                     </DropdownMenuItem>
@@ -603,7 +601,7 @@ export default function DiffPanel({
         </DropdownMenu>
         {selectedTurnId === null && selectedGitScope === "branch" && selectedGitSource?.baseRef && (
           <div
-            className="flex min-w-0 max-w-full items-center gap-2 overflow-hidden text-xs text-muted-foreground"
+            className="flex min-w-0 max-w-full items-center gap-2 overflow-hidden text-(length:--text-caption) text-muted-foreground"
             title={`${selectedGitSource.headRef ?? "HEAD"} → ${selectedGitSource.baseRef}`}
             aria-label={`Comparing ${selectedGitSource.headRef ?? "HEAD"} against ${selectedGitSource.baseRef}`}
           >
@@ -630,17 +628,17 @@ export default function DiffPanel({
               </ComboboxTrigger>
               <ComboboxPopup
                 align="start"
-                className="w-72 min-w-0 max-w-[calc(100vw-1rem)] overflow-hidden [&>[data-slot=combobox-popup]]:min-w-0 [&>[data-slot=combobox-popup]]:overflow-hidden"
+                className="w-72 min-w-0 max-w-[calc(100vw-1rem)] overflow-hidden"
               >
                 <div className="min-w-0 shrink-0 px-3 pt-2.5">
-                  <div className="relative -translate-y-px border-b border-border/70 pb-1.5 transition-colors focus-within:border-ring">
+                  <div className="relative -translate-y-px border-b border-(--panel-edge-muted) pb-1.5 transition-colors focus-within:border-ring">
                     <SearchIcon
                       aria-hidden="true"
                       className="pointer-events-none absolute top-1.5 left-0 size-4 shrink-0 text-muted-foreground/55"
                     />
                     <ComboboxInput
-                      className="[&_input]:h-6.5 [&_input]:ps-5 [&_input]:font-sans [&_input]:leading-6.5"
-                      inputClassName="rounded-none bg-transparent text-sm"
+                      className="[&_input]:h-(--panel-compact-input-height) [&_input]:ps-5 [&_input]:font-sans [&_input]:leading-(--panel-compact-input-height)"
+                      inputClassName="rounded-none bg-transparent text-(length:--text-ui)"
                       placeholder="Search refs..."
                       showTrigger={false}
                       size="sm"
@@ -650,7 +648,7 @@ export default function DiffPanel({
                     />
                   </div>
                 </div>
-                <div className="grid shrink-0 grid-cols-[1rem_minmax(0,1fr)] items-center gap-2 border-b border-border/70 ps-3 pe-6.5 pt-2 pb-1.5 font-medium text-[10px] text-muted-foreground uppercase tracking-wide">
+                <div className="grid shrink-0 grid-cols-[1rem_minmax(0,1fr)] items-center gap-2 border-b border-(--panel-edge-muted) ps-3 pe-6.5 pt-2 pb-1.5 font-medium text-(length:--text-caption) text-muted-foreground uppercase tracking-wide">
                   <span aria-hidden="true" />
                   <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_2rem] items-center">
                     <span>Branch</span>
@@ -720,7 +718,7 @@ export default function DiffPanel({
           <DiffStatLabel
             additions={diffLineStat.additions}
             deletions={diffLineStat.deletions}
-            className="mr-1 text-[11px]"
+            className="mr-1 text-(length:--text-caption)"
             layout="inline"
           />
         )}
@@ -816,29 +814,31 @@ export default function DiffPanel({
   return (
     <DiffPanelShell mode={mode} header={headerRow}>
       {!activeThread ? (
-        <div className="flex flex-1 items-center justify-center px-5 text-center text-xs text-muted-foreground/70">
+        <div className="flex flex-1 items-center justify-center px-5 text-center text-(length:--text-caption) text-(--panel-muted-ink)">
           Select a thread to inspect turn diffs.
         </div>
       ) : !isGitRepo ? (
-        <div className="flex flex-1 items-center justify-center px-5 text-center text-xs text-muted-foreground/70">
+        <div className="flex flex-1 items-center justify-center px-5 text-center text-(length:--text-caption) text-(--panel-muted-ink)">
           Turn diffs are unavailable because this project is not a git repository.
         </div>
       ) : selectedTurnId !== null && orderedTurnDiffSummaries.length === 0 ? (
-        <div className="flex flex-1 items-center justify-center px-5 text-center text-xs text-muted-foreground/70">
+        <div className="flex flex-1 items-center justify-center px-5 text-center text-(length:--text-caption) text-(--panel-muted-ink)">
           No completed turns yet.
         </div>
       ) : (
         <>
           <div className="diff-panel-viewport flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
             {isSelectedPatchTruncated && (
-              <p className="shrink-0 border-b border-border/70 bg-muted/40 px-3 py-1.5 text-[11px] text-muted-foreground">
+              <p className="shrink-0 border-b border-(--panel-edge-muted) bg-(--panel-notice-surface) px-3 py-1.5 text-(length:--text-caption) text-muted-foreground">
                 This diff was truncated because it exceeded the preview limit. The changes shown are
                 incomplete.
               </p>
             )}
             {selectedPatchError && !renderablePatch && (
               <div className="px-3">
-                <p className="mb-2 text-[11px] text-red-500/80">{selectedPatchError}</p>
+                <p className="mb-2 text-(length:--text-caption) text-destructive">
+                  {selectedPatchError}
+                </p>
               </div>
             )}
             {!renderablePatch ? (
@@ -853,7 +853,7 @@ export default function DiffPanel({
                   }
                 />
               ) : (
-                <div className="flex h-full items-center justify-center px-3 py-2 text-xs text-muted-foreground/70">
+                <div className="flex h-full items-center justify-center px-3 py-2 text-(length:--text-caption) text-(--panel-muted-ink)">
                   <p>
                     {hasNoNetChanges
                       ? "No net changes in this selection."
@@ -888,10 +888,11 @@ export default function DiffPanel({
                       <Tooltip>
                         <TooltipTrigger
                           render={
-                            <button
-                              type="button"
+                            <Button
+                              variant="ghost"
+                              size="icon-xs"
                               className={cn(
-                                "inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-sm border-0 bg-transparent p-0 transition-colors hover:bg-foreground/10 focus-visible:outline-hidden",
+                                "size-5 rounded-sm",
                                 getDiffCollapseIconClassName(fileDiff),
                               )}
                               aria-label={collapsed ? `Expand ${filePath}` : `Collapse ${filePath}`}
@@ -930,10 +931,12 @@ export default function DiffPanel({
             ) : (
               <div className="min-h-0 flex-1 overflow-auto p-2">
                 <div className="space-y-2">
-                  <p className="text-[11px] text-muted-foreground/75">{renderablePatch.reason}</p>
+                  <p className="text-(length:--text-caption) text-muted-foreground">
+                    {renderablePatch.reason}
+                  </p>
                   <pre
                     className={cn(
-                      "max-h-[72vh] rounded-md border border-border/70 bg-background/70 p-3 font-mono text-[11px] leading-relaxed text-muted-foreground/90",
+                      "max-h-(--panel-raw-patch-max-height) rounded-md border border-(--panel-edge-muted) bg-(--panel-raw-patch-surface) p-3 font-mono text-(length:--code-font-size) leading-(--code-line-height) text-muted-foreground",
                       wordWrap
                         ? "overflow-auto whitespace-pre-wrap wrap-break-word"
                         : "overflow-auto",

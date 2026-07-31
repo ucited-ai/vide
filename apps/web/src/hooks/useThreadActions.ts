@@ -102,6 +102,12 @@ export function useThreadActions() {
   const unarchiveThreadMutation = useAtomCommand(threadEnvironment.unarchive, {
     reportFailure: false,
   });
+  const pinThreadMutation = useAtomCommand(threadEnvironment.pin, {
+    reportFailure: false,
+  });
+  const unpinThreadMutation = useAtomCommand(threadEnvironment.unpin, {
+    reportFailure: false,
+  });
   const deleteThreadMutation = useAtomCommand(threadEnvironment.delete, {
     reportFailure: false,
   });
@@ -450,6 +456,24 @@ export function useThreadActions() {
     [resolveThreadTarget, settleThreadMutation],
   );
 
+  const pinThread = useCallback(
+    (target: ScopedThreadRef) =>
+      pinThreadMutation({
+        environmentId: target.environmentId,
+        input: { threadId: target.threadId },
+      }),
+    [pinThreadMutation],
+  );
+
+  const unpinThread = useCallback(
+    (target: ScopedThreadRef) =>
+      unpinThreadMutation({
+        environmentId: target.environmentId,
+        input: { threadId: target.threadId },
+      }),
+    [unpinThreadMutation],
+  );
+
   const unsettleThread = useCallback(
     async (target: ScopedThreadRef) => {
       if (!readEnvironmentSupportsSettlement(target.environmentId)) {
@@ -561,6 +585,8 @@ export function useThreadActions() {
       unarchiveThread,
       deleteThread,
       confirmAndDeleteThread,
+      pinThread,
+      unpinThread,
       settleThread,
       unsettleThread,
       snoozeThread,
@@ -570,9 +596,11 @@ export function useThreadActions() {
       archiveThread,
       confirmAndDeleteThread,
       deleteThread,
+      pinThread,
       settleThread,
       snoozeThread,
       unarchiveThread,
+      unpinThread,
       unsettleThread,
       unsnoozeThread,
     ],

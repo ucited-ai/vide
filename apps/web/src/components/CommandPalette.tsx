@@ -1251,9 +1251,6 @@ function OpenCommandPaletteDialog(props: {
           <CommandInput
             className={isBrowsing ? (willCreateProjectPath ? "pe-36" : "pe-16") : undefined}
             placeholder={inputPlaceholder}
-            wrapperClassName={
-              isSubmenu ? "[&_[data-slot=autocomplete-start-addon]]:pointer-events-auto" : undefined
-            }
             {...(isSubmenu
               ? {
                   startAddon: (

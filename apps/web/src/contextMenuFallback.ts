@@ -57,7 +57,9 @@ function createIconElement(name: string, tone: "neutral" | "destructive"): SVGSV
   svg.setAttribute("stroke-linejoin", "round");
   svg.setAttribute(
     "class",
-    tone === "destructive" ? "size-3.5 shrink-0" : "size-3.5 shrink-0 text-muted-foreground",
+    tone === "destructive"
+      ? "size-(--popup-icon-size) shrink-0"
+      : "size-(--popup-icon-size) shrink-0 text-muted-foreground",
   );
   for (const node of paths) {
     const child = document.createElementNS(SVG_NS, node.tag);
@@ -166,23 +168,24 @@ export function showContextMenuFallback<T extends string>(
 
       const menu = document.createElement("div");
       menu.className =
-        "fixed z-[10000] min-w-32 max-w-sm overflow-hidden rounded-lg border border-border bg-popover bg-clip-padding text-popover-foreground shadow-lg/5 outline-none";
+        "fixed z-[10000] min-w-(--popup-min-width) max-w-sm overflow-hidden rounded-(--popup-radius) border border-border bg-popover bg-clip-padding text-popover-foreground shadow-lg/5 outline-none";
       menu.style.cssText =
-        "position:fixed;z-index:10000;min-width:8rem;max-width:24rem;overflow:hidden;border-radius:var(--radius-lg);border:1px solid var(--border);background:var(--popover);background-clip:padding-box;color:var(--popover-foreground);box-shadow:0 10px 15px -3px rgb(0 0 0 / 0.05),0 4px 6px -4px rgb(0 0 0 / 0.05);outline:none;pointer-events:auto;";
+        "position:fixed;z-index:10000;min-width:var(--popup-min-width);max-width:24rem;overflow:hidden;border-radius:var(--popup-radius);border:1px solid var(--border);background:var(--popover);background-clip:padding-box;color:var(--popover-foreground);box-shadow:0 10px 15px -3px rgb(0 0 0 / 0.05),0 4px 6px -4px rgb(0 0 0 / 0.05);outline:none;pointer-events:auto;";
       menu.style.left = `${preferredLeft}px`;
       menu.style.top = `${preferredTop}px`;
       menu.dataset.level = String(level);
 
       const inner = document.createElement("div");
       inner.className =
-        "max-h-[min(24rem,70vh)] min-w-0 max-w-sm overflow-y-auto overflow-x-hidden p-1";
+        "max-h-(--popup-list-max-height) min-w-0 max-w-sm overflow-y-auto overflow-x-hidden p-(--popup-padding)";
       inner.style.cssText =
-        "max-height:min(24rem,70vh);min-width:0;max-width:24rem;overflow-x:hidden;overflow-y:auto;padding:0.25rem;";
+        "max-height:var(--popup-list-max-height);min-width:0;max-width:24rem;overflow-x:hidden;overflow-y:auto;padding:var(--popup-padding);";
 
       for (const item of entries) {
         if (item.header === true) {
           const header = document.createElement("div");
-          header.className = "px-2 py-1.5 font-medium text-muted-foreground text-xs";
+          header.className =
+            "px-(--popup-item-padding-inline) py-(--popup-label-padding-block) font-medium text-(length:--text-caption) text-muted-foreground";
           header.textContent = item.label;
           inner.appendChild(header);
           continue;
@@ -197,14 +200,14 @@ export function showContextMenuFallback<T extends string>(
         const isDisabled = item.disabled === true;
         button.disabled = isDisabled;
         const rowBase =
-          "flex w-full cursor-default select-none items-center gap-2 rounded-sm px-2 py-1 text-left outline-none transition-colors sm:min-h-7 sm:text-sm min-h-8 text-base";
+          "flex min-h-(--popup-item-height) w-full cursor-default select-none items-center gap-(--popup-item-gap) rounded-(--popup-item-radius) px-(--popup-item-padding-inline) py-1 text-left text-(length:--text-ui) outline-none transition-colors";
         button.className = isDisabled
           ? `${rowBase} pointer-events-none cursor-not-allowed text-muted-foreground opacity-64`
           : isLeafDestructive
             ? `${rowBase} text-destructive-foreground hover:bg-destructive/10 hover:text-destructive-foreground`
             : `${rowBase} text-foreground hover:bg-accent hover:text-accent-foreground`;
         button.style.cssText =
-          "display:flex;width:100%;min-height:1.75rem;align-items:center;gap:0.5rem;border:0;border-radius:var(--radius-sm);background:transparent;padding:0.25rem 0.5rem;color:var(--foreground);font-family:var(--font-sans,system-ui,sans-serif);font-size:0.875rem;line-height:1.25rem;text-align:left;cursor:default;";
+          "display:flex;width:100%;min-height:var(--popup-item-height);align-items:center;gap:var(--popup-item-gap);border:0;border-radius:var(--popup-item-radius);background:transparent;padding:0.25rem var(--popup-item-padding-inline);color:var(--foreground);font-family:var(--font-sans,system-ui,sans-serif);font-size:var(--text-ui);line-height:1.45;text-align:left;cursor:default;";
         if (isLeafDestructive) {
           button.style.color = "var(--destructive-foreground)";
         }
@@ -228,7 +231,8 @@ export function showContextMenuFallback<T extends string>(
 
         if (hasChildren) {
           const chevron = document.createElement("span");
-          chevron.className = "ms-auto shrink-0 text-muted-foreground/80 text-sm leading-none";
+          chevron.className =
+            "ms-auto shrink-0 text-(length:--text-ui) text-muted-foreground/80 leading-none";
           chevron.textContent = ">";
           button.appendChild(chevron);
         }

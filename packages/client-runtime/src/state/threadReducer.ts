@@ -72,6 +72,7 @@ export function applyThreadDetailEvent(
           createdAt: event.payload.createdAt,
           updatedAt: event.payload.updatedAt,
           archivedAt: null,
+          pinned: false,
           settledOverride: null,
           settledAt: null,
           snoozedUntil: null,
@@ -102,6 +103,18 @@ export function applyThreadDetailEvent(
       return {
         kind: "updated",
         thread: { ...thread, archivedAt: null, updatedAt: event.payload.updatedAt },
+      };
+
+    case "thread.pinned":
+      return {
+        kind: "updated",
+        thread: { ...thread, pinned: true, updatedAt: event.payload.updatedAt },
+      };
+
+    case "thread.unpinned":
+      return {
+        kind: "updated",
+        thread: { ...thread, pinned: false, updatedAt: event.payload.updatedAt },
       };
 
     case "thread.settled":

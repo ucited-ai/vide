@@ -105,7 +105,7 @@ function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       className={cn(
-        "flex flex-col gap-2 p-6 in-[[data-slot=dialog-popup]:has([data-slot=dialog-panel])]:pb-3 max-sm:pb-4",
+        "flex flex-col gap-(--dialog-gap) p-(--dialog-padding) in-[[data-slot=dialog-popup]:has([data-slot=dialog-panel])]:pb-(--dialog-seam) max-sm:pb-(--dialog-seam)",
         className,
       )}
       data-slot="dialog-header"
@@ -124,9 +124,9 @@ function DialogFooter({
   return (
     <div
       className={cn(
-        "flex flex-col-reverse gap-2 px-6 sm:flex-row sm:justify-end sm:rounded-b-[calc(var(--radius-2xl)-1px)]",
-        variant === "default" && "border-t bg-muted/72 py-4",
-        variant === "bare" && "py-4",
+        "flex flex-col-reverse gap-2 px-(--dialog-padding) sm:flex-row sm:justify-end sm:rounded-b-[calc(var(--dialog-radius)-1px)]",
+        variant === "default" && "border-t bg-muted/72 py-(--dialog-footer-padding-block)",
+        variant === "bare" && "py-(--dialog-footer-padding-block)",
         className,
       )}
       data-slot="dialog-footer"
@@ -138,7 +138,10 @@ function DialogFooter({
 function DialogTitle({ className, ...props }: DialogPrimitive.Title.Props) {
   return (
     <DialogPrimitive.Title
-      className={cn("font-heading font-semibold text-xl leading-none", className)}
+      className={cn(
+        "font-heading font-semibold text-(length:--text-title) leading-none",
+        className,
+      )}
       data-slot="dialog-title"
       {...props}
     />
@@ -148,7 +151,7 @@ function DialogTitle({ className, ...props }: DialogPrimitive.Title.Props) {
 function DialogDescription({ className, ...props }: DialogPrimitive.Description.Props) {
   return (
     <DialogPrimitive.Description
-      className={cn("text-muted-foreground text-sm", className)}
+      className={cn("text-(length:--text-ui) text-muted-foreground", className)}
       data-slot="dialog-description"
       {...props}
     />
@@ -164,7 +167,7 @@ function DialogPanel({
     <ScrollArea scrollFade={scrollFade}>
       <div
         className={cn(
-          "p-6 in-[[data-slot=dialog-popup]:has([data-slot=dialog-header])]:pt-1 in-[[data-slot=dialog-popup]:has([data-slot=dialog-footer]:not(.border-t))]:pb-1",
+          "p-(--dialog-padding) in-[[data-slot=dialog-popup]:has([data-slot=dialog-header])]:pt-(--dialog-seam-inner) in-[[data-slot=dialog-popup]:has([data-slot=dialog-footer]:not(.border-t))]:pb-(--dialog-seam-inner)",
           className,
         )}
         data-slot="dialog-panel"

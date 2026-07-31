@@ -172,6 +172,52 @@ it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
         assert.equal(row.lastAppliedSequence, 3);
       }
 
+      yield* eventStore.append({
+        type: "thread.pinned",
+        eventId: EventId.make("evt-pin-1"),
+        aggregateKind: "thread",
+        aggregateId: ThreadId.make("thread-1"),
+        occurredAt: "2026-01-01T00:00:00.500Z",
+        commandId: CommandId.make("cmd-pin-1"),
+        causationEventId: null,
+        correlationId: CommandId.make("cmd-pin-1"),
+        metadata: {},
+        payload: {
+          threadId: ThreadId.make("thread-1"),
+          updatedAt: "2026-01-01T00:00:00.500Z",
+        },
+      });
+      yield* projectionPipeline.bootstrap;
+      const pinnedRows = yield* sql<{ readonly pinned: number }>`
+        SELECT pinned
+        FROM projection_threads
+        WHERE thread_id = 'thread-1'
+      `;
+      assert.deepEqual(pinnedRows, [{ pinned: 1 }]);
+
+      yield* eventStore.append({
+        type: "thread.unpinned",
+        eventId: EventId.make("evt-unpin-1"),
+        aggregateKind: "thread",
+        aggregateId: ThreadId.make("thread-1"),
+        occurredAt: "2026-01-01T00:00:00.750Z",
+        commandId: CommandId.make("cmd-unpin-1"),
+        causationEventId: null,
+        correlationId: CommandId.make("cmd-unpin-1"),
+        metadata: {},
+        payload: {
+          threadId: ThreadId.make("thread-1"),
+          updatedAt: "2026-01-01T00:00:00.750Z",
+        },
+      });
+      yield* projectionPipeline.bootstrap;
+      const unpinnedRows = yield* sql<{ readonly pinned: number }>`
+        SELECT pinned
+        FROM projection_threads
+        WHERE thread_id = 'thread-1'
+      `;
+      assert.deepEqual(unpinnedRows, [{ pinned: 0 }]);
+
       // Settled lifecycle through the DB pipeline: thread.settled writes the
       // override + timestamp, thread.unsettled(user) flips to the active pin.
       yield* eventStore.append({

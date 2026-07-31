@@ -23,6 +23,7 @@ function MenuTrigger({ className, children, ...props }: MenuPrimitive.Trigger.Pr
 function MenuPopup({
   children,
   className,
+  header,
   sideOffset = 4,
   align = "center",
   alignOffset,
@@ -31,6 +32,13 @@ function MenuPopup({
   collisionAvoidance,
   ...props
 }: MenuPrimitive.Popup.Props & {
+  /**
+   * Full-bleed chrome above the scrolling list — a `PopupSearchField`, a group
+   * caption. It sits outside the padded scroll container so its hairline can
+   * reach both inner edges of the surface, and so it does not scroll away with
+   * the rows it filters.
+   */
+  header?: React.ReactNode;
   align?: MenuPrimitive.Positioner.Props["align"];
   sideOffset?: MenuPrimitive.Positioner.Props["sideOffset"];
   alignOffset?: MenuPrimitive.Positioner.Props["alignOffset"];
@@ -56,15 +64,19 @@ function MenuPopup({
           // `:not(*:is(class*='w-'))`, whose inner selector is invalid, so it
           // matched everything *and* outranked any `min-w-*` a caller passed.
           // Plain, so tailwind-merge can hand the decision back to callers.
+          // The height cap lives on the surface, not on the scroll container:
+          // with a `header` above it the container is no longer the whole popup,
+          // so capping the container let the pair overflow the viewport.
           className={cn(
-            "dropdown-glass relative flex min-w-(--popup-min-width) origin-(--transform-origin) rounded-lg outline-none focus:outline-none",
+            "dropdown-glass relative flex max-h-(--popup-max-height) min-w-(--popup-min-width) origin-(--transform-origin) flex-col overflow-hidden rounded-(--popup-radius) outline-none focus:outline-none",
             className,
           )}
           data-popup-surface=""
           data-slot="menu-popup"
           {...props}
         >
-          <div className="max-h-(--available-height) w-full overflow-y-auto p-(--popup-padding)">
+          {header}
+          <div className="min-h-0 w-full flex-1 overflow-y-auto p-(--popup-padding)">
             {children}
           </div>
         </MenuPrimitive.Popup>
@@ -89,7 +101,7 @@ function MenuItem({
   return (
     <MenuPrimitive.Item
       className={cn(
-        "[&>svg]:-mx-0.5 flex min-h-(--popup-item-height) cursor-default select-none items-center gap-(--popup-item-gap) rounded-sm px-(--popup-item-padding-inline) py-1 text-(length:--text-ui) text-foreground outline-none data-disabled:pointer-events-none data-highlighted:bg-accent data-inset:ps-8 data-[variant=destructive]:text-destructive-foreground data-highlighted:text-accent-foreground data-disabled:opacity-64 [&>svg:not([class*='opacity-'])]:opacity-80 [&>svg:not([class*='size-'])]:size-4 [&>svg:not([class*='text-'])]:text-muted-foreground data-[variant=destructive]:[&>svg:not([class*='text-'])]:text-current [&>svg]:pointer-events-none [&>svg]:shrink-0",
+        "flex min-h-(--popup-item-height) cursor-default select-none items-center gap-(--popup-item-gap) rounded-(--popup-item-radius) px-(--popup-item-padding-inline) py-1 text-(length:--text-ui) text-foreground outline-none data-disabled:pointer-events-none data-highlighted:bg-accent data-inset:ps-(--popup-item-inset-padding-inline) data-[variant=destructive]:text-destructive-foreground data-highlighted:text-accent-foreground data-disabled:opacity-64 [&>svg:not([class*='opacity-'])]:opacity-80 [&>svg:not([class*='size-'])]:size-(--popup-icon-size) [&>svg:not([class*='text-'])]:text-muted-foreground data-[variant=destructive]:[&>svg:not([class*='text-'])]:text-current [&>svg]:pointer-events-none [&>svg]:shrink-0",
         className,
       )}
       data-inset={inset}
@@ -113,8 +125,10 @@ function MenuCheckboxItem({
     <MenuPrimitive.CheckboxItem
       checked={checked}
       className={cn(
-        "grid min-h-(--popup-item-height) in-data-[side=none]:min-w-[calc(var(--anchor-width)+1.25rem)] cursor-default items-center gap-(--popup-item-gap) rounded-sm py-1 ps-(--popup-item-padding-inline) text-(length:--text-ui) text-foreground outline-none data-disabled:pointer-events-none data-highlighted:bg-accent data-highlighted:text-accent-foreground data-disabled:opacity-64 [&_svg:not([class*='size-'])]:size-4 [&_svg]:pointer-events-none [&_svg]:shrink-0",
-        variant === "switch" ? "grid-cols-[1fr_auto] gap-4 pe-1.5" : "grid-cols-[1rem_1fr] pe-4",
+        "grid min-h-(--popup-item-height) in-data-[side=none]:min-w-[calc(var(--anchor-width)+1.25rem)] cursor-default items-center gap-(--popup-item-gap) rounded-(--popup-item-radius) py-1 ps-(--popup-item-padding-inline) text-(length:--text-ui) text-foreground outline-none data-disabled:pointer-events-none data-highlighted:bg-accent data-highlighted:text-accent-foreground data-disabled:opacity-64 [&_svg:not([class*='size-'])]:size-(--popup-icon-size) [&_svg]:pointer-events-none [&_svg]:shrink-0",
+        variant === "switch"
+          ? "grid-cols-[1fr_auto] gap-4 pe-1.5"
+          : "grid-cols-[var(--popup-icon-size)_1fr] pe-(--popup-item-padding-inline)",
         className,
       )}
       data-slot="menu-checkbox-item"
@@ -169,7 +183,7 @@ function MenuRadioItem({
   return (
     <MenuPrimitive.RadioItem
       className={cn(
-        "flex min-h-(--popup-item-height) in-data-[side=none]:min-w-[calc(var(--anchor-width)+1.25rem)] cursor-default items-center rounded-sm px-(--popup-item-padding-inline) py-1 text-(length:--text-ui) text-foreground outline-none data-checked:bg-foreground/[0.08] data-disabled:pointer-events-none data-highlighted:bg-accent data-highlighted:text-accent-foreground data-disabled:opacity-64 [&_svg:not([class*='size-'])]:size-4 [&_svg]:pointer-events-none [&_svg]:shrink-0",
+        "flex min-h-(--popup-item-height) in-data-[side=none]:min-w-[calc(var(--anchor-width)+1.25rem)] cursor-default items-center rounded-(--popup-item-radius) px-(--popup-item-padding-inline) py-1 text-(length:--text-ui) text-foreground outline-none data-checked:bg-foreground/[0.08] data-disabled:pointer-events-none data-highlighted:bg-accent data-highlighted:text-accent-foreground data-disabled:opacity-64 [&_svg:not([class*='size-'])]:size-(--popup-icon-size) [&_svg]:pointer-events-none [&_svg]:shrink-0",
         className,
       )}
       data-slot="menu-radio-item"
@@ -190,7 +204,7 @@ function MenuGroupLabel({
   return (
     <MenuPrimitive.GroupLabel
       className={cn(
-        "px-(--popup-item-padding-inline) py-1.5 font-medium text-(length:--text-caption) text-muted-foreground data-inset:ps-9 sm:data-inset:ps-8",
+        "px-(--popup-item-padding-inline) py-(--popup-label-padding-block) font-medium text-(length:--text-caption) text-muted-foreground data-inset:ps-(--popup-item-inset-padding-inline)",
         className,
       )}
       data-inset={inset}
@@ -238,7 +252,7 @@ function MenuSubTrigger({
   return (
     <MenuPrimitive.SubmenuTrigger
       className={cn(
-        "flex min-h-(--popup-item-height) cursor-default items-center gap-(--popup-item-gap) rounded-sm px-(--popup-item-padding-inline) py-1 text-(length:--text-ui) text-foreground outline-none data-disabled:pointer-events-none data-highlighted:bg-accent data-popup-open:bg-accent data-inset:ps-8 data-highlighted:text-accent-foreground data-popup-open:text-accent-foreground data-disabled:opacity-64 [&_svg:not([class*='size-'])]:size-4 [&_svg:not([class*='text-'])]:text-muted-foreground [&_svg]:pointer-events-none",
+        "flex min-h-(--popup-item-height) cursor-default items-center gap-(--popup-item-gap) rounded-(--popup-item-radius) px-(--popup-item-padding-inline) py-1 text-(length:--text-ui) text-foreground outline-none data-disabled:pointer-events-none data-highlighted:bg-accent data-popup-open:bg-accent data-inset:ps-(--popup-item-inset-padding-inline) data-highlighted:text-accent-foreground data-popup-open:text-accent-foreground data-disabled:opacity-64 [&_svg:not([class*='size-'])]:size-(--popup-icon-size) [&_svg:not([class*='text-'])]:text-muted-foreground [&_svg]:pointer-events-none",
         className,
       )}
       data-inset={inset}
@@ -246,7 +260,7 @@ function MenuSubTrigger({
       {...props}
     >
       {children}
-      <ChevronRightIcon className="-me-0.5 ms-auto opacity-80" />
+      <ChevronRightIcon className="ms-auto opacity-80" />
     </MenuPrimitive.SubmenuTrigger>
   );
 }

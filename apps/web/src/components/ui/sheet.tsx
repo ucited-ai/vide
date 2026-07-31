@@ -87,7 +87,7 @@ function SheetPopup({
             side === "right" &&
               "col-start-2 w-[calc(100%-(--spacing(12)))] max-w-md border-s data-ending-style:translate-x-8 data-starting-style:translate-x-8",
             variant === "inset" &&
-              "before:hidden sm:rounded-2xl sm:border sm:before:rounded-[calc(var(--radius-2xl)-1px)] sm:**:data-[slot=sheet-footer]:rounded-b-[calc(var(--radius-2xl)-1px)]",
+              "before:hidden sm:rounded-(--dialog-radius) sm:border sm:before:rounded-[calc(var(--dialog-radius)-1px)] sm:**:data-[slot=sheet-footer]:rounded-b-[calc(var(--dialog-radius)-1px)]",
             className,
           )}
           data-slot="sheet-popup"
@@ -113,7 +113,7 @@ function SheetHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       className={cn(
-        "flex flex-col gap-2 p-6 in-[[data-slot=sheet-popup]:has([data-slot=sheet-panel])]:pb-3 max-sm:pb-4",
+        "flex flex-col gap-(--dialog-gap) p-(--dialog-padding) in-[[data-slot=sheet-popup]:has([data-slot=sheet-panel])]:pb-(--dialog-seam) max-sm:pb-(--dialog-seam)",
         className,
       )}
       data-slot="sheet-header"
@@ -132,10 +132,10 @@ function SheetFooter({
   return (
     <div
       className={cn(
-        "flex flex-col-reverse gap-2 px-6 sm:flex-row sm:justify-end",
-        variant === "default" && "border-t bg-muted/72 py-4",
+        "flex flex-col-reverse gap-2 px-(--dialog-padding) sm:flex-row sm:justify-end",
+        variant === "default" && "border-t bg-muted/72 py-(--dialog-footer-padding-block)",
         variant === "bare" &&
-          "in-[[data-slot=sheet-popup]:has([data-slot=sheet-panel])]:pt-3 pt-4 pb-6",
+          "in-[[data-slot=sheet-popup]:has([data-slot=sheet-panel])]:pt-(--dialog-seam) pt-(--dialog-footer-padding-block) pb-(--dialog-padding)",
         className,
       )}
       data-slot="sheet-footer"
@@ -147,7 +147,10 @@ function SheetFooter({
 function SheetTitle({ className, ...props }: SheetPrimitive.Title.Props) {
   return (
     <SheetPrimitive.Title
-      className={cn("font-heading font-semibold text-xl leading-none", className)}
+      className={cn(
+        "font-heading font-semibold text-(length:--text-title) leading-none",
+        className,
+      )}
       data-slot="sheet-title"
       {...props}
     />
@@ -157,7 +160,7 @@ function SheetTitle({ className, ...props }: SheetPrimitive.Title.Props) {
 function SheetDescription({ className, ...props }: SheetPrimitive.Description.Props) {
   return (
     <SheetPrimitive.Description
-      className={cn("text-muted-foreground text-sm", className)}
+      className={cn("text-(length:--text-ui) text-muted-foreground", className)}
       data-slot="sheet-description"
       {...props}
     />
@@ -173,7 +176,7 @@ function SheetPanel({
     <ScrollArea scrollFade={scrollFade}>
       <div
         className={cn(
-          "p-6 in-[[data-slot=sheet-popup]:has([data-slot=sheet-header])]:pt-1 in-[[data-slot=sheet-popup]:has([data-slot=sheet-footer]:not(.border-t))]:pb-1",
+          "p-(--dialog-padding) in-[[data-slot=sheet-popup]:has([data-slot=sheet-header])]:pt-(--dialog-seam-inner) in-[[data-slot=sheet-popup]:has([data-slot=sheet-footer]:not(.border-t))]:pb-(--dialog-seam-inner)",
           className,
         )}
         data-slot="sheet-panel"

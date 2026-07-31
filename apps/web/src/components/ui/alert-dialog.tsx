@@ -74,7 +74,10 @@ function AlertDialogPopup({
 function AlertDialogHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
-      className={cn("flex flex-col gap-2 p-6 text-center max-sm:pb-4 sm:text-left", className)}
+      className={cn(
+        "flex flex-col gap-(--dialog-gap) p-(--dialog-padding) text-center max-sm:pb-(--dialog-seam) sm:text-left",
+        className,
+      )}
       data-slot="alert-dialog-header"
       {...props}
     />
@@ -91,9 +94,9 @@ function AlertDialogFooter({
   return (
     <div
       className={cn(
-        "flex flex-col-reverse gap-2 px-6 sm:flex-row sm:justify-end sm:rounded-b-[calc(var(--radius-2xl)-1px)]",
-        variant === "default" && "border-t bg-muted/72 py-4",
-        variant === "bare" && "pb-6",
+        "flex flex-col-reverse gap-2 px-(--dialog-padding) sm:flex-row sm:justify-end sm:rounded-b-[calc(var(--dialog-radius)-1px)]",
+        variant === "default" && "border-t bg-muted/72 py-(--dialog-footer-padding-block)",
+        variant === "bare" && "pb-(--dialog-padding)",
         className,
       )}
       data-slot="alert-dialog-footer"
@@ -105,7 +108,10 @@ function AlertDialogFooter({
 function AlertDialogTitle({ className, ...props }: AlertDialogPrimitive.Title.Props) {
   return (
     <AlertDialogPrimitive.Title
-      className={cn("font-heading font-semibold text-xl leading-none", className)}
+      className={cn(
+        "font-heading font-semibold text-(length:--text-title) leading-none",
+        className,
+      )}
       data-slot="alert-dialog-title"
       {...props}
     />
@@ -115,7 +121,7 @@ function AlertDialogTitle({ className, ...props }: AlertDialogPrimitive.Title.Pr
 function AlertDialogDescription({ className, ...props }: AlertDialogPrimitive.Description.Props) {
   return (
     <AlertDialogPrimitive.Description
-      className={cn("text-muted-foreground text-sm", className)}
+      className={cn("text-(length:--text-ui) text-muted-foreground", className)}
       data-slot="alert-dialog-description"
       {...props}
     />

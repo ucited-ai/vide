@@ -21,8 +21,11 @@ export default defineConfig({
     testTimeout: 60_000,
   },
   staged: {
-    // Formatter only for now — no lint or typecheck on commit.
-    "*": "vp fmt",
+    // Formatter only for now — no lint or typecheck on commit. The wrapper exists
+    // because plain `vp fmt` exits non-zero on a staged set oxfmt cannot format at
+    // all (only binaries, only a `.py`, only an extensionless file); see
+    // scripts/staged-format.ts.
+    "*": "node scripts/staged-format.ts",
   },
   fmt: {
     ignorePatterns: [

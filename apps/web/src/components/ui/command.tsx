@@ -1,7 +1,7 @@
 "use client";
 
+import { Autocomplete as AutocompletePrimitive } from "@base-ui/react/autocomplete";
 import { Dialog as CommandDialogPrimitive } from "@base-ui/react/dialog";
-import { SearchIcon } from "lucide-react";
 import type * as React from "react";
 import { cn } from "~/lib/utils";
 import {
@@ -10,12 +10,12 @@ import {
   AutocompleteEmpty,
   AutocompleteGroup,
   AutocompleteGroupLabel,
-  AutocompleteInput,
   AutocompleteItem,
   AutocompleteList,
   AutocompleteSeparator,
 } from "~/components/ui/autocomplete";
 import { DIALOG_BACKDROP_CLASS, DIALOG_POPUP_CLASS } from "~/components/ui/dialog-styles";
+import { PopupSearchField, type PopupSearchFieldProps } from "~/components/ui/popup-search-field";
 
 const CommandDialog = CommandDialogPrimitive.Root;
 
@@ -94,35 +94,38 @@ function Command({
   );
 }
 
+/**
+ * The palette's query field is the shared popup search field, driven by Base UI
+ * Autocomplete instead of its own state — hence the `render`. It used to be an
+ * `AutocompleteInput` with the box unpainted by four `!` overrides, which is the
+ * long way round to a borderless field and left the palette looking different
+ * from every other picker in the app.
+ */
 function CommandInput({
   className,
-  wrapperClassName,
-  placeholder,
+  startAddon,
   ...props
-}: React.ComponentProps<typeof AutocompleteInput> & {
-  wrapperClassName?: string | undefined;
+}: Omit<PopupSearchFieldProps, "fieldClassName" | "icon" | "render"> & {
+  startAddon?: React.ReactNode;
 }) {
   return (
-    <div className={cn("px-2.5 py-1.5", wrapperClassName)}>
-      <AutocompleteInput
-        autoFocus
-        className={cn(
-          "border-transparent! bg-transparent! shadow-none before:hidden has-focus-visible:ring-0 placeholder:text-muted-foreground/80",
-          className,
-        )}
-        placeholder={placeholder}
-        size="lg"
-        startAddon={<SearchIcon />}
-        {...props}
-      />
-    </div>
+    <PopupSearchField
+      autoFocus
+      className={className}
+      icon={startAddon}
+      render={<AutocompletePrimitive.Input />}
+      {...props}
+    />
   );
 }
 
 function CommandList({ className, ...props }: React.ComponentProps<typeof AutocompleteList>) {
   return (
     <AutocompleteList
-      className={cn("not-empty:scroll-py-2 not-empty:p-2", className)}
+      className={cn(
+        "not-empty:scroll-py-(--popup-padding) not-empty:p-(--popup-padding)",
+        className,
+      )}
       data-slot="command-list"
       {...props}
     />
@@ -143,7 +146,7 @@ function CommandPanel({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       className={cn(
-        "relative min-h-0 overflow-hidden rounded-t-xl not-has-[+[data-slot=command-footer]]:rounded-b-2xl bg-transparent **:data-[slot=scroll-area-scrollbar]:mt-2 [touch-action:pan-y]",
+        "relative min-h-0 overflow-hidden rounded-t-(--dialog-radius) not-has-[+[data-slot=command-footer]]:rounded-b-(--dialog-radius) bg-transparent **:data-[slot=scroll-area-scrollbar]:mt-2 [touch-action:pan-y]",
         className,
       )}
       {...props}
@@ -172,7 +175,7 @@ function CommandItem({ className, ...props }: React.ComponentProps<typeof Autoco
   return (
     <AutocompleteItem
       className={cn(
-        "py-1.5 data-selected:bg-foreground/[0.06] data-highlighted:bg-foreground/[0.09] data-highlighted:text-foreground [&[data-highlighted][data-selected]]:bg-foreground/[0.09] [&[data-highlighted][data-selected]]:text-foreground",
+        "data-selected:bg-foreground/[0.06] data-highlighted:bg-foreground/[0.09] data-highlighted:text-foreground [&[data-highlighted][data-selected]]:bg-foreground/[0.09] [&[data-highlighted][data-selected]]:text-foreground",
         className,
       )}
       data-slot="command-item"
@@ -187,7 +190,7 @@ function CommandSeparator({
 }: React.ComponentProps<typeof AutocompleteSeparator>) {
   return (
     <AutocompleteSeparator
-      className={cn("my-2", className)}
+      className={cn("my-(--popup-padding)", className)}
       data-slot="command-separator"
       {...props}
     />
@@ -198,7 +201,7 @@ function CommandShortcut({ className, ...props }: React.ComponentProps<"kbd">) {
   return (
     <kbd
       className={cn(
-        "ms-auto font-medium font-sans text-muted-foreground text-xs tracking-widest",
+        "ms-auto font-medium font-sans text-(length:--text-caption) text-muted-foreground tracking-widest",
         className,
       )}
       data-slot="command-shortcut"
@@ -211,7 +214,7 @@ function CommandFooter({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       className={cn(
-        "relative flex items-center justify-between gap-2 rounded-b-[calc(var(--radius-2xl)-1px)] bg-foreground/[0.025] px-5 py-3 font-medium text-sm text-muted-foreground [&_[data-slot=kbd-group]]:font-sans [&_[data-slot=kbd]]:bg-foreground/[0.08] [&_[data-slot=kbd]]:text-foreground [&_[data-slot=kbd]]:ring-0",
+        "relative flex items-center justify-between gap-2 rounded-b-[calc(var(--dialog-radius)-1px)] bg-foreground/[0.025] px-(--dialog-padding) py-(--dialog-footer-padding-block) font-medium text-(length:--text-caption) text-muted-foreground [&_[data-slot=kbd-group]]:font-sans [&_[data-slot=kbd]]:bg-foreground/[0.08] [&_[data-slot=kbd]]:text-foreground [&_[data-slot=kbd]]:ring-0",
         className,
       )}
       data-slot="command-footer"
