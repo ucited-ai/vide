@@ -42,7 +42,7 @@ export function DraftHeroHeadline({
   );
 
   return (
-    <h1 className="mx-auto w-full max-w-5xl text-center font-normal text-(length:--chat-hero-title-size) text-foreground tracking-tight sm:text-(length:--chat-hero-title-size-wide)">
+    <h1 className="mx-auto w-full max-w-5xl text-center font-normal text-(length:--hero-title-size-narrow) text-foreground tracking-tight @sm:text-(length:--chat-hero-title-size) @3xl:text-(length:--chat-hero-title-size-wide)">
       {hasResolvedProject ? (
         <>What should we build in {projectSelector}?</>
       ) : canChooseProject ? (

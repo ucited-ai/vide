@@ -59,7 +59,10 @@ export const ProjectPickerMenu = memo(function ProjectPickerMenu({
   return (
     <Menu open={open} onOpenChange={setOpen}>
       {children}
-      <MenuPopup className="w-(--chat-picker-width)">
+      {/* Starts at the trigger's left edge and runs right, matching the
+          left-aligned context strip it opens from. Centred (the shared default)
+          left it straddling the trigger. */}
+      <MenuPopup align="start" className="w-(--chat-picker-width)">
         <div className="flex items-center gap-2 border-border/70 border-b px-(--popup-item-padding-inline) pb-1.5 transition-colors focus-within:border-ring">
           <SearchIcon
             aria-hidden="true"

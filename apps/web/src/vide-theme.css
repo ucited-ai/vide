@@ -636,11 +636,6 @@
 
   --panel-subheader-height: 2.5rem;
   --panel-hairline: 1px;
-  --panel-inline-width: 42vw;
-  --panel-inline-min-width: 360px;
-  --panel-inline-max-width: 560px;
-  --panel-titlebar-safe-padding: 1em;
-  --panel-compact-input-height: 1.625rem;
   --panel-raw-patch-max-height: 72vh;
 
   /*
@@ -701,11 +696,8 @@
     var(--destructive)
   );
 
-  --panel-diff-header-height: 2rem;
-  --panel-diff-header-padding-block: 0.375rem;
   --panel-diff-title-underline-offset: 0.125rem;
   --panel-diff-title-hover-ink: var(--ink);
-  --panel-control-surface: color-mix(in srgb, var(--surface-content) 96%, var(--ink));
   --panel-notice-surface: color-mix(in srgb, var(--surface-content) 98%, var(--ink));
   --panel-raw-patch-surface: color-mix(in srgb, var(--surface-content) 70%, var(--surface-chrome));
   --panel-loading-surface: color-mix(in srgb, var(--surface-content) 75%, var(--surface-chrome));
@@ -757,4 +749,70 @@
   /* The empty-chat question is display copy, not a fifth general UI text role. */
   --chat-hero-title-size: 1.5rem;
   --chat-hero-title-size-wide: 1.875rem;
+}
+
+/* -------------------------------- environment column floating separation */
+
+:root:root:root {
+  /*
+   * A border-only inset panel still read as part of the workspace slab. The
+   * environment column needs one quiet elevation cue, but reusing popup glass
+   * was rejected because this long-lived tool surface must stay fully opaque.
+   */
+  --envcol-edge: var(--edge);
+  --envcol-shadow: 0 1rem 2.5rem -1.125rem color-mix(in srgb, var(--ink) 55%, transparent);
+  --envcol-hidden-translate: calc(100% + var(--envcol-inset));
+}
+
+/* ----------------------------------------------- review surface proportions */
+
+:root:root:root {
+  /*
+   * Review is a panel surface now, so its two chrome rows borrow the panel
+   * rhythm while file rows and icon controls stay aligned with popup lists.
+   * Menu widths remain named because both long refs and paths need a stable
+   * reading measure without leaking one-off geometry into the component.
+   */
+  --review-toolbar-height: var(--panel-subheader-height);
+  --review-control-size: var(--header-control-size);
+  --review-icon-size: var(--popup-icon-size);
+  --review-file-row-height: var(--popup-item-height);
+  --review-range-menu-width: 18rem;
+  --review-jump-menu-width: 18rem;
+  --review-options-menu-width: 16rem;
+  --review-loading-title-width: 8rem;
+  --review-loading-stat-width: 5rem;
+  --review-loading-line-height: 0.75rem;
+}
+
+/* -------------------------------- composer column resilience */
+
+/*
+ * The draft hero and context strip used to size themselves from the window, so
+ * opening either side panel left their wide layouts painted into a narrow chat
+ * column. Viewport breakpoints were tried first and failed whenever the window
+ * stayed wide; these roles instead support the container-query ladder at the
+ * composer's real width. The strip keeps its established inset as a named
+ * offset, while the final ref dissolves at the clipped edge instead of gaining
+ * an ellipsis or painting through the chips before it.
+ */
+:root:root:root {
+  --composer-context-strip-width-offset: 2.75rem;
+  --composer-context-strip-edge-fade: 1rem;
+  --hero-title-size-narrow: 1.25rem;
+}
+
+:root:root:root [data-composer-context-strip-content] {
+  mask-image: linear-gradient(
+    to right,
+    var(--ink) 0,
+    var(--ink) calc(100% - var(--composer-context-strip-edge-fade)),
+    transparent 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    to right,
+    var(--ink) 0,
+    var(--ink) calc(100% - var(--composer-context-strip-edge-fade)),
+    transparent 100%
+  );
 }

@@ -903,12 +903,15 @@ export function BranchToolbarBranchSelector({
             disabled={isInitialBranchesLoadPending || isBranchActionPending}
           >
             <GitBranchIcon className="size-3 shrink-0 opacity-70" />
-            <span className="min-w-0 max-w-[240px] truncate">{triggerLabel}</span>
+            <span className="shrink-0 whitespace-nowrap">{triggerLabel}</span>
             <ChevronDownIcon className="size-3 shrink-0 opacity-50" />
           </ComboboxTrigger>
         </span>
       </div>
-      <ComboboxPopup align="end" side="top" className="flex w-(--chat-ref-picker-width) flex-col">
+      {/* Starts at the trigger's left edge, like every other chip in the
+          context strip. This one opened to the right while its neighbours
+          opened left, which read as two different menus. */}
+      <ComboboxPopup align="start" side="top" className="flex w-(--chat-ref-picker-width) flex-col">
         <div className="shrink-0 px-(--popup-item-padding-inline) pt-(--popup-padding)">
           <div className="relative -translate-y-px border-b border-border/70 pb-1.5 transition-colors focus-within:border-ring">
             <SearchIcon

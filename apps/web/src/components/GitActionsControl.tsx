@@ -92,6 +92,7 @@ interface GitActionsInput {
   gitCwd: string | null;
   activeThreadRef: ScopedThreadRef | null;
   draftId?: DraftId;
+  enabled?: boolean;
 }
 
 interface PendingDefaultBranchAction {
@@ -1005,7 +1006,12 @@ export function useGitRepositoryInit(
  * that offers them — today the environment menu in the chat header — supplies
  * only the rows; the state, the guards, and the toasts stay here.
  */
-export function useGitActions({ gitCwd, activeThreadRef, draftId }: GitActionsInput) {
+export function useGitActions({
+  gitCwd,
+  activeThreadRef,
+  draftId,
+  enabled = true,
+}: GitActionsInput) {
   const updateThreadMetadata = useAtomCommand(
     threadEnvironment.updateMetadata,
     "thread branch metadata update",
@@ -1113,7 +1119,7 @@ export function useGitActions({ gitCwd, activeThreadRef, draftId }: GitActionsIn
   );
 
   const gitStatusQuery = useEnvironmentQuery(
-    activeEnvironmentId !== null && gitCwd !== null
+    enabled && activeEnvironmentId !== null && gitCwd !== null
       ? vcsEnvironment.status({
           environmentId: activeEnvironmentId,
           input: { cwd: gitCwd },
@@ -1155,7 +1161,7 @@ export function useGitActions({ gitCwd, activeThreadRef, draftId }: GitActionsIn
     activeDraftThread.worktreePath === null;
 
   useEffect(() => {
-    if (isGitActionRunning || isSelectingWorktreeBase || activeServerThread) {
+    if (!enabled || isGitActionRunning || isSelectingWorktreeBase || activeServerThread) {
       return;
     }
 
@@ -1171,6 +1177,7 @@ export function useGitActions({ gitCwd, activeThreadRef, draftId }: GitActionsIn
   }, [
     activeServerThread,
     activeDraftThread?.branch,
+    enabled,
     gitStatusForActions,
     isGitActionRunning,
     isSelectingWorktreeBase,
@@ -1203,6 +1210,9 @@ export function useGitActions({ gitCwd, activeThreadRef, draftId }: GitActionsIn
     : null;
 
   useEffect(() => {
+    if (!enabled) {
+      return;
+    }
     const interval = window.setInterval(() => {
       if (!activeGitActionProgressRef.current) {
         return;
@@ -1213,10 +1223,10 @@ export function useGitActions({ gitCwd, activeThreadRef, draftId }: GitActionsIn
     return () => {
       window.clearInterval(interval);
     };
-  }, [updateActiveProgressToast]);
+  }, [enabled, updateActiveProgressToast]);
 
   useEffect(() => {
-    if (gitCwd === null) {
+    if (!enabled || gitCwd === null) {
       return;
     }
 
@@ -1246,7 +1256,7 @@ export function useGitActions({ gitCwd, activeThreadRef, draftId }: GitActionsIn
       window.removeEventListener("focus", scheduleRefreshCurrentGitStatus);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [activeEnvironmentId, gitCwd, refreshVcsStatus]);
+  }, [activeEnvironmentId, enabled, gitCwd, refreshVcsStatus]);
 
   const openExistingPr = useCallback(async () => {
     const api = readLocalApi();
@@ -1941,6 +1951,9 @@ export function useGitActions({ gitCwd, activeThreadRef, draftId }: GitActionsIn
     quickAction,
     quickActionDisabledReason,
     refreshStatus: () => {
+      if (!enabled) {
+        return;
+      }
       requestVcsStatusRefresh(refreshVcsStatus, activeEnvironmentId, gitCwd);
     },
     runMenuItem: openDialogForMenuItem,

@@ -13,7 +13,6 @@ import { memo, useCallback, useMemo } from "react";
 
 import { useComposerDraftStore, type DraftId } from "../composerDraftStore";
 import { useProject, useThread, useThreadShellsForProjectRefs } from "../state/entities";
-import { useIsMobile } from "../hooks/useMediaQuery";
 import {
   type EnvMode,
   type EnvironmentOption,
@@ -61,7 +60,7 @@ interface BranchToolbarProps {
   onEnvironmentChange?: (environmentId: EnvironmentId) => void;
 }
 
-interface MobileRunContextSelectorProps {
+interface CompactRunContextSelectorProps {
   envLocked: boolean;
   envModeLocked: boolean;
   environmentId: EnvironmentId;
@@ -76,7 +75,7 @@ interface MobileRunContextSelectorProps {
   onUsePreviousWorktree: () => void;
 }
 
-const MobileRunContextSelector = memo(function MobileRunContextSelector({
+const CompactRunContextSelector = memo(function CompactRunContextSelector({
   envLocked,
   envModeLocked,
   environmentId,
@@ -89,7 +88,7 @@ const MobileRunContextSelector = memo(function MobileRunContextSelector({
   onEnvModeChange,
   previousWorktreeLabel,
   onUsePreviousWorktree,
-}: MobileRunContextSelectorProps) {
+}: CompactRunContextSelectorProps) {
   const activeEnvironment = useMemo(
     () => availableEnvironments?.find((env) => env.environmentId === environmentId) ?? null,
     [availableEnvironments, environmentId],
@@ -128,7 +127,7 @@ const MobileRunContextSelector = memo(function MobileRunContextSelector({
 
   if (isLocked) {
     return (
-      <span className="inline-flex min-w-0 max-w-[48%] flex-1 items-center justify-start gap-1 rounded-md border border-transparent px-[calc(--spacing(2)-1px)] text-(length:--text-ui) font-medium text-muted-foreground/70 md:hidden">
+      <span className="inline-flex min-w-0 max-w-full flex-1 items-center justify-start gap-1 rounded-md border border-transparent px-[calc(--spacing(2)-1px)] text-(length:--text-ui) font-medium text-muted-foreground/70">
         {triggerContent}
       </span>
     );
@@ -138,7 +137,7 @@ const MobileRunContextSelector = memo(function MobileRunContextSelector({
     <Menu>
       <MenuTrigger
         render={<Button variant="ghost" size="xs" />}
-        className="min-w-0 max-w-[48%] flex-1 justify-start text-muted-foreground/70 hover:text-foreground/80 md:hidden"
+        className="min-w-0 max-w-full flex-1 justify-start text-muted-foreground/70 hover:text-foreground/80"
       >
         {triggerContent}
         <ChevronDownIcon className="size-3 shrink-0 opacity-50" />
@@ -307,7 +306,6 @@ export const BranchToolbar = memo(function BranchToolbar({
     activeEnvironment: activeEnvironmentOption,
     canPickEnvironment: showEnvironmentPicker,
   });
-  const isMobile = useIsMobile();
   // Picking another project starts a thread there. From a draft that replaces
   // the draft it stands in for; from a started thread it pushes, so the thread
   // the user just left stays behind them in history.
@@ -328,39 +326,43 @@ export const BranchToolbar = memo(function BranchToolbar({
   // composer's flat top instead of landing on its rounded corners.
   return (
     <div
-      className="-mb-px mx-auto flex w-[calc(100%-2.75rem)] items-center justify-start gap-1 rounded-t-2xl bg-(--surface-recessed) px-2.5 pt-1.5 pb-2"
+      className="-mb-px mx-auto w-[calc(100%-var(--composer-context-strip-width-offset))] overflow-hidden rounded-t-2xl bg-(--surface-recessed) px-2.5 pt-1.5 pb-2"
       data-composer-context-strip=""
     >
-      <ProjectPickerMenu picker={projectPicker}>
-        <MenuTrigger
-          render={<Button variant="ghost" size="xs" />}
-          aria-label="Change project"
-          className="min-w-0 shrink justify-start font-medium text-muted-foreground/70 hover:text-foreground/80"
-        >
-          <span className="min-w-0 truncate">
-            {projectPicker.activeProjectDisplayName ?? activeProject.title}
-          </span>
-          <ChevronDownIcon className="size-3 shrink-0 opacity-50" />
-        </MenuTrigger>
-      </ProjectPickerMenu>
-      <Separator orientation="vertical" className="mx-0.5 h-3.5!" />
-      {isMobile ? (
-        <MobileRunContextSelector
-          envLocked={envLocked}
-          envModeLocked={envModeLocked}
-          environmentId={environmentId}
-          availableEnvironments={availableEnvironments}
-          showEnvironmentPicker={showEnvironmentPicker}
-          showEnvironmentIndicator={showEnvironmentIndicator}
-          onEnvironmentChange={onEnvironmentChange}
-          effectiveEnvMode={effectiveEnvMode}
-          activeWorktreePath={activeWorktreePath}
-          onEnvModeChange={onEnvModeChange}
-          previousWorktreeLabel={previousWorktreeLabel}
-          onUsePreviousWorktree={onUsePreviousWorktree}
-        />
-      ) : (
-        <div className="flex min-w-0 items-center gap-1">
+      <div
+        className="flex w-full min-w-0 items-center justify-start gap-1 overflow-hidden"
+        data-composer-context-strip-content=""
+      >
+        <ProjectPickerMenu picker={projectPicker}>
+          <MenuTrigger
+            render={<Button variant="ghost" size="xs" />}
+            aria-label="Change project"
+            className="min-w-0 shrink justify-start font-medium text-muted-foreground/70 hover:text-foreground/80"
+          >
+            <span className="min-w-0 truncate">
+              {projectPicker.activeProjectDisplayName ?? activeProject.title}
+            </span>
+            <ChevronDownIcon className="size-3 shrink-0 opacity-50" />
+          </MenuTrigger>
+        </ProjectPickerMenu>
+        <Separator orientation="vertical" className="mx-0.5 h-3.5!" />
+        <div className="flex min-w-0 flex-1 items-center @lg:hidden">
+          <CompactRunContextSelector
+            envLocked={envLocked}
+            envModeLocked={envModeLocked}
+            environmentId={environmentId}
+            availableEnvironments={availableEnvironments}
+            showEnvironmentPicker={showEnvironmentPicker}
+            showEnvironmentIndicator={showEnvironmentIndicator}
+            onEnvironmentChange={onEnvironmentChange}
+            effectiveEnvMode={effectiveEnvMode}
+            activeWorktreePath={activeWorktreePath}
+            onEnvModeChange={onEnvModeChange}
+            previousWorktreeLabel={previousWorktreeLabel}
+            onUsePreviousWorktree={onUsePreviousWorktree}
+          />
+        </div>
+        <div className="hidden min-w-0 shrink items-center gap-1 @lg:flex">
           {showEnvironmentIndicator && availableEnvironments && (
             <>
               <BranchToolbarEnvironmentSelector
@@ -381,22 +383,22 @@ export const BranchToolbar = memo(function BranchToolbar({
             onUsePreviousWorktree={onUsePreviousWorktree}
           />
         </div>
-      )}
 
-      <BranchToolbarBranchSelector
-        className="min-w-0 flex-1 justify-end md:ml-auto md:flex-none"
-        environmentId={environmentId}
-        threadId={threadId}
-        {...(draftId ? { draftId } : {})}
-        envLocked={envLocked}
-        {...(effectiveEnvModeOverride ? { effectiveEnvModeOverride } : {})}
-        {...(activeThreadBranchOverride !== undefined ? { activeThreadBranchOverride } : {})}
-        {...(onActiveThreadBranchOverrideChange ? { onActiveThreadBranchOverrideChange } : {})}
-        startFromOrigin={startFromOrigin}
-        onStartFromOriginChange={onStartFromOriginChange}
-        {...(onCheckoutPullRequestRequest ? { onCheckoutPullRequestRequest } : {})}
-        {...(onComposerFocusRequest ? { onComposerFocusRequest } : {})}
-      />
+        <BranchToolbarBranchSelector
+          className="min-w-0 flex-1 justify-start"
+          environmentId={environmentId}
+          threadId={threadId}
+          {...(draftId ? { draftId } : {})}
+          envLocked={envLocked}
+          {...(effectiveEnvModeOverride ? { effectiveEnvModeOverride } : {})}
+          {...(activeThreadBranchOverride !== undefined ? { activeThreadBranchOverride } : {})}
+          {...(onActiveThreadBranchOverrideChange ? { onActiveThreadBranchOverrideChange } : {})}
+          startFromOrigin={startFromOrigin}
+          onStartFromOriginChange={onStartFromOriginChange}
+          {...(onCheckoutPullRequestRequest ? { onCheckoutPullRequestRequest } : {})}
+          {...(onComposerFocusRequest ? { onComposerFocusRequest } : {})}
+        />
+      </div>
     </div>
   );
 });

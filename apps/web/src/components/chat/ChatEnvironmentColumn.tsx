@@ -13,7 +13,6 @@ import {
   GlobeIcon,
   MoreHorizontalIcon,
   SearchIcon,
-  XIcon,
 } from "lucide-react";
 import {
   memo,
@@ -32,9 +31,9 @@ import { usePaginatedBranches } from "~/state/queries";
 import { resolveLockedWorkspaceLabel } from "../BranchToolbar.logic";
 import { useThreadBranchSelection } from "../BranchToolbarBranchSelector";
 import { GitActionItemIcon, GitQuickActionIcon, useGitActions } from "../GitActionsControl";
-import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
+import { useSidebar } from "../ui/sidebar";
 import { Spinner } from "../ui/spinner";
 
 interface ChatEnvironmentColumnProps {
@@ -281,8 +280,9 @@ function EnvironmentBranchRow({
 /**
  * Everything a thread runs against — its worktree, its ref, and the git actions
  * that move it forward — as its own column beside the chat pane, in place of
- * the dropdown this replaced. Stays mounted so it can animate both open and
- * shut; `open` only ever changes its width.
+ * the dropdown this replaced. Stays mounted so both layout modes animate shut:
+ * width reserves room while the sidebar is collapsed, and transform carries
+ * the same surface over the chat while the sidebar is expanded.
  */
 export const ChatEnvironmentColumn = memo(function ChatEnvironmentColumn({
   environmentId,
@@ -292,6 +292,8 @@ export const ChatEnvironmentColumn = memo(function ChatEnvironmentColumn({
   open,
   onClose,
 }: ChatEnvironmentColumnProps) {
+  const { state: sidebarState } = useSidebar();
+  const overlaysChat = sidebarState === "expanded";
   const activeThreadRef = useMemo(
     () => scopeThreadRef(environmentId, threadId),
     [environmentId, threadId],
@@ -299,6 +301,7 @@ export const ChatEnvironmentColumn = memo(function ChatEnvironmentColumn({
   const git = useGitActions({
     gitCwd,
     activeThreadRef,
+    enabled: open,
     ...(draftId ? { draftId } : {}),
   });
   const branch = useThreadBranchSelection({
@@ -342,29 +345,36 @@ export const ChatEnvironmentColumn = memo(function ChatEnvironmentColumn({
     <>
       <div
         className={cn(
-          "relative h-full min-h-0 min-w-0 self-stretch overflow-hidden",
+          "relative z-40 h-full min-h-0 min-w-0 self-stretch overflow-visible",
           "transition-[width] duration-(--duration-base) ease-(--ease-soft)",
         )}
-        style={{ width: open ? "var(--envcol-width)" : 0 }}
+        style={{ width: open && !overlaysChat ? "var(--envcol-width)" : 0 }}
         // Collapsed but mounted, it must not be reachable: without this, Tab
         // walks into a column nobody can see.
         {...(!open ? { inert: true } : {})}
         data-environment-column-open={open ? "true" : "false"}
+        data-environment-column-mode={overlaysChat ? "overlay" : "push"}
+        onKeyDown={(event) => {
+          if (event.key === "Escape" && !event.defaultPrevented) {
+            onClose();
+          }
+        }}
       >
-        <div className="absolute inset-y-(--envcol-inset) end-(--envcol-inset) flex w-[calc(var(--envcol-width)-2*var(--envcol-inset))] min-h-0 flex-col overflow-hidden rounded-[var(--envcol-radius)] bg-(--envcol-surface)">
-          <div className="flex h-(--envcol-header-height) shrink-0 items-center justify-between gap-2 border-b border-border px-2.5">
+        <div
+          className={cn(
+            "absolute inset-y-(--envcol-inset) end-(--envcol-inset) flex w-[calc(var(--envcol-width)-2*var(--envcol-inset))] min-h-0 flex-col overflow-hidden rounded-[var(--envcol-radius)] border border-(--envcol-edge) bg-(--envcol-surface) shadow-[var(--envcol-shadow)]",
+            "transition-[transform,visibility] duration-(--duration-base) ease-(--ease-soft)",
+            open ? "visible translate-x-0" : "invisible translate-x-(--envcol-hidden-translate)",
+          )}
+          data-environment-column-surface
+          aria-label="Environment overview"
+          role="region"
+        >
+          <div className="flex h-(--envcol-header-height) shrink-0 items-center gap-2 border-b border-border px-2.5">
             <span className="flex min-w-0 items-center gap-1.5 text-(length:--text-ui) font-medium text-foreground">
               <BoxIcon aria-hidden className="size-3.5 shrink-0 opacity-70" />
               <span className="truncate">Environment</span>
             </span>
-            <Button
-              aria-label="Hide environment overview"
-              size="icon-xs"
-              variant="ghost"
-              onClick={onClose}
-            >
-              <XIcon aria-hidden className="size-3.5" />
-            </Button>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto p-(--popup-padding)">
             <div>

@@ -2,6 +2,7 @@ import { BugIcon, HammerIcon, ScanSearchIcon, GitPullRequestArrowIcon } from "lu
 import { useCallback } from "react";
 
 import { useComposerHandleContext } from "~/composerHandleContext";
+import { cn } from "~/lib/utils";
 
 /**
  * Quick starts under the draft headline.
@@ -60,16 +61,19 @@ export function DraftHeroSuggestions() {
   }
 
   return (
-    <div className="pointer-events-auto mx-auto mt-8 grid w-full max-w-3xl grid-cols-2 gap-2 px-4 sm:grid-cols-4">
-      {SUGGESTIONS.map(({ icon: Icon, label, prompt }) => (
+    <div className="pointer-events-auto mx-auto mt-8 grid w-full max-w-3xl grid-cols-1 gap-2 px-4 @sm:grid-cols-2 @3xl:grid-cols-4">
+      {SUGGESTIONS.map(({ icon: Icon, label, prompt }, index) => (
         <button
           key={label}
           type="button"
           onClick={() => applySuggestion(prompt)}
-          className="group flex min-h-24 cursor-default flex-col items-start gap-2.5 rounded-xl border border-border/60 bg-card p-3 text-left transition-[transform,border-color,background-color] duration-(--duration-fast) ease-(--ease-out) hover:-translate-y-px hover:border-border focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none motion-reduce:hover:translate-y-0"
+          className={cn(
+            "group min-h-24 cursor-default flex-col items-start gap-2.5 rounded-xl border border-border/60 bg-card p-3 text-left transition-[transform,border-color,background-color] duration-(--duration-fast) ease-(--ease-out) hover:-translate-y-px hover:border-border focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none motion-reduce:hover:translate-y-0",
+            index === 0 ? "flex" : index === 1 ? "hidden @sm:flex" : "hidden @3xl:flex",
+          )}
         >
           <Icon className="size-4 shrink-0 text-muted-foreground/70 transition-colors group-hover:text-foreground/80" />
-          <span className="text-[13px] leading-snug text-muted-foreground/85 tracking-[-0.006em] group-hover:text-foreground/90">
+          <span className="hyphens-none text-(length:--text-ui) leading-snug text-muted-foreground/85 tracking-[-0.006em] [overflow-wrap:normal] group-hover:text-foreground/90">
             {label}
           </span>
         </button>

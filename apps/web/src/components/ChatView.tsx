@@ -5737,7 +5737,6 @@ function ChatViewContent(props: ChatViewProps) {
         <Suspense fallback={null}>
           <DiffPanel
             key={`${activeThreadKey}:${diffPanelGitStatusResolutionKey}`}
-            mode="embedded"
             composerDraftTarget={composerDraftTarget}
             initialGitScope={initialDiffPanelGitScope}
           />
@@ -5910,7 +5909,7 @@ function ChatViewContent(props: ChatViewProps) {
             >
               <div
                 ref={attachDraftHeroTransitionGroupRef}
-                className="chat-composer-horizontal-inset w-full"
+                className="@container chat-composer-horizontal-inset w-full"
               >
                 <div className="pointer-events-auto relative z-10">
                   {isDraftHeroState ? (
@@ -5947,7 +5946,7 @@ function ChatViewContent(props: ChatViewProps) {
                     {/* Worktree, environment, and branch read as conditions the next
                         message runs under, so they sit above the input — outside the
                         glass shell, which would otherwise grow to enclose them. */}
-                    {showComposerContextStrip && (
+                    {showComposerContextStrip && timelineEntries.length === 0 && (
                       <div className="pointer-events-auto relative z-10 mx-auto w-full max-w-3xl">
                         <BranchToolbar
                           environmentId={activeThread.environmentId}
@@ -6145,12 +6144,10 @@ function ChatViewContent(props: ChatViewProps) {
       </div>
 
       {/*
-        Its own column, beside the chat pane rather than floating over it —
-        mounted whenever there is something to show, same as the right panel
-        below, so opening and closing both animate instead of one of them
-        snapping. `useGitActions` lives inside it and owns the commit /
-        publish / default-branch dialogs, which is why it has to stay mounted
-        even while the column itself is visually collapsed.
+        Its own shell beside the chat pane: it reserves width while the sidebar
+        is collapsed and lets the inset surface overlay chat while the sidebar
+        is expanded. It stays mounted so both modes animate shut and its git
+        dialogs can render outside the collapsing wrapper.
       */}
       {showEnvironmentColumn ? (
         <ChatEnvironmentColumn

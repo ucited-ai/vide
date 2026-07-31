@@ -344,6 +344,28 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(vide-mob
     -webkit-app-region: no-drag;
   }
 
+  /*
+   * These controls are window-owned siblings painted over the chat titlebar,
+   * so the descendant exceptions on `.drag-region` cannot reach them. Electron
+   * needs the exclusion on each hit target, not only on their flex container.
+   */
+  .workspace-titlebar-controls button {
+    -webkit-app-region: no-drag;
+  }
+
+  /*
+   * Overlay mode puts the environment surface across the same titlebar pixels.
+   * Keep every control carved out directly for the same reason as the global
+   * window controls above.
+   */
+  [data-environment-column-surface] button,
+  [data-environment-column-surface] input,
+  [data-environment-column-surface] textarea,
+  [data-environment-column-surface] select,
+  [data-environment-column-surface] a {
+    -webkit-app-region: no-drag;
+  }
+
   .surface-subheader {
     @apply flex shrink-0 items-center bg-background;
     height: var(--panel-subheader-height);
@@ -1347,6 +1369,11 @@ label:has(> select#reasoning-effort) select {
   border-radius: var(--radius);
   overflow: clip;
   background: var(--panel-diff-file-surface);
+}
+
+.review-diff-surface > diffs-container {
+  border: 0;
+  border-radius: 0;
 }
 
 @keyframes ultrathink-rainbow {

@@ -1,4 +1,5 @@
-import type { ContextMenuItem, PreviewSessionSnapshot } from "@vide/contracts";
+import { useAtomValue } from "@effect/atom-react";
+import type { ContextMenuItem, KeybindingCommand, PreviewSessionSnapshot } from "@vide/contracts";
 import { getTerminalLabel } from "@vide/shared/terminalLabels";
 import {
   ClipboardList,
@@ -21,9 +22,11 @@ import {
 } from "react";
 
 import { isElectron } from "~/env";
+import { shortcutLabelForCommand } from "~/keybindings";
 import type { RightPanelSurface } from "~/rightPanelStore";
 import { cn } from "~/lib/utils";
 import { readLocalApi } from "~/localApi";
+import { primaryServerKeybindingsAtom } from "~/state/server";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 import { Button } from "~/components/ui/button";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "~/components/ui/menu";
@@ -68,7 +71,7 @@ interface RightPanelTabsProps {
 const SURFACE_DISABLED_REASONS = {
   browser: "Browser previews are only available in the Vide desktop app.",
   files: "Files are only available when a project is open.",
-  diff: "Diff is only available for server threads in Git repositories.",
+  diff: "Review is only available for server threads in Git repositories.",
 } as const;
 
 type TabContextMenuAction = "copy-path" | "close" | "close-others" | "close-to-right" | "close-all";
@@ -101,41 +104,39 @@ function SurfaceMenuItem(props: {
   return <DisabledReasonTooltip reason={props.disabledReason} trigger={item} />;
 }
 
-/**
- * One row of the empty state. Stacked rather than tiled: the panel is a column,
- * so two cards side by side squeeze both the label and its description into a
- * third of the width they could have had.
- */
-function SurfaceCard(props: {
+function SurfaceRow(props: {
   icon: LucideIcon;
   label: string;
-  description: string;
+  shortcut: string | null;
   available: boolean;
   disabledReason: string | null;
   onClick: () => void;
 }) {
   const Icon = props.icon;
-  const card = (
+  const row = (
     <button
       type="button"
       {...(props.available ? { onClick: props.onClick } : { "aria-disabled": true })}
       className={cn(
-        "flex w-full items-center gap-4 rounded-lg border border-border bg-card px-5 py-4 text-left",
+        "flex min-h-(--popup-item-height) w-full items-center gap-(--popup-item-gap) rounded-(--popup-item-radius) px-(--popup-item-padding-inline) text-left",
         "transition-colors duration-(--duration-fast) ease-(--ease-out)",
         props.available ? "hover:bg-accent" : "cursor-not-allowed opacity-40",
       )}
     >
-      <Icon className="size-5 shrink-0 text-muted-foreground" />
-      <span className="flex min-w-0 flex-col gap-1">
-        <span className="text-(length:--text-ui) font-medium text-foreground">{props.label}</span>
-        <span className="text-(length:--text-caption) leading-relaxed text-muted-foreground">
-          {props.description}
-        </span>
+      <Icon className="size-(--popup-icon-size) shrink-0 text-muted-foreground" />
+      <span className="min-w-0 flex-1 truncate text-(length:--text-ui) text-foreground">
+        {props.label}
       </span>
+      <kbd
+        className="shrink-0 font-medium font-sans text-(length:--text-caption) text-muted-foreground/72 tracking-widest"
+        title={props.shortcut ?? "No keybinding assigned"}
+      >
+        {props.shortcut ?? "—"}
+      </kbd>
     </button>
   );
-  if (props.available || props.disabledReason === null) return card;
-  return <DisabledReasonTooltip reason={props.disabledReason} trigger={card} />;
+  if (props.available || props.disabledReason === null) return row;
+  return <DisabledReasonTooltip reason={props.disabledReason} trigger={row} />;
 }
 
 function RightPanelEmptyState(props: {
@@ -147,59 +148,69 @@ function RightPanelEmptyState(props: {
   diffAvailable: boolean;
   filesAvailable: boolean;
 }) {
-  const actions = [
+  const keybindings = useAtomValue(primaryServerKeybindingsAtom);
+  const actions: ReadonlyArray<{
+    label: string;
+    icon: LucideIcon;
+    shortcutCommand: KeybindingCommand | null;
+    available: boolean;
+    disabledReason: string | null;
+    onClick: () => void;
+  }> = [
     {
       label: "Browser",
-      description: "Open a local app or URL.",
       icon: Globe2,
+      shortcutCommand: "preview.toggle",
       available: props.browserAvailable,
       disabledReason: SURFACE_DISABLED_REASONS.browser,
       onClick: props.onAddBrowser,
     },
     {
       label: "Terminal",
-      description: "Start a shell in this workspace.",
       icon: TerminalSquare,
+      shortcutCommand: "terminal.toggle",
       available: true,
       disabledReason: null,
       onClick: props.onAddTerminal,
     },
     {
       label: "Files",
-      description: "Browse and read workspace files.",
       icon: Files,
+      shortcutCommand: null,
       available: props.filesAvailable,
       disabledReason: SURFACE_DISABLED_REASONS.files,
       onClick: props.onAddFiles,
     },
     {
-      label: "Diff",
-      description: "Review changes in this thread.",
+      label: "Review",
       icon: FileDiff,
+      shortcutCommand: "diff.toggle",
       available: props.diffAvailable,
       disabledReason: SURFACE_DISABLED_REASONS.diff,
       onClick: props.onAddDiff,
     },
-  ] as const;
+  ];
 
   return (
-    <div className="vide-fade-in flex min-h-0 flex-1 flex-col overflow-y-auto px-6 py-10">
-      {/* `m-auto` rather than `justify-center`: an overflowing centred flex
-          child is clipped at the top and cannot be scrolled back to. */}
-      <div className="m-auto flex w-full flex-col gap-6">
-        <div>
+    <div className="vide-fade-in flex min-h-0 flex-1 flex-col overflow-y-auto p-(--popup-padding)">
+      <div className="m-auto flex w-full flex-col gap-(--popup-padding)">
+        <div className="flex flex-col gap-(--popup-padding) px-(--popup-item-padding-inline)">
           <h3 className="text-(length:--text-title) font-medium text-foreground">Open a surface</h3>
-          <p className="mt-1 text-(length:--text-ui) text-muted-foreground">
+          <p className="text-(length:--text-ui) text-muted-foreground">
             Choose what to show in this panel.
           </p>
         </div>
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col">
           {actions.map((action) => (
-            <SurfaceCard
+            <SurfaceRow
               key={action.label}
               icon={action.icon}
               label={action.label}
-              description={action.description}
+              shortcut={
+                action.shortcutCommand
+                  ? shortcutLabelForCommand(keybindings, action.shortcutCommand)
+                  : null
+              }
               available={action.available}
               disabledReason={action.disabledReason}
               onClick={action.onClick}
@@ -218,7 +229,7 @@ function surfaceTitle(
 ): string {
   switch (surface.kind) {
     case "diff":
-      return "Diff";
+      return "Review";
     case "files":
       return "Files";
     case "file":
@@ -504,7 +515,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
                   onClick={props.onAddDiff}
                 >
                   <FileDiff />
-                  Diff
+                  Review
                 </SurfaceMenuItem>
               </MenuPopup>
             </Menu>
