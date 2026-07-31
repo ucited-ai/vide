@@ -229,6 +229,7 @@ import { MessagesTimeline } from "./chat/MessagesTimeline";
 import { ChatEnvironmentColumn } from "./chat/ChatEnvironmentColumn";
 import { ChatHeader } from "./chat/ChatHeader";
 import { PanelLayoutControls, RightPanelMaximizeControl } from "./chat/PanelLayoutControls";
+import { PreviewPanelLayoutContext } from "./preview/PreviewPanelShell";
 import { type ExpandedImagePreview } from "./chat/ExpandedImagePreview";
 import { NoActiveThreadState } from "./NoActiveThreadState";
 import { resolveEffectiveEnvMode, resolveLocalCheckoutBranchMismatch } from "./BranchToolbar.logic";
@@ -1585,8 +1586,12 @@ function ChatViewContent(props: ChatViewProps) {
   const rightPanelMaximized =
     canMaximizeRightPanel && maximizedRightPanelThreadKey === routeThreadKey;
   const inlineRightPanelOwnsTitleBar = rightPanelOpen && !shouldUsePlanSidebarSheet;
-  // Its own column beside the chat pane, not a dropdown — see ChatEnvironmentColumn.
-  const [environmentColumnOpen, setEnvironmentColumnOpen] = useState(false);
+  // Automatic space pressure is durable intent, not a temporary visibility
+  // override: only the user's next toggle changes "auto-closed" back to open.
+  const [environmentColumnIntent, setEnvironmentColumnIntent] = useState<
+    "open" | "user-closed" | "auto-closed"
+  >("user-closed");
+  const environmentColumnOpen = environmentColumnIntent === "open";
 
   useEffect(() => {
     if (!activeThreadRef) return;
@@ -3326,11 +3331,47 @@ function ChatViewContent(props: ChatViewProps) {
     );
   }, [canMaximizeRightPanel, routeThreadKey]);
   const toggleEnvironmentColumn = useCallback(() => {
-    setEnvironmentColumnOpen((open) => !open);
+    setEnvironmentColumnIntent((intent) => (intent === "open" ? "user-closed" : "open"));
   }, []);
   const closeEnvironmentColumn = useCallback(() => {
-    setEnvironmentColumnOpen(false);
+    setEnvironmentColumnIntent("user-closed");
   }, []);
+  const autoCollapseEnvironmentColumn = useCallback(() => {
+    setEnvironmentColumnIntent((intent) => (intent === "open" ? "auto-closed" : intent));
+  }, []);
+  const collapseRightPanelFromResize = useCallback(() => {
+    if (!rightPanelOpen) return;
+    if (planSidebarOpen) {
+      closePlanSidebar();
+    } else {
+      closePreviewPanel();
+    }
+  }, [closePlanSidebar, closePreviewPanel, planSidebarOpen, rightPanelOpen]);
+  const enterRightPanelFullArea = useCallback(() => {
+    if (!canMaximizeRightPanel) return;
+    setMaximizedRightPanelThreadKey(routeThreadKey);
+  }, [canMaximizeRightPanel, routeThreadKey]);
+  const leaveRightPanelFullArea = useCallback(() => {
+    setMaximizedRightPanelThreadKey((threadKey) =>
+      threadKey === routeThreadKey ? null : threadKey,
+    );
+  }, [routeThreadKey]);
+  const previewPanelLayoutActions = useMemo(
+    () => ({
+      environmentOpen: environmentColumnOpen,
+      onCollapsePanel: collapseRightPanelFromResize,
+      onEnterFullArea: enterRightPanelFullArea,
+      onLeaveFullArea: leaveRightPanelFullArea,
+      onAutoCollapseEnvironment: autoCollapseEnvironmentColumn,
+    }),
+    [
+      autoCollapseEnvironmentColumn,
+      collapseRightPanelFromResize,
+      enterRightPanelFullArea,
+      environmentColumnOpen,
+      leaveRightPanelFullArea,
+    ],
+  );
   const cleanupRightPanelSurfaces = useCallback(
     (surfaces: readonly RightPanelSurface[]) => {
       if (!activeThreadRef) return;
@@ -5788,7 +5829,7 @@ function ChatViewContent(props: ChatViewProps) {
           // transition here the chat column collapsed in a single frame, so half
           // the movement glided and half of it snapped.
           "transition-[flex-grow,width] duration-(--duration-base) ease-(--ease-soft)",
-          rightPanelMaximized ? "w-0 flex-none" : "flex-1",
+          rightPanelMaximized ? "w-0 min-w-0 flex-none" : "min-w-(--layout-chat-min-width) flex-1",
         )}
         data-chat-column-maximized-away={rightPanelMaximized ? "true" : "false"}
       >
@@ -6144,9 +6185,9 @@ function ChatViewContent(props: ChatViewProps) {
       </div>
 
       {/*
-        Its own shell beside the chat pane: it reserves width while the sidebar
-        is collapsed and lets the inset surface overlay chat while the sidebar
-        is expanded. It stays mounted so both modes animate shut and its git
+        Its own shell beside the chat pane: it reserves width while the right
+        panel is collapsed and lets the inset surface overlay chat while the
+        right panel is open. It stays mounted so both modes animate shut and its git
         dialogs can render outside the collapsing wrapper.
       */}
       {showEnvironmentColumn ? (
@@ -6156,6 +6197,8 @@ function ChatViewContent(props: ChatViewProps) {
           {...(routeKind === "draft" && draftId ? { draftId } : {})}
           gitCwd={gitCwd}
           open={environmentColumnOpen}
+          rightPanelOpen={rightPanelOpen}
+          fullAreaHidden={rightPanelMaximized}
           onClose={closeEnvironmentColumn}
         />
       ) : null}
@@ -6167,31 +6210,33 @@ function ChatViewContent(props: ChatViewProps) {
         width transition and collapses to zero instead.
       */}
       {!shouldUsePlanSidebarSheet && activeThreadRef ? (
-        <RightPanelTabs
-          mode="inline"
-          open={rightPanelOpen}
-          maximized={rightPanelMaximized}
-          surfaces={rightPanelState.surfaces}
-          activeSurfaceId={activeRightPanelSurface?.id ?? null}
-          pendingSurfaceIds={pendingFileSurfaceIds}
-          previewSessions={activePreviewState.sessions}
-          terminalLabelsById={activeTerminalLabelsById}
-          onActivate={activateRightPanelSurface}
-          onCloseSurface={closeRightPanelSurface}
-          onCloseOtherSurfaces={closeOtherRightPanelSurfaces}
-          onCloseSurfacesToRight={closeRightPanelSurfacesToRight}
-          onCloseAllSurfaces={closeAllRightPanelSurfaces}
-          onCopyFilePath={copyRightPanelFilePath}
-          onAddBrowser={createBrowserSurface}
-          onAddTerminal={addTerminalSurface}
-          onAddDiff={addDiffSurface}
-          onAddFiles={addFilesSurface}
-          browserAvailable={isPreviewSupportedInRuntime()}
-          diffAvailable={isServerThread && isGitRepo}
-          filesAvailable={activeProject !== null}
-        >
-          {rightPanelContent}
-        </RightPanelTabs>
+        <PreviewPanelLayoutContext.Provider value={previewPanelLayoutActions}>
+          <RightPanelTabs
+            mode="inline"
+            open={rightPanelOpen}
+            maximized={rightPanelMaximized}
+            surfaces={rightPanelState.surfaces}
+            activeSurfaceId={activeRightPanelSurface?.id ?? null}
+            pendingSurfaceIds={pendingFileSurfaceIds}
+            previewSessions={activePreviewState.sessions}
+            terminalLabelsById={activeTerminalLabelsById}
+            onActivate={activateRightPanelSurface}
+            onCloseSurface={closeRightPanelSurface}
+            onCloseOtherSurfaces={closeOtherRightPanelSurfaces}
+            onCloseSurfacesToRight={closeRightPanelSurfacesToRight}
+            onCloseAllSurfaces={closeAllRightPanelSurfaces}
+            onCopyFilePath={copyRightPanelFilePath}
+            onAddBrowser={createBrowserSurface}
+            onAddTerminal={addTerminalSurface}
+            onAddDiff={addDiffSurface}
+            onAddFiles={addFilesSurface}
+            browserAvailable={isPreviewSupportedInRuntime()}
+            diffAvailable={isServerThread && isGitRepo}
+            filesAvailable={activeProject !== null}
+          >
+            {rightPanelContent}
+          </RightPanelTabs>
+        </PreviewPanelLayoutContext.Provider>
       ) : null}
       {shouldUsePlanSidebarSheet && rightPanelOpen && activeThreadRef ? (
         <RightPanelSheet open onClose={planSidebarOpen ? closePlanSidebar : closePreviewPanel}>

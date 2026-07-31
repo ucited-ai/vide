@@ -33,7 +33,6 @@ import { useThreadBranchSelection } from "../BranchToolbarBranchSelector";
 import { GitActionItemIcon, GitQuickActionIcon, useGitActions } from "../GitActionsControl";
 import { Input } from "../ui/input";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
-import { useSidebar } from "../ui/sidebar";
 import { Spinner } from "../ui/spinner";
 
 interface ChatEnvironmentColumnProps {
@@ -44,6 +43,8 @@ interface ChatEnvironmentColumnProps {
   /** Width animates between 0 and its resting size, the way the right panel
    *  does — the column stays mounted at all times so both directions animate. */
   open: boolean;
+  rightPanelOpen: boolean;
+  fullAreaHidden: boolean;
   onClose: () => void;
 }
 
@@ -281,8 +282,8 @@ function EnvironmentBranchRow({
  * Everything a thread runs against — its worktree, its ref, and the git actions
  * that move it forward — as its own column beside the chat pane, in place of
  * the dropdown this replaced. Stays mounted so both layout modes animate shut:
- * width reserves room while the sidebar is collapsed, and transform carries
- * the same surface over the chat while the sidebar is expanded.
+ * width reserves room while the right panel is collapsed, and transform carries
+ * the same surface over the chat while the right panel is open.
  */
 export const ChatEnvironmentColumn = memo(function ChatEnvironmentColumn({
   environmentId,
@@ -290,10 +291,30 @@ export const ChatEnvironmentColumn = memo(function ChatEnvironmentColumn({
   draftId,
   gitCwd,
   open,
+  rightPanelOpen,
+  fullAreaHidden,
   onClose,
 }: ChatEnvironmentColumnProps) {
-  const { state: sidebarState } = useSidebar();
-  const overlaysChat = sidebarState === "expanded";
+  const visibleOpen = open && !fullAreaHidden;
+
+  /*
+   * Escape closes the panel from anywhere, not only from inside it.
+   *
+   * Opening the panel does not move focus into it, so the keydown handler on the
+   * wrapper below only ever fired if the user had already tabbed in — which left
+   * the keyboard with no way out of an open panel. `defaultPrevented` keeps a
+   * dialog or popup layered above this one from being dismissed twice: whatever
+   * is on top handles Escape first and marks it.
+   */
+  useEffect(() => {
+    if (!visibleOpen) return;
+    const onWindowKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      onClose();
+    };
+    window.addEventListener("keydown", onWindowKeyDown);
+    return () => window.removeEventListener("keydown", onWindowKeyDown);
+  }, [onClose, visibleOpen]);
   const activeThreadRef = useMemo(
     () => scopeThreadRef(environmentId, threadId),
     [environmentId, threadId],
@@ -301,7 +322,7 @@ export const ChatEnvironmentColumn = memo(function ChatEnvironmentColumn({
   const git = useGitActions({
     gitCwd,
     activeThreadRef,
-    enabled: open,
+    enabled: visibleOpen,
     ...(draftId ? { draftId } : {}),
   });
   const branch = useThreadBranchSelection({
@@ -315,13 +336,13 @@ export const ChatEnvironmentColumn = memo(function ChatEnvironmentColumn({
   // Refreshes the moment the column opens, the way the dropdown menu it
   // replaced refreshed on every open. The column now stays mounted while
   // closed, so this only needs to fire on the closed -> open edge.
-  const wasOpenRef = useRef(open);
+  const wasOpenRef = useRef(visibleOpen);
   useEffect(() => {
-    if (open && !wasOpenRef.current) {
+    if (visibleOpen && !wasOpenRef.current) {
       git.refreshStatus();
     }
-    wasOpenRef.current = open;
-  }, [open, git.refreshStatus]);
+    wasOpenRef.current = visibleOpen;
+  }, [visibleOpen, git.refreshStatus]);
 
   const SourceControlIcon = git.sourceControlPresentation.Icon;
   const commitItem = git.menuItems.find((item) => item.id === "commit") ?? null;
@@ -348,12 +369,13 @@ export const ChatEnvironmentColumn = memo(function ChatEnvironmentColumn({
           "relative z-40 h-full min-h-0 min-w-0 self-stretch overflow-visible",
           "transition-[width] duration-(--duration-base) ease-(--ease-soft)",
         )}
-        style={{ width: open && !overlaysChat ? "var(--envcol-width)" : 0 }}
+        style={{ width: visibleOpen && !rightPanelOpen ? "var(--envcol-width)" : 0 }}
         // Collapsed but mounted, it must not be reachable: without this, Tab
         // walks into a column nobody can see.
-        {...(!open ? { inert: true } : {})}
-        data-environment-column-open={open ? "true" : "false"}
-        data-environment-column-mode={overlaysChat ? "overlay" : "push"}
+        {...(!visibleOpen ? { inert: true } : {})}
+        data-environment-column-open={visibleOpen ? "true" : "false"}
+        data-environment-column-mode={rightPanelOpen ? "overlay" : "push"}
+        data-environment-column-full-area-hidden={fullAreaHidden ? "true" : "false"}
         onKeyDown={(event) => {
           if (event.key === "Escape" && !event.defaultPrevented) {
             onClose();
@@ -362,9 +384,23 @@ export const ChatEnvironmentColumn = memo(function ChatEnvironmentColumn({
       >
         <div
           className={cn(
-            "absolute inset-y-(--envcol-inset) end-(--envcol-inset) flex w-[calc(var(--envcol-width)-2*var(--envcol-inset))] min-h-0 flex-col overflow-hidden rounded-[var(--envcol-radius)] border border-(--envcol-edge) bg-(--envcol-surface) shadow-[var(--envcol-shadow)]",
+            "absolute bottom-(--envcol-inset) end-(--envcol-inset) flex w-[calc(var(--envcol-width)-2*var(--envcol-inset))] min-h-0 flex-col overflow-hidden rounded-[var(--envcol-radius)] border border-(--envcol-edge) bg-(--envcol-surface) shadow-[var(--envcol-shadow)]",
+            /*
+             * Overlaying, it starts below the chat header rather than at the
+             * top inset. The header's right edge is where the toggle that owns
+             * this panel lives, and the close button was removed because that
+             * toggle is the single control — so a surface painted over it left
+             * the panel with no way to shut, since focus also stays on the
+             * covered trigger and never reaches the Escape handler below.
+             * Pushing (its own column, nothing above it) keeps the top inset.
+             */
+            rightPanelOpen
+              ? "top-[calc(var(--workspace-topbar-height)+var(--envcol-inset))]"
+              : "top-(--envcol-inset)",
             "transition-[transform,visibility] duration-(--duration-base) ease-(--ease-soft)",
-            open ? "visible translate-x-0" : "invisible translate-x-(--envcol-hidden-translate)",
+            visibleOpen
+              ? "visible translate-x-0"
+              : "invisible translate-x-(--envcol-hidden-translate)",
           )}
           data-environment-column-surface
           aria-label="Environment overview"

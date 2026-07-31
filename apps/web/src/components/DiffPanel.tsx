@@ -611,17 +611,18 @@ export default function DiffPanel({
     remoteBranchRefs.refresh();
   }, [branchDiffPreview, gitStatusQuery, localBranchRefs, remoteBranchRefs]);
 
+  const gitApplyCommand =
+    selectedTurnId === null && selectedGitScope === "branch"
+      ? buildGitApplyCommand({
+          baseRef: selectedGitSource?.baseRef ?? null,
+          headRef: selectedGitSource?.headRef ?? "HEAD",
+        })
+      : null;
+
   const copyGitApplyCommand = useCallback(() => {
-    const command = buildGitApplyCommand(
-      selectedTurnId === null && selectedGitScope === "branch"
-        ? {
-            baseRef: selectedGitSource?.baseRef ?? null,
-            headRef: selectedGitSource?.headRef ?? "HEAD",
-          }
-        : {},
-    );
-    void navigator.clipboard?.writeText(command);
-  }, [selectedGitScope, selectedGitSource?.baseRef, selectedGitSource?.headRef, selectedTurnId]);
+    if (gitApplyCommand === null) return;
+    void navigator.clipboard?.writeText(gitApplyCommand);
+  }, [gitApplyCommand]);
 
   const selectTurn = (turnId: TurnId) => {
     if (!routeThreadRef) return;
@@ -913,11 +914,16 @@ export default function DiffPanel({
             >
               Don&apos;t load full files
             </DropdownMenuCheckboxItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={copyGitApplyCommand}>
-              <CopyIcon />
-              Copy git apply command
-            </DropdownMenuItem>
+            {/* Only a branch review can name the two refs the command needs. */}
+            {gitApplyCommand === null ? null : (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={copyGitApplyCommand}>
+                  <CopyIcon />
+                  Copy git apply command
+                </DropdownMenuItem>
+              </>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

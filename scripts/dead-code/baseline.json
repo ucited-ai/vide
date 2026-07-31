@@ -354,7 +354,6 @@
     "test-only-export:apps/web/src/components/preview/previewAutomationOpenReadiness.ts:DEFAULT_PREVIEW_AUTOMATION_VIEWPORT": "2026-07-30",
     "test-only-export:apps/web/src/components/preview/previewAutomationRequestConsumer.ts:serializePreviewAutomationError": "2026-07-30",
     "test-only-export:apps/web/src/components/preview/previewMiniPlayerLayout.ts:PREVIEW_MINI_PLAYER_EDGE_GAP": "2026-07-30",
-    "test-only-export:apps/web/src/components/preview/PreviewPanelShell.tsx:getPreviewPanelMaxWidth": "2026-07-30",
     "test-only-export:apps/web/src/components/preview/useDiscoveredLocalServers.ts:mergeServers": "2026-07-30",
     "test-only-export:apps/web/src/components/ProviderUpdateLaunchNotification.logic.ts:firstUnsuccessfulSecondaryProviderOutcome": "2026-07-30",
     "test-only-export:apps/web/src/components/ProviderUpdateLaunchNotification.logic.ts:getSingleProviderUpdateProgressToastView": "2026-07-30",

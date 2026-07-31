@@ -816,3 +816,17 @@
     transparent 100%
   );
 }
+
+/* -------------------------------- three-way workspace resilience */
+
+:root:root:root {
+  /*
+   * The inline workspace can never trade either primary surface below one
+   * compact reading measure. Environment width is a separate reservation:
+   * while it overlays chat, resizing consumes that reservation before chat's
+   * own minimum. Arithmetic-only dimensions stay as named TypeScript constants
+   * because pointer coordinates cannot consume CSS lengths directly.
+   */
+  --layout-chat-min-width: 20rem;
+  --layout-right-panel-min-width: 20rem;
+}

@@ -28,10 +28,21 @@ describe("review surface preferences", () => {
 });
 
 describe("review surface git apply command", () => {
-  it("quotes refs and falls back to the working-tree diff", () => {
+  it("quotes both refs", () => {
     expect(buildGitApplyCommand({ baseRef: "origin/main", headRef: "feature's/head" })).toBe(
       "git diff --binary 'origin/main'...'feature'\\''s/head' | git apply -",
     );
-    expect(buildGitApplyCommand({})).toBe("git diff --binary | git apply -");
+  });
+
+  /*
+   * No command rather than a working-tree fallback. The fallback described a
+   * different change than the one on screen — it re-applied whatever was
+   * unstaged at paste time — so callers hide the affordance instead.
+   */
+  it("returns null unless both refs are known", () => {
+    expect(buildGitApplyCommand({})).toBeNull();
+    expect(buildGitApplyCommand({ baseRef: "origin/main" })).toBeNull();
+    expect(buildGitApplyCommand({ headRef: "HEAD" })).toBeNull();
+    expect(buildGitApplyCommand({ baseRef: "", headRef: "HEAD" })).toBeNull();
   });
 });

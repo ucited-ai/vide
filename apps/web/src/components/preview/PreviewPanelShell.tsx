@@ -1,22 +1,40 @@
-import { type PointerEvent as ReactPointerEvent, type ReactNode, useEffect, useState } from "react";
+import {
+  createContext,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 
 import { isElectron } from "~/env";
+import type { ResizableWidthResult } from "~/hooks/resizableWidthLogic";
 import { useResizableWidth } from "~/hooks/useResizableWidth";
 import { cn } from "~/lib/utils";
 
 import { RightPanelResizeHandle } from "./RightPanelResizeHandle";
+import {
+  getPreviewPanelLayout,
+  getPreviewPanelMaxWidth,
+  PREVIEW_PANEL_DEFAULT_WIDTH,
+  PREVIEW_PANEL_MIN_WIDTH,
+  PREVIEW_PANEL_RESIZE_DEAD_ZONE,
+} from "./previewPanelLayout";
 
 export type PreviewPanelMode = "inline" | "sheet" | "sidebar" | "embedded";
 
 const PREVIEW_PANEL_WIDTH_STORAGE_KEY = "vide:preview-panel-width";
-const PREVIEW_PANEL_MIN_WIDTH = 360;
-/** Fraction of the viewport allowed, preserving the remaining space for chat. */
-const PREVIEW_PANEL_MAX_WIDTH_FRACTION = 0.7;
-const PREVIEW_PANEL_DEFAULT_WIDTH = 540;
-
-export function getPreviewPanelMaxWidth(viewportWidth: number): number {
-  return Math.floor(viewportWidth * PREVIEW_PANEL_MAX_WIDTH_FRACTION);
+interface PreviewPanelLayoutActions {
+  readonly environmentOpen: boolean;
+  readonly onCollapsePanel: () => void;
+  readonly onEnterFullArea: () => void;
+  readonly onLeaveFullArea: () => void;
+  readonly onAutoCollapseEnvironment: () => void;
 }
+
+export const PreviewPanelLayoutContext = createContext<PreviewPanelLayoutActions | null>(null);
 
 /**
  * Shell for the preview panel. In inline mode the panel is user-resizable
@@ -39,53 +57,72 @@ export function PreviewPanelShell(props: {
   const isOpen = props.open ?? true;
   const useDragRegion = isElectron && props.mode !== "sheet" && props.mode !== "embedded";
   const isInline = props.mode === "inline";
-  const maxWidth = useViewportClampedMaxWidth();
-  const { width, handlers } = useResizableWidth({
+  const shellRef = useRef<HTMLDivElement>(null);
+  const workspaceWidth = useWorkspaceWidth(shellRef);
+  const layoutActions = useContext(PreviewPanelLayoutContext);
+  const maxWidth = getPreviewPanelMaxWidth(workspaceWidth);
+  const onResizeEnd = useCallback(
+    (result: ResizableWidthResult) => {
+      if (!layoutActions) return;
+      if (result.snap === "collapse") {
+        layoutActions.onCollapsePanel();
+        return;
+      }
+      if (result.snap === "full-area") {
+        layoutActions.onEnterFullArea();
+        return;
+      }
+      if (props.maximized) {
+        layoutActions.onLeaveFullArea();
+      }
+    },
+    [layoutActions, props.maximized],
+  );
+  const { width, resizing, handlers } = useResizableWidth({
     storageKey: PREVIEW_PANEL_WIDTH_STORAGE_KEY,
     defaultWidth: PREVIEW_PANEL_DEFAULT_WIDTH,
     minWidth: PREVIEW_PANEL_MIN_WIDTH,
     maxWidth,
+    deadZone: PREVIEW_PANEL_RESIZE_DEAD_ZONE,
+    ...(props.maximized ? { dragStartWidth: workspaceWidth } : {}),
     edge: "left",
+    onResizeEnd,
   });
+  const previewLayout = getPreviewPanelLayout({
+    workspaceWidth,
+    panelWidth: width,
+    environmentOpen: layoutActions?.environmentOpen ?? false,
+  });
+  useEffect(() => {
+    if (!isInline || !isOpen || props.maximized || !previewLayout.autoCollapseEnvironment) {
+      return;
+    }
+    layoutActions?.onAutoCollapseEnvironment();
+  }, [isInline, isOpen, layoutActions, previewLayout.autoCollapseEnvironment, props.maximized]);
   /*
    * Width settles on the shared panel curve, except while the handle is held:
    * a drag has to track the cursor exactly, and easing every rAF tick would
    * make the edge trail the pointer.
    */
-  const [resizing, setResizing] = useState(false);
-  const resizeHandlers = {
-    onPointerDown: (event: ReactPointerEvent<HTMLElement>) => {
-      setResizing(true);
-      handlers.onPointerDown(event);
-    },
-    onPointerMove: handlers.onPointerMove,
-    onPointerUp: (event: ReactPointerEvent<HTMLElement>) => {
-      handlers.onPointerUp(event);
-      setResizing(false);
-    },
-    onPointerCancel: (event: ReactPointerEvent<HTMLElement>) => {
-      handlers.onPointerCancel(event);
-      setResizing(false);
-    },
-  };
+  const fullArea = Boolean(props.maximized && isOpen);
+  const usesPixelWidth = isInline && (!fullArea || resizing);
 
   return (
     <div
+      ref={shellRef}
       className={cn(
         "relative flex h-full min-h-0 min-w-0 flex-col self-stretch overflow-hidden bg-background",
         isInline
-          ? props.maximized && isOpen
+          ? fullArea && !resizing
             ? "flex-1 border-l border-border"
-            : "shrink-0"
+            : cn("shrink-0", fullArea && resizing && "ms-auto")
           : "w-full",
         // The edge only exists while there is a panel to edge. Kept at zero
         // width it would read as a stray hairline down the side of the chat.
-        isInline && isOpen && !props.maximized && "border-l border-border",
+        isInline && isOpen && (!fullArea || resizing) && "border-l border-border",
         isInline && !resizing && "transition-[width] duration-(--duration-base) ease-(--ease-soft)",
       )}
-      style={
-        isInline && !(props.maximized && isOpen) ? { width: isOpen ? `${width}px` : 0 } : undefined
-      }
+      style={usesPixelWidth ? { width: isOpen ? `${width}px` : 0 } : undefined}
       // Collapsed but mounted, it must not be reachable: without this, Tab walks
       // into a panel nobody can see.
       {...(isInline && !isOpen ? { inert: true } : {})}
@@ -93,9 +130,7 @@ export function PreviewPanelShell(props: {
       data-preview-panel-open={isOpen ? "true" : "false"}
       data-preview-panel-maximized={props.maximized ? "true" : "false"}
     >
-      {isInline && isOpen && !props.maximized ? (
-        <RightPanelResizeHandle handlers={resizeHandlers} />
-      ) : null}
+      {isInline && isOpen ? <RightPanelResizeHandle handlers={handlers} /> : null}
       {useDragRegion ? <div className="electron-drag-region h-0 w-full" aria-hidden /> : null}
       {/*
        * Holds its own width instead of following the shell's.
@@ -114,9 +149,10 @@ export function PreviewPanelShell(props: {
         data-slot="preview-panel-inner"
         className={cn(
           "flex min-h-0 flex-1 flex-col",
-          isInline && !(props.maximized && isOpen) && "shrink-0",
+          isInline && "min-w-(--layout-right-panel-min-width)",
+          usesPixelWidth && "shrink-0",
         )}
-        style={isInline && !(props.maximized && isOpen) ? { width: `${width}px` } : undefined}
+        style={usesPixelWidth ? { width: `${width}px` } : undefined}
       >
         {props.children}
       </div>
@@ -125,28 +161,24 @@ export function PreviewPanelShell(props: {
 }
 
 /**
- * Track viewport width to derive a sensible upper bound for the panel.
- * Resize-aware so dragging the OS window narrower re-clamps the stored
- * width on the next render (the hook's clamp picks this up automatically).
+ * Measure the common chat/environment/panel flex row. Unlike viewport width,
+ * this already excludes whatever width the left app sidebar currently owns.
  */
-function useViewportClampedMaxWidth(): number {
-  const [vw, setVw] = useState(() => (typeof window === "undefined" ? 1280 : window.innerWidth));
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    let frame = 0;
-    const onResize = () => {
-      // Coalesce rapid resize events into one rAF tick.
-      if (frame !== 0) return;
-      frame = window.requestAnimationFrame(() => {
-        frame = 0;
-        setVw(window.innerWidth);
-      });
-    };
-    window.addEventListener("resize", onResize);
+function useWorkspaceWidth(shellRef: React.RefObject<HTMLDivElement | null>): number {
+  const [width, setWidth] = useState(() =>
+    typeof window === "undefined" ? 1280 : window.innerWidth,
+  );
+  useLayoutEffect(() => {
+    const workspace = shellRef.current?.parentElement;
+    if (!workspace) return;
+    const update = () => setWidth(workspace.clientWidth);
+    update();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(update);
+    observer.observe(workspace);
     return () => {
-      window.removeEventListener("resize", onResize);
-      if (frame !== 0) window.cancelAnimationFrame(frame);
+      observer.disconnect();
     };
   }, []);
-  return getPreviewPanelMaxWidth(vw);
+  return width;
 }
