@@ -15,6 +15,7 @@
  */
 
 import {
+  DEFAULT_CHAT_INDICATOR_COLOR,
   DEFAULT_PALETTE,
   DEFAULT_TEXT_SCALE,
   MAX_TEXT_SCALE,
@@ -79,21 +80,25 @@ const CHROME_PRESET_HEXES: Readonly<Record<"light" | "dark", ReadonlyArray<[stri
   ],
 };
 
+type ProbedColors = Readonly<Record<"light" | "dark", Readonly<Record<string, string>>>>;
+
+const EMPTY_PROBED_COLORS: ProbedColors = { light: {}, dark: {} };
+
 /**
- * The ladder as the stylesheet has it, for both themes at once.
+ * What the stylesheet is painting, for both themes at once.
  *
  * Read off a hidden probe rather than copied into a table here: the values are
- * decided in `vide-theme.css`, and a second copy in TypeScript would be wrong
- * the first time anyone tunes one. The probe carries the opposite theme's class,
- * which is the only way to see the other half of the ladder without switching
- * the app to it.
+ * decided in `vide-theme.css`, and a second copy in TypeScript would be wrong the
+ * first time anyone tunes one. The probe carries the opposite theme's class,
+ * which is the only way to see the other half of the theme without switching the
+ * app to it.
+ *
+ * Keyed by the property name so anything the theme declares can be read the same
+ * way — the ladder, and the colours the indicator offers as a place to start.
  */
-function useLadderColors(): Readonly<
-  Record<"light" | "dark", Partial<Record<PaletteSlot, string>>>
-> {
-  const [colors, setColors] = useState<
-    Readonly<Record<"light" | "dark", Partial<Record<PaletteSlot, string>>>>
-  >({ light: {}, dark: {} });
+function useProbedColors(properties: ReadonlyArray<string>): ProbedColors {
+  const [colors, setColors] = useState<ProbedColors>(EMPTY_PROBED_COLORS);
+  const key = properties.join(" ");
 
   useEffect(() => {
     /* Attached but not painted: custom properties only resolve for an element
@@ -105,20 +110,41 @@ function useLadderColors(): Readonly<
     const read = (theme: "light" | "dark") => {
       probe.className = theme === "dark" ? "dark" : "";
       const computed = getComputedStyle(probe);
-      const slots: Partial<Record<PaletteSlot, string>> = {};
-      for (const slot of PALETTE_SLOTS) {
-        const value = computed.getPropertyValue(`--${slot}`).trim();
-        if (value !== "") slots[slot] = value;
+      const values: Record<string, string> = {};
+      for (const property of key.split(" ")) {
+        const value = computed.getPropertyValue(property).trim();
+        if (value !== "") values[property] = value;
       }
-      return slots;
+      return values;
     };
 
     setColors({ light: read("light"), dark: read("dark") });
     probe.remove();
-  }, []);
+    // The list is a fixed table at the module level; the joined key is what keeps
+    // the effect from re-running on a new array with the same contents.
+  }, [key]);
 
   return colors;
 }
+
+const LADDER_PROPERTIES = PALETTE_SLOTS.map((slot) => `--${slot}`);
+
+/**
+ * The colours the indicator offers as a place to start.
+ *
+ * A grey for staying monochrome and three hues quiet enough that a running turn
+ * is noticed without the app gaining a brand. The values are decided in
+ * `vide-theme.css` beside everything else that is a colour — these are only the
+ * names to read them back under.
+ */
+const INDICATOR_PRESETS: ReadonlyArray<readonly [string, string]> = [
+  ["Grey", "--chat-indicator-grey"],
+  ["Green", "--chat-indicator-green"],
+  ["Amber", "--chat-indicator-amber"],
+  ["Blue", "--chat-indicator-blue"],
+];
+
+const INDICATOR_PRESET_PROPERTIES = INDICATOR_PRESETS.map(([, property]) => property);
 
 /** A colour the picker can hold, whatever form the stylesheet wrote it in. */
 function toPickerValue(color: string | undefined): string | undefined {
@@ -127,14 +153,16 @@ function toPickerValue(color: string | undefined): string | undefined {
 }
 
 function SwatchButton({
-  slot,
+  label,
   color,
   presets,
+  showAlpha = false,
   onChange,
 }: {
-  readonly slot: PaletteSlot;
+  readonly label: string;
   readonly color: string;
   readonly presets: ReadonlyArray<ColorPickerPreset>;
+  readonly showAlpha?: boolean;
   readonly onChange: (value: string) => void;
 }) {
   return (
@@ -146,7 +174,7 @@ function SwatchButton({
               render={
                 <button
                   type="button"
-                  aria-label={SLOT_LABELS[slot]}
+                  aria-label={label}
                   className={cn(
                     "size-7 shrink-0 cursor-pointer rounded-full border border-border transition-[scale,border-color]",
                     "hover:scale-105 hover:border-foreground/40 active:scale-95",
@@ -169,7 +197,7 @@ function SwatchButton({
             />
           }
         />
-        <TooltipPopup side="top">{SLOT_LABELS[slot]}</TooltipPopup>
+        <TooltipPopup side="top">{label}</TooltipPopup>
       </Tooltip>
       <PopoverPopup
         side="bottom"
@@ -177,12 +205,7 @@ function SwatchButton({
         sideOffset={6}
         className="overflow-hidden rounded-md p-0 [--viewport-inline-padding:0px] [&_[data-slot=popover-viewport]]:p-0"
       >
-        <ColorPicker
-          value={color}
-          onChange={onChange}
-          presets={presets}
-          showAlpha={slot === SLOT_TAKES_OPACITY}
-        />
+        <ColorPicker value={color} onChange={onChange} presets={presets} showAlpha={showAlpha} />
       </PopoverPopup>
     </Popover>
   );
@@ -192,7 +215,7 @@ export function ThemeColorsRow() {
   const palette = useClientSettings((settings) => settings.palette);
   const updateSettings = useUpdateClientSettings();
   const { resolvedTheme } = useTheme();
-  const ladder = useLadderColors();
+  const ladder = useProbedColors(LADDER_PROPERTIES);
 
   /*
    * The swatches edit the theme currently on screen, because that is the only
@@ -218,8 +241,8 @@ export function ThemeColorsRow() {
       }
     };
     /* What this rung is today, so "undo my drag" is one click away. */
-    push(`${SLOT_LABELS[slot]}, as designed`, toPickerValue(ladder[resolvedTheme][slot]));
-    push(`${SLOT_LABELS[slot]} in ${other}`, toPickerValue(ladder[other][slot]));
+    push(`${SLOT_LABELS[slot]}, as designed`, toPickerValue(ladder[resolvedTheme][`--${slot}`]));
+    push(`${SLOT_LABELS[slot]} in ${other}`, toPickerValue(ladder[other][`--${slot}`]));
     if (slot === "surface-chrome") {
       for (const [label, hex] of CHROME_PRESET_HEXES[resolvedTheme]) {
         push(label, hexToPaletteColor(hex));
@@ -231,10 +254,11 @@ export function ThemeColorsRow() {
   const swatch = (slot: PaletteSlot) => (
     <SwatchButton
       key={slot}
-      slot={slot}
+      label={SLOT_LABELS[slot]}
       /* A rung the user has not chosen shows what the stylesheet is painting. */
-      color={active[slot] ?? ladder[resolvedTheme][slot] ?? "transparent"}
+      color={active[slot] ?? ladder[resolvedTheme][`--${slot}`] ?? "transparent"}
       presets={presetsFor(slot)}
+      showAlpha={slot === SLOT_TAKES_OPACITY}
       onChange={(value) => write(slot, value)}
     />
   );
@@ -267,6 +291,60 @@ export function ThemeColorsRow() {
             {swatch("ink-tertiary")}
           </div>
         </div>
+      }
+    />
+  );
+}
+
+/**
+ * The one colour the app offers that is not a rung of the ladder.
+ *
+ * The indicator is only ever on screen while a turn is running, which is what
+ * makes it the one place a colour cannot leak into the rest of the app: nothing
+ * is painted from it and nothing sits beside it for long. Unset — the default —
+ * it takes the colour of the line it is in, which is the monochrome answer.
+ *
+ * It lives in the Chat section rather than in Colours because it is a property of
+ * the indicator, not of the palette; and in the settings rather than in a chat
+ * toolbar, because it is chosen once and then never thought about again.
+ */
+export function ChatIndicatorColorRow() {
+  const chatIndicatorColor = useClientSettings((settings) => settings.chatIndicatorColor);
+  const updateSettings = useUpdateClientSettings();
+  const { resolvedTheme } = useTheme();
+  const ink = useProbedColors(LADDER_PROPERTIES)[resolvedTheme]["--ink"];
+  const presetColors = useProbedColors(INDICATOR_PRESET_PROPERTIES)[resolvedTheme];
+  const chosen = chatIndicatorColor[resolvedTheme];
+  /* Unset, the indicator is the colour of the line it sits in — so that is what
+     the swatch shows, rather than an empty circle. */
+  const followsText = toPickerValue(ink) ?? "transparent";
+
+  return (
+    <SettingsRow
+      title="Indicator colour"
+      description={`What the live indicator is painted in while a turn runs. Unset, it takes the colour of the line it sits in. Stored separately for light and dark; you are editing ${resolvedTheme}.`}
+      resetAction={
+        chatIndicatorColor.light === null && chatIndicatorColor.dark === null ? null : (
+          <SettingResetButton
+            label="indicator colour"
+            onClick={() => updateSettings({ chatIndicatorColor: DEFAULT_CHAT_INDICATOR_COLOR })}
+          />
+        )
+      }
+      control={
+        <SwatchButton
+          color={chosen ?? followsText}
+          label="Indicator colour"
+          presets={INDICATOR_PRESETS.flatMap(([label, property]) => {
+            const value = toPickerValue(presetColors[property]);
+            return value === undefined ? [] : [{ label, value }];
+          })}
+          onChange={(value) =>
+            updateSettings({
+              chatIndicatorColor: { ...chatIndicatorColor, [resolvedTheme]: value },
+            })
+          }
+        />
       }
     />
   );

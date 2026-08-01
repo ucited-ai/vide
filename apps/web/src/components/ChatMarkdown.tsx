@@ -68,6 +68,7 @@ import {
 } from "../markdown-clipboard";
 import { remarkNormalizeListItemIndentation } from "../markdown-list-indentation";
 import { rehypeChatStreamWords } from "../markdown-stream-words";
+import { useChatStreamReveal } from "../chatStreamReveal";
 import {
   normalizeMarkdownLinkDestination,
   resolveMarkdownFileLinkMeta,
@@ -119,7 +120,13 @@ interface ChatMarkdownProps {
   threadRef?: ScopedThreadRef | undefined;
   onTaskListChange?: ((input: { markerOffset: number; checked: boolean }) => void) | undefined;
   isStreaming?: boolean;
-  /** How words arrive while `isStreaming`. Ignored once the message settles. */
+  /**
+   * Whether the turn this text belongs to is still running, which is what earns
+   * it a word-by-word reveal. Deliberately not `isStreaming`: that is on only
+   * when the server streams assistant text, which it does not by default.
+   */
+  isLiveTurn?: boolean;
+  /** How words arrive while the turn is live. Ignored once its reveal has run out. */
   streamAnimation?: ChatStreamAnimation | undefined;
   skills?: ReadonlyArray<Pick<ServerProviderSkill, "name" | "displayName">>;
   className?: string;
@@ -191,12 +198,6 @@ const CHAT_MARKDOWN_REMARK_PLUGINS_WITH_BREAKS = [
 const CHAT_MARKDOWN_REHYPE_PLUGINS = [
   rehypeRaw,
   [rehypeSanitize, CHAT_MARKDOWN_SANITIZE_SCHEMA],
-] satisfies NonNullable<ReactMarkdownOptions["rehypePlugins"]>;
-
-/* Word wrapping goes last: ordered before the sanitiser, its spans are stripped. */
-const CHAT_MARKDOWN_REHYPE_PLUGINS_WITH_STREAM_WORDS = [
-  ...CHAT_MARKDOWN_REHYPE_PLUGINS,
-  rehypeChatStreamWords,
 ] satisfies NonNullable<ReactMarkdownOptions["rehypePlugins"]>;
 
 function extractFenceLanguage(className: string | undefined): string {
@@ -1267,6 +1268,7 @@ function ChatMarkdown({
   threadRef,
   onTaskListChange,
   isStreaming = false,
+  isLiveTurn = false,
   streamAnimation,
   skills = EMPTY_MARKDOWN_SKILLS,
   className,
@@ -1592,12 +1594,22 @@ function ChatMarkdown({
     ],
   );
 
-  // Only a message that is still arriving is worth wrapping word by word, and
-  // only for a variant that has motion to show. Everything else renders the
-  // plain tree, which is also what a message falls back to the moment it
-  // settles.
-  const revealsWords =
-    isStreaming && streamAnimation !== undefined && streamAnimation !== "instant";
+  // Only text a running turn is still adding to is worth wrapping word by word,
+  // and only for a variant that has motion to show. Everything else renders the
+  // plain tree, which is also what a message falls back to once its last delta
+  // has finished arriving.
+  const reveal = useChatStreamReveal({ text, animation: streamAnimation, live: isLiveTurn });
+  /* Word wrapping goes last: ordered before the sanitiser, its spans are stripped. */
+  const rehypePlugins = useMemo(
+    () =>
+      reveal.active
+        ? ([
+            ...CHAT_MARKDOWN_REHYPE_PLUGINS,
+            [rehypeChatStreamWords, reveal.timing],
+          ] satisfies NonNullable<ReactMarkdownOptions["rehypePlugins"]>)
+        : CHAT_MARKDOWN_REHYPE_PLUGINS,
+    [reveal],
+  );
 
   return (
     <div
@@ -1607,18 +1619,14 @@ function ChatMarkdown({
         "chat-markdown w-full min-w-0 text-(length:--text-chat) leading-relaxed text-foreground/80",
         className,
       )}
-      data-chat-stream-animation={revealsWords ? streamAnimation : undefined}
+      data-chat-stream-animation={reveal.active ? streamAnimation : undefined}
       onCopy={handleCopy}
     >
       <ReactMarkdown
         remarkPlugins={
           lineBreaks ? CHAT_MARKDOWN_REMARK_PLUGINS_WITH_BREAKS : CHAT_MARKDOWN_REMARK_PLUGINS
         }
-        rehypePlugins={
-          revealsWords
-            ? CHAT_MARKDOWN_REHYPE_PLUGINS_WITH_STREAM_WORDS
-            : CHAT_MARKDOWN_REHYPE_PLUGINS
-        }
+        rehypePlugins={rehypePlugins}
         components={markdownComponents}
         urlTransform={markdownUrlTransform}
       >

@@ -6029,7 +6029,7 @@ function ChatViewContent(props: ChatViewProps) {
                         message runs under, so they sit above the input — outside the
                         glass shell, which would otherwise grow to enclose them. */}
                     {showComposerContextStrip && timelineEntries.length === 0 && (
-                      <div className="pointer-events-auto relative z-10 mx-auto w-full max-w-3xl">
+                      <div className="pointer-events-auto relative z-10 mx-auto w-full max-w-(--chat-column-width)">
                         <BranchToolbar
                           environmentId={activeThread.environmentId}
                           threadId={activeThread.id}
@@ -6056,7 +6056,7 @@ function ChatViewContent(props: ChatViewProps) {
                         />
                       </div>
                     )}
-                    <div className="chat-composer-glass-shell relative mx-auto w-full max-w-3xl">
+                    <div className="chat-composer-glass-shell relative mx-auto w-full max-w-(--chat-column-width)">
                       <div className="chat-composer-glass-host relative z-10 w-full rounded-[22px]">
                         <div ref={attachDraftHeroComposerAnchorRef} className="relative z-10">
                           <ChatComposer

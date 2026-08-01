@@ -15,6 +15,7 @@ import * as DesktopClientSettings from "./DesktopClientSettings.ts";
 const clientSettings: ClientSettings = {
   autoOpenPlanSidebar: false,
   chatChangedFilesLayout: "tree",
+  chatIndicatorColor: { light: null, dark: "rgb(76 195 138 / 100%)" },
   chatStreamAnimation: "assemble",
   chatThinkingIndicator: "orbits",
   confirmThreadArchive: true,

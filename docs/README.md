@@ -17,3 +17,5 @@
 - [Operations](./operations/ci.md)
 - [Providers](./providers/codex.md)
 - [Reference](./reference/encyclopedia.md)
+  - [Agent turn motion](./reference/agent-turn-motion.html) — the mock the chat's turn is built
+    against; open it in a browser beside the app

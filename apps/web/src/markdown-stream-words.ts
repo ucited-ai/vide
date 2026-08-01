@@ -9,9 +9,14 @@
  * changed, and nothing replays when the message re-renders for an unrelated
  * reason.
  *
+ * What staggers them is a delay written onto each new word. The delay is why the
+ * turn does not depend on how the provider delivers text: assistant streaming is
+ * off by default, so a whole paragraph normally lands in one delta, and without a
+ * clock of its own the reveal would be a single flash on every word at once.
+ *
  * Runs after sanitisation — a plugin ordered before it would have its spans
- * stripped. Applied only while a message is streaming: once it settles the
- * wrappers are gone and the transcript is plain markup again.
+ * stripped. Applied only while a message is still being written: once its reveal
+ * has run out the wrappers are gone and the transcript is plain markup again.
  *
  * Code, and the text inside a link, are left whole. `ChatMarkdown` reads both
  * back out of the tree as flat strings (a fence's source, a link's label), and
@@ -29,31 +34,61 @@ interface HastNode {
 /** The class the stylesheet animates. One word, one element. */
 const STREAM_WORD_CLASS_NAME = "chat-stream-word";
 
-/**
- * Words are numbered around a short cycle so a variant can stagger within a
- * group rather than reveal everything the same instant. Providers send several
- * words per delta, which is what makes the stagger visible; a single-word delta
- * just carries a few milliseconds of delay nobody reads as one.
- */
-const WORD_SLOT_COUNT = 3;
-
 const OPAQUE_TAGS = new Set(["code", "pre", "a"]);
 
-function wordElement(value: string, slot: number): HastNode {
-  return {
-    type: "element",
-    tagName: "span",
-    properties: {
-      className: [STREAM_WORD_CLASS_NAME],
-      "data-word-slot": String(slot),
-    },
-    children: [{ type: "text", value }],
-  };
+export interface ChatStreamWordTiming {
+  /**
+   * Words already on screen before this render.
+   *
+   * They arrived, and animated, earlier — so they are wrapped exactly as before
+   * (React keeps their DOM only if the markup matches) but carry no delay. A
+   * delay that grew on a word already at rest would put it back inside its own
+   * delay phase, where `animation-fill-mode: backwards` hides it: the word would
+   * blink out because a later word arrived.
+   */
+  readonly revealedWordCount: number;
+  /** Reveal delay of the nth word of this delta, in milliseconds. */
+  readonly delayMsOf: (indexInDelta: number) => number;
+  /** Where the nth word of this delta comes in from, for the variants that travel. */
+  readonly offsetOf: (indexInDelta: number) => { readonly dx: string; readonly dy: string };
 }
 
-export function rehypeChatStreamWords() {
+/** Words as the reveal counts them, so a delay can be handed out per word. */
+export function countStreamWords(text: string): number {
+  return text.match(/\S+/g)?.length ?? 0;
+}
+
+export function rehypeChatStreamWords(timing: ChatStreamWordTiming) {
   return (tree: HastNode) => {
     let wordCount = 0;
+
+    const wordElement = (value: string): HastNode => {
+      const indexInDelta = wordCount - timing.revealedWordCount;
+      wordCount += 1;
+      if (indexInDelta < 0) {
+        return {
+          type: "element",
+          tagName: "span",
+          properties: { className: [STREAM_WORD_CLASS_NAME] },
+          children: [{ type: "text", value }],
+        };
+      }
+
+      const offset = timing.offsetOf(indexInDelta);
+      return {
+        type: "element",
+        tagName: "span",
+        properties: {
+          className: [STREAM_WORD_CLASS_NAME],
+          style: [
+            `--chat-stream-delay:${String(Math.round(timing.delayMsOf(indexInDelta)))}ms`,
+            `--chat-stream-dx:${offset.dx}`,
+            `--chat-stream-dy:${offset.dy}`,
+          ].join(";"),
+        },
+        children: [{ type: "text", value }],
+      };
+    };
 
     /** Words and the gaps between them, in order, so spacing survives the wrap. */
     const splitIntoWords = (value: string): HastNode[] => {
@@ -64,8 +99,7 @@ export function rehypeChatStreamWords() {
           nodes.push({ type: "text", value: part });
           continue;
         }
-        nodes.push(wordElement(part, wordCount % WORD_SLOT_COUNT));
-        wordCount += 1;
+        nodes.push(wordElement(part));
       }
       return nodes;
     };

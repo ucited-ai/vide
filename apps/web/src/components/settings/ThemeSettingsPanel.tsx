@@ -9,7 +9,12 @@ import {
   type ChatAppearanceOption,
 } from "../chat/chatAppearance";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
-import { TextSizeRow, ThemeColorsRow, ThemePreview } from "./ThemeAppearanceControls";
+import {
+  ChatIndicatorColorRow,
+  TextSizeRow,
+  ThemeColorsRow,
+  ThemePreview,
+} from "./ThemeAppearanceControls";
 import {
   SettingResetButton,
   SettingsPageContainer,
@@ -121,6 +126,8 @@ function ChatAppearanceSection() {
           />
         }
       />
+
+      <ChatIndicatorColorRow />
 
       <SettingsRow
         title="Changed files"

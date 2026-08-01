@@ -105,6 +105,14 @@
   --wash-active: rgb(0 0 0 / 7%);
   --wash-selected: rgb(0 0 0 / 6%);
 
+  /*
+   * The highlight the sheen carries through live type. Light, not ink — which is
+   * why it is here beside the edges and washes, and why it darkens rather than
+   * lightens under a light theme: a white sheen on grey text on a white page is
+   * a gap in the sentence, not a shine.
+   */
+  --chat-sheen: #000005;
+
   /* macOS control radii. */
   --radius: 0.5rem;
 
@@ -127,6 +135,45 @@
      stop the eye tracking individual words across a re-wrap, not enough to read
      as an effect. */
   --chat-reflow-blur: 3px;
+
+  /*
+   * The reading column, once.
+   *
+   * The transcript and the composer are the same column: the input answers the
+   * text above it, and one of them being wider than the other reads as a
+   * mistake. They used to arrive at their width separately — the transcript from
+   * `max-w-3xl` inside a scroller padded by 20px, the composer from a 48rem cap
+   * inside a container padded by 20px — which left the composer 16px narrower
+   * than the text at every width wide enough to reach the cap. Both now size off
+   * this pair, so there is no second number to keep in sync.
+   *
+   * TIMELINE_CONTENT_MAX_WIDTH in MessagesTimeline.logic.ts is the same 48rem in
+   * pixels; the minimap needs it as a number to know whether the side gutter can
+   * hold a hover strip.
+   */
+  --chat-column-width: 48rem;
+  --chat-column-inset: 1.25rem;
+
+  /*
+   * The agent turn's one hanging-indent column.
+   *
+   * Every icon of a turn — the indicator, a tool glyph, a file glyph — sits
+   * inside this width, and every piece of the turn's text starts at its far
+   * edge. It is what makes a turn read as one column rather than as a stack of
+   * rows that each chose their own inset.
+   */
+  --chat-turn-gutter: 1.375rem;
+
+  /* The turn's motion. One open/close duration, one text swap, one sheen — a
+     turn that opened at one speed and swapped at another read as two systems. */
+  --chat-turn-open-duration: 480ms;
+  --chat-turn-swap-duration: 380ms;
+  --chat-turn-swap-in-duration: 360ms;
+  --chat-turn-swap-out-duration: 220ms;
+  --chat-sheen-duration: 3.4s;
+  /* Snappier than --ease-soft on the way in: a word or a label arriving should
+     land, where a panel opening should settle. */
+  --chat-turn-snap: cubic-bezier(0.14, 0.92, 0.22, 1);
 
   /*
    * Type scale. Named by role rather than size so a component never has to pick
@@ -256,6 +303,8 @@
   --wash-hover: rgb(255 255 255 / 5%);
   --wash-active: rgb(255 255 255 / 9%);
   --wash-selected: rgb(255 255 255 / 7%);
+
+  --chat-sheen: #ffffff;
 }
 
 /* ------------------------------------------- map the ladder onto app tokens */
@@ -436,20 +485,26 @@
  * opaque surface one step above the pane keeps it legible over scrolling text
  * instead of letting the transcript smear through it.
  *
- * It is exactly as wide as the transcript, not inset from it: MessagesTimeline
- * lays its messages out in `max-w-3xl`, so 48rem lines the input up with the
- * text it answers. A narrower composer looked stranded under a wider column —
- * the two read as one column or as a mistake, nothing in between.
+ * It is exactly as wide as the transcript, not inset from it: both read
+ * --chat-column-width and --chat-column-inset, so the input lines up with the
+ * text it answers by construction. A narrower composer looked stranded under a
+ * wider column — the two read as one column or as a mistake, nothing in between.
+ *
+ * The inset is added to the safe area rather than replacing it, so the column
+ * still clears a notch. It also overrides index.css's own padding on this class,
+ * which is why both sides are declared here.
  *
  * Both the context-chip strip (BranchToolbar's `w-4/5`) and the composer size
  * off this same container, so the strip stays at 80% of the composer without
  * needing a number of its own.
  */
 :root:root:root .chat-composer-horizontal-inset {
-  --composer-max-width: 48rem;
+  --composer-max-width: var(--chat-column-width);
 
   margin-inline: auto;
-  max-width: calc(var(--composer-max-width) + 1.5rem);
+  max-width: calc(var(--composer-max-width) + 2 * var(--chat-column-inset));
+  padding-inline-start: calc(env(safe-area-inset-left) + var(--chat-column-inset));
+  padding-inline-end: calc(env(safe-area-inset-right) + var(--chat-column-inset));
 }
 
 /*
@@ -986,18 +1041,195 @@
   --right-panel-card-hover: color-mix(in srgb, var(--card) 92%, var(--ink));
 }
 
+/* ---------------------------------------------------------- the agent turn */
+
+/*
+ * One hanging-indent column for the whole turn.
+ *
+ * Icons live inside --chat-turn-gutter and every piece of the turn's text starts
+ * at its far edge: the status line, a thought, a tool group, the answer and the
+ * changed files all sit on one edge, whichever kind of row they are. Rows used
+ * to each pick their own inset, which is what made a turn read as a stack of
+ * unrelated things.
+ */
+.chat-turn-row {
+  display: grid;
+  width: 100%;
+  grid-template-columns: var(--chat-turn-gutter) minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.chat-turn-body {
+  padding-inline-start: var(--chat-turn-gutter);
+}
+
+/*
+ * The one open/close mechanic.
+ *
+ * A grid row eased from 0fr to 1fr, which is the only way to transition to a
+ * height nobody measured: the content decides how tall it is and the transition
+ * still runs. Everything in a turn that opens uses it — a tool group's calls, the
+ * changed files, a file's diff — so opening anything feels like opening
+ * everything else.
+ */
+.chat-grow {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--chat-turn-open-duration) var(--ease-soft);
+}
+
+.chat-grow[data-open="true"] {
+  grid-template-rows: 1fr;
+}
+
+.chat-grow > .chat-grow-clip {
+  overflow: hidden;
+  min-height: 0;
+}
+
+/*
+ * Text that swaps in place.
+ *
+ * Both labels are out of flow and stacked, so the outgoing one leaves while the
+ * incoming one arrives and neither moves the line they are set in. Where the box
+ * has to morph — the status line, whose label is only as wide as its text — the
+ * width is set in pixels by the component after measuring the incoming text
+ * against the hidden probe: an intrinsic width cannot be transitioned, and a
+ * line that jumps to its new width is the thing this exists to avoid.
+ */
+.chat-swap {
+  position: relative;
+  display: inline-block;
+  height: 1.55em;
+  transition: width var(--chat-turn-swap-duration) var(--ease-soft);
+}
+
+.chat-swap-item {
+  position: absolute;
+  top: 0;
+  left: 0;
+  overflow: hidden;
+  max-width: 100%;
+  line-height: 1.55;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* More specific than .chat-shimmer, so a swap always beats the running sheen. */
+.chat-swap-item[data-swap="in"] {
+  animation: chat-swap-in var(--chat-turn-swap-in-duration) var(--chat-turn-snap) both;
+}
+
+.chat-swap-item[data-swap="out"] {
+  animation: chat-swap-out var(--chat-turn-swap-out-duration) var(--chat-turn-snap) forwards;
+}
+
+/* Laid out but never painted: what the box is about to have to be wide enough for. */
+.chat-swap-probe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  max-width: none;
+  white-space: nowrap;
+  visibility: hidden;
+}
+
+@keyframes chat-swap-in {
+  from {
+    opacity: 0;
+    transform: translateX(-11px) scaleX(1.12);
+    filter: blur(2.2px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+    filter: blur(0);
+  }
+}
+
+@keyframes chat-swap-out {
+  to {
+    opacity: 0;
+    transform: translateX(9px) scaleX(1.08);
+    filter: blur(2px);
+  }
+}
+
+/*
+ * The sheen: a highlight travelling through whatever type is alive right now.
+ *
+ * It is how a turn says "this line is still being written" without a spinner
+ * beside it. The gradient is clipped to the glyphs, so the text itself carries
+ * the light and nothing is added to the row.
+ */
+.chat-shimmer {
+  background-image: linear-gradient(
+    100deg,
+    var(--chat-shimmer-base, var(--ink-tertiary)) 0 42%,
+    var(--chat-sheen) 50%,
+    var(--chat-shimmer-base, var(--ink-tertiary)) 58% 100%
+  );
+  background-repeat: no-repeat;
+  background-size: 300% 100%;
+  color: transparent;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: chat-sheen var(--chat-sheen-duration) cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+/* A thought is content, not chrome: its sheen travels through ink rather than
+   through the fainter type a status line is set in. */
+.chat-turn-body.chat-shimmer {
+  --chat-shimmer-base: var(--ink);
+}
+
+@keyframes chat-sheen {
+  from {
+    background-position: 118% 0;
+  }
+
+  to {
+    background-position: -30% 0;
+  }
+}
+
 /* ------------------------------------------------------- chat appearance */
 
 /*
  * The live indicator.
  *
  * Sized in `em` so it scales with whatever line it sits in, and coloured by
- * `currentColor` so it inherits the row's ink instead of carrying a colour of
- * its own. The canvas reads both back out of computed style — this block is
- * where they are actually decided.
+ * `currentColor` so it inherits the row's ink instead of carrying a colour of its
+ * own. The canvas reads both back out of computed style — this block is where
+ * they are actually decided. A colour the user has chosen instead reaches the
+ * canvas as a prop, because a setting has to arrive the moment it changes rather
+ * than the next time the line around it resizes.
  */
 :root:root:root {
   --chat-thinking-indicator-size: 1.25em;
+
+  /*
+   * Somewhere to start when choosing the indicator's colour.
+   *
+   * The grey is the ladder's faintest ink, so it follows a chosen palette instead
+   * of sitting beside one. The three hues cannot come from the ladder — it is
+   * monochrome by construction and owns no hue — so they are declared here, with
+   * every other colour, and the settings panel reads them back off a probe the
+   * same way it reads the ladder.
+   */
+  --chat-indicator-grey: var(--ink-tertiary);
+  --chat-indicator-green: #1a7f4b;
+  --chat-indicator-amber: #a9741f;
+  --chat-indicator-blue: #3573b0;
+}
+
+/* The hues, and only the hues: one that reads as calm against a dark floor is
+   washed out on a light one. The grey needs no repeat — it is the ladder's. */
+.dark.dark.dark {
+  --chat-indicator-green: #4cc38a;
+  --chat-indicator-amber: #d9a343;
+  --chat-indicator-blue: #5b9dd9;
 }
 
 .chat-thinking-indicator {
@@ -1019,17 +1251,24 @@
  * A word animates because its element is new, not because anything told it to:
  * the reveal fires on first paint and never again, so re-rendering a message
  * leaves the words already on screen exactly where they were. Every variant is
- * therefore only a keyframe plus a curve — the timing that used to belong to a
- * scheduler is the arrival of the text itself.
+ * therefore only a keyframe plus a curve.
  *
- * Adding one is a keyframe, a rule here, and an id in the settings contract.
- * `instant` needs no rule at all: it is the absence of this whole block.
+ * What staggers them is --chat-stream-delay, written onto each word as it is
+ * wrapped: the reveal runs on its own clock rather than on the provider's, which
+ * is the only way a turn reads the same whether the text arrives token by token
+ * or a whole paragraph at once (it usually arrives at once — assistant streaming
+ * is off by default).
+ *
+ * Adding a variant is a keyframe, a rule here, and an id in the settings
+ * contract. `instant` needs no rule at all: it is the absence of this whole
+ * block.
  */
 .chat-stream-word {
   display: inline-block;
   /* Words hold their own baseline, so a reveal that moves or scales one cannot
      nudge the line it is set in. */
   vertical-align: baseline;
+  animation-delay: var(--chat-stream-delay, 0ms);
   animation-duration: var(--chat-stream-duration, 440ms);
   animation-timing-function: var(--chat-stream-ease, var(--ease-soft));
 
@@ -1041,16 +1280,6 @@
    * through its delay, which is the half that matters.
    */
   animation-fill-mode: backwards;
-}
-
-/* Words land in threes: the delay is inside the group, not across the message,
-   so a long answer never accumulates a lag behind the text arriving. */
-[data-chat-stream-animation="phrase"] .chat-stream-word[data-word-slot="1"] {
-  animation-delay: 70ms;
-}
-
-[data-chat-stream-animation="phrase"] .chat-stream-word[data-word-slot="2"] {
-  animation-delay: 140ms;
 }
 
 [data-chat-stream-animation="assemble"] .chat-stream-word {
@@ -1100,10 +1329,12 @@
   animation-name: chat-stream-phrase;
 }
 
+/* Each word arrives from a slightly different direction — the offsets are
+   written on the word beside its delay, from the same noise. */
 @keyframes chat-stream-assemble {
   from {
     opacity: 0;
-    transform: translateY(3px) scaleX(1.16);
+    transform: translate(var(--chat-stream-dx, 0), var(--chat-stream-dy, 3px)) scaleX(1.16);
     filter: blur(2.4px);
   }
 
@@ -1191,11 +1422,37 @@
    */
   :root:root:root .chat-stream-word {
     animation-name: none;
+    animation-delay: 0ms;
     opacity: 1;
     filter: none;
     clip-path: none;
     mask-image: none;
     -webkit-mask-image: none;
     transform: none;
+  }
+
+  /*
+   * The turn keeps its states and loses its travel. Opening still resolves to
+   * the same 1fr, a swap still replaces one label with the other, and the sheen
+   * becomes the colour it was travelling through — an endlessly repeating
+   * gradient is the one thing here that has to actually stop.
+   */
+  :root:root:root .chat-grow {
+    transition-duration: 1ms;
+  }
+
+  :root:root:root .chat-swap {
+    transition-duration: 1ms;
+  }
+
+  :root:root:root .chat-swap-item {
+    animation-duration: 1ms;
+  }
+
+  :root:root:root .chat-shimmer {
+    color: var(--chat-shimmer-base, var(--ink-tertiary));
+    background-image: none;
+    animation-name: none;
+    -webkit-text-fill-color: currentcolor;
   }
 }

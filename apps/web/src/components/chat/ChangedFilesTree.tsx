@@ -1,4 +1,4 @@
-import { type TurnId } from "@vide/contracts";
+import { type EnvironmentId, type ThreadId, type TurnId } from "@vide/contracts";
 import { type ChatChangedFilesLayout } from "@vide/contracts/settings";
 import { memo, useCallback, useMemo, useState } from "react";
 import { type TurnDiffFileChange } from "../../types";
@@ -7,35 +7,27 @@ import {
   summarizeTurnDiffStats,
   type TurnDiffTreeNode,
 } from "../../lib/turnDiffTree";
+import { useTurnFileDiffs, type TurnFileDiffs } from "../../hooks/useTurnFileDiffs";
 import {
   ChevronsDownUpIcon,
   ChevronsUpDownIcon,
   ChevronRightIcon,
   FileDiffIcon,
+  FilesIcon,
   FolderIcon,
   FolderClosedIcon,
 } from "lucide-react";
 import { cn } from "~/lib/utils";
+import { ChangedFileDiff } from "./ChangedFileDiff";
+import { ChatGrow } from "./ChatGrow";
 import { DiffStatLabel, hasNonZeroStat } from "./DiffStatLabel";
 import { PierreEntryIcon } from "./PierreEntryIcon";
 import { QUALIFIER_CLASS_NAME, QualifiedLabel } from "./QualifiedLabel";
 import { Button } from "../ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { ChangedFilesList } from "./ChangedFilesList";
-import {
-  changedFileName,
-  selectChangedFilePreview,
-  summarizeChangedFileScopes,
-} from "./changedFilesPresentation";
 
 const EMPTY_DIRECTORY_OVERRIDES: Record<string, boolean> = {};
-
-/**
- * The card is chrome laid on the transcript's floor, so it is opaque in both
- * modes and its sticky header can reuse the same surface to occlude the rows
- * passing under it.
- */
-const CARD_SURFACE_CLASS = "bg-(--surface-chrome)";
 
 /**
  * One row, whether it names a directory or a file: the same height, the same
@@ -51,14 +43,29 @@ const TREE_ROW_STAT_CLASS = "ml-auto shrink-0 font-mono text-(length:--text-capt
 const TREE_ROW_INSET_PX = 8;
 const TREE_ROW_INDENT_PX = 12;
 
+/**
+ * What a turn changed, as the last line of the turn.
+ *
+ * Not a card any more: a bordered box under the answer read as an attachment,
+ * where this is the turn's own receipt and belongs on the same gutter as
+ * everything else it said. One row states the count and the weight; opening it
+ * lists the files; opening a file shows its diff right there.
+ */
+export interface ChangedFilesDiffTarget {
+  readonly turnId: TurnId;
+  readonly checkpointTurnCount: number;
+  readonly environmentId: EnvironmentId | null;
+  readonly threadId: ThreadId | null;
+}
+
 export const ChangedFilesCard = memo(function ChangedFilesCard(props: {
   turnId: TurnId;
   files: ReadonlyArray<TurnDiffFileChange>;
   expanded: boolean;
-  showCompactPreview: boolean;
   allDirectoriesExpanded: boolean;
   layout: ChatChangedFilesLayout;
   resolvedTheme: "light" | "dark";
+  diffTarget: ChangedFilesDiffTarget;
   onExpandedChange: (expanded: boolean) => void;
   onToggleAllDirectories: () => void;
   onOpenTurnDiff: (turnId: TurnId, filePath?: string) => void;
@@ -67,184 +74,162 @@ export const ChangedFilesCard = memo(function ChangedFilesCard(props: {
     turnId,
     files,
     expanded,
-    showCompactPreview,
     allDirectoriesExpanded,
     layout,
     resolvedTheme,
+    diffTarget,
     onExpandedChange,
     onToggleAllDirectories,
     onOpenTurnDiff,
   } = props;
   const summaryStat = useMemo(() => summarizeTurnDiffStats(files), [files]);
-  const scopeSummary = useMemo(() => summarizeChangedFileScopes(files), [files]);
-  const previewFiles = useMemo(() => selectChangedFilePreview(files), [files]);
-  const compactPreviewVisible = showCompactPreview && !expanded;
+  const [openPaths, setOpenPaths] = useState<ReadonlySet<string>>(() => new Set());
+  const onTogglePath = useCallback((path: string) => {
+    setOpenPaths((existing) => {
+      const next = new Set(existing);
+      if (next.has(path)) {
+        next.delete(path);
+      } else {
+        next.add(path);
+      }
+      return next;
+    });
+  }, []);
+  const diffs = useTurnFileDiffs({
+    turnId: diffTarget.turnId,
+    checkpointTurnCount: diffTarget.checkpointTurnCount,
+    environmentId: diffTarget.environmentId,
+    threadId: diffTarget.threadId,
+    enabled: expanded && openPaths.size > 0,
+  });
 
   return (
     <div
-      className={cn("mt-4 rounded-2xl border border-border p-2", CARD_SURFACE_CLASS)}
-      data-changed-files-state={
-        expanded ? "expanded" : compactPreviewVisible ? "preview" : "collapsed"
-      }
+      className="mt-3"
+      data-changed-files-state={expanded ? "expanded" : "collapsed"}
+      data-changed-files-turn={turnId}
     >
-      <div
-        className={cn(
-          "flex items-center justify-between gap-2 rounded-(--radius) px-1",
-          expanded && `sticky top-2 z-10 mb-2 ${CARD_SURFACE_CLASS}`,
-        )}
+      <button
+        aria-expanded={expanded}
+        className="chat-turn-row cursor-pointer rounded-(--radius) py-0.5 pr-2 text-(length:--text-caption) transition-colors hover:bg-(--wash-hover) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
+        data-scroll-anchor-ignore
+        onClick={() => onExpandedChange(!expanded)}
+        type="button"
       >
-        <button
-          type="button"
-          aria-expanded={expanded}
-          data-scroll-anchor-ignore
-          className="group flex min-w-0 flex-1 items-center gap-1.5 rounded-(--radius) px-1 py-1.5 text-left transition-colors hover:bg-(--wash-hover) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          onClick={() => onExpandedChange(!expanded)}
-        >
-          <ChevronRightIcon
-            aria-hidden="true"
-            className={cn(
-              "size-3.5 shrink-0 text-muted-foreground transition-transform",
-              expanded && "rotate-90",
-            )}
-          />
-          <span className="flex min-w-0 items-center gap-1 whitespace-nowrap font-medium text-foreground text-(length:--text-ui)">
-            <span>
-              {files.length} changed file{files.length === 1 ? "" : "s"}
-            </span>
-            {hasNonZeroStat(summaryStat) && (
-              <DiffStatLabel
-                additions={summaryStat.additions}
-                className="text-(length:--text-ui)"
-                deletions={summaryStat.deletions}
-                layout="inline"
-              />
-            )}
+        <span className="flex items-center justify-start">
+          <FilesIcon aria-hidden="true" className="size-3.5 shrink-0 text-(--ink-tertiary)" />
+        </span>
+        <span className="flex min-w-0 items-center gap-1.5 text-left whitespace-nowrap text-(--ink-secondary)">
+          <span>
+            Changed {files.length} file{files.length === 1 ? "" : "s"}
           </span>
-          <span className="ml-1 hidden truncate text-(length:--text-caption) text-muted-foreground sm:inline">
-            {expanded ? "Hide files" : "Show files"}
-          </span>
-        </button>
-        <div className="flex items-center gap-1.5">
-          {/* Only the tree has folders to fold. */}
-          {expanded && layout === "tree" ? (
+          {hasNonZeroStat(summaryStat) && (
+            <DiffStatLabel
+              additions={summaryStat.additions}
+              className="text-(length:--text-caption)"
+              deletions={summaryStat.deletions}
+              layout="inline"
+            />
+          )}
+        </span>
+        <ChevronRightIcon
+          aria-hidden="true"
+          className={cn(
+            "size-3 shrink-0 text-(--ink-tertiary) transition-transform",
+            expanded && "rotate-90",
+          )}
+        />
+      </button>
+      <ChatGrow open={expanded}>
+        <div className="chat-turn-body pt-1 pb-1">
+          {layout === "tree" ? (
+            <ChangedFilesTree
+              key={`changed-files-tree:${turnId}`}
+              allDirectoriesExpanded={allDirectoriesExpanded}
+              diffs={diffs}
+              files={files}
+              openPaths={openPaths}
+              onTogglePath={onTogglePath}
+              resolvedTheme={resolvedTheme}
+            />
+          ) : (
+            <ChangedFilesList
+              diffs={diffs}
+              files={files}
+              layout={layout}
+              openPaths={openPaths}
+              onTogglePath={onTogglePath}
+              resolvedTheme={resolvedTheme}
+            />
+          )}
+          {/*
+           * The panel is no longer where a file is read, so the button that opens
+           * it sits after the list rather than in the head — it is the way out to
+           * the full diff, not the way into this one.
+           */}
+          <div className="mt-1 flex items-center gap-1.5">
             <Tooltip>
               <TooltipTrigger
                 render={
                   <Button
-                    type="button"
-                    size="icon-xs"
-                    variant="outline"
-                    className="!size-[22px]"
-                    aria-label={
-                      allDirectoriesExpanded ? "Collapse all folders" : "Expand all folders"
-                    }
+                    aria-label="Open diff"
                     data-scroll-anchor-ignore
-                    onClick={onToggleAllDirectories}
+                    onClick={() => onOpenTurnDiff(turnId, files[0]?.path)}
+                    size="xs"
+                    type="button"
+                    variant="ghost"
                   />
                 }
               >
-                {allDirectoriesExpanded ? (
-                  <ChevronsDownUpIcon className="size-3" />
-                ) : (
-                  <ChevronsUpDownIcon className="size-3" />
-                )}
+                <FileDiffIcon className="size-3" />
+                <span>Open diff</span>
               </TooltipTrigger>
-              <TooltipPopup side="top">
-                {allDirectoriesExpanded ? "Collapse all folders" : "Expand all folders"}
-              </TooltipPopup>
+              <TooltipPopup side="top">Open the full diff in the panel</TooltipPopup>
             </Tooltip>
-          ) : null}
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  type="button"
-                  size="xs"
-                  variant="outline"
-                  aria-label="Open diff"
-                  onClick={() => onOpenTurnDiff(turnId, files[0]?.path)}
-                />
-              }
-            >
-              <FileDiffIcon className="size-3" />
-              <span className="hidden sm:inline">Open diff</span>
-            </TooltipTrigger>
-            <TooltipPopup side="top">Open the full diff</TooltipPopup>
-          </Tooltip>
-        </div>
-      </div>
-      {expanded ? (
-        layout === "tree" ? (
-          <ChangedFilesTree
-            key={`changed-files-tree:${turnId}`}
-            turnId={turnId}
-            files={files}
-            allDirectoriesExpanded={allDirectoriesExpanded}
-            resolvedTheme={resolvedTheme}
-            onOpenTurnDiff={onOpenTurnDiff}
-          />
-        ) : (
-          <ChangedFilesList
-            turnId={turnId}
-            files={files}
-            layout={layout}
-            resolvedTheme={resolvedTheme}
-            onOpenTurnDiff={onOpenTurnDiff}
-          />
-        )
-      ) : compactPreviewVisible ? (
-        <div className="px-2 pb-1.5 pt-1">
-          <p className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-(length:--text-caption) text-muted-foreground">
-            {scopeSummary.map((scope, index) => (
-              <span key={scope.label} className="inline-flex items-center gap-1">
-                {index > 0 ? <span aria-hidden="true">·</span> : null}
-                <QualifiedLabel
-                  name={scope.label}
-                  trail={`${scope.fileCount} file${scope.fileCount === 1 ? "" : "s"}`}
-                />
-              </span>
-            ))}
-          </p>
-          <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            {previewFiles.map((file) => (
-              <button
-                key={file.path}
-                type="button"
-                title={file.path}
-                className="inline-flex max-w-48 items-center gap-1 rounded-(--radius) border border-border bg-(--wash-hover) px-1.5 py-1 text-(length:--text-caption) text-muted-foreground transition-colors hover:bg-(--wash-active) hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                onClick={() => onOpenTurnDiff(turnId, file.path)}
-              >
-                <PierreEntryIcon
-                  pathValue={file.path}
-                  kind="file"
-                  theme={resolvedTheme}
-                  className="size-3 shrink-0 text-muted-foreground"
-                />
-                <span className="truncate">{changedFileName(file.path)}</span>
-              </button>
-            ))}
-            <button
-              type="button"
-              className="rounded-(--radius) px-1.5 py-1 text-(length:--text-caption) font-medium text-muted-foreground transition-colors hover:bg-(--wash-hover) hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              onClick={() => onExpandedChange(true)}
-            >
-              Show all {files.length} files
-            </button>
+            {/* Only the tree has folders to fold. */}
+            {layout === "tree" ? (
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      aria-label={
+                        allDirectoriesExpanded ? "Collapse all folders" : "Expand all folders"
+                      }
+                      data-scroll-anchor-ignore
+                      onClick={onToggleAllDirectories}
+                      size="icon-xs"
+                      type="button"
+                      variant="ghost"
+                    />
+                  }
+                >
+                  {allDirectoriesExpanded ? (
+                    <ChevronsDownUpIcon className="size-3" />
+                  ) : (
+                    <ChevronsUpDownIcon className="size-3" />
+                  )}
+                </TooltipTrigger>
+                <TooltipPopup side="top">
+                  {allDirectoriesExpanded ? "Collapse all folders" : "Expand all folders"}
+                </TooltipPopup>
+              </Tooltip>
+            ) : null}
           </div>
         </div>
-      ) : null}
+      </ChatGrow>
     </div>
   );
 });
 
 export const ChangedFilesTree = memo(function ChangedFilesTree(props: {
-  turnId: TurnId;
   files: ReadonlyArray<TurnDiffFileChange>;
   allDirectoriesExpanded: boolean;
   resolvedTheme: "light" | "dark";
-  onOpenTurnDiff: (turnId: TurnId, filePath?: string) => void;
+  openPaths: ReadonlySet<string>;
+  diffs: TurnFileDiffs;
+  onTogglePath: (path: string) => void;
 }) {
-  const { files, allDirectoriesExpanded, onOpenTurnDiff, resolvedTheme, turnId } = props;
+  const { files, allDirectoriesExpanded, diffs, openPaths, onTogglePath, resolvedTheme } = props;
   const treeNodes = useMemo(() => buildTurnDiffTree(files), [files]);
   const directoryPathsKey = useMemo(
     () => collectDirectoryPaths(treeNodes).join("\u0000"),
@@ -323,32 +308,39 @@ export const ChangedFilesTree = memo(function ChangedFilesTree(props: {
       );
     }
 
+    const open = openPaths.has(node.path);
     return (
-      <button
-        key={`file:${node.path}`}
-        type="button"
-        className={TREE_ROW_CLASS}
-        style={{ paddingLeft: `${leftPadding}px` }}
-        onClick={() => onOpenTurnDiff(turnId, node.path)}
-      >
-        {hasDirectoryNodes || depth > 0 ? (
-          <span aria-hidden="true" className="size-3.5 shrink-0" />
-        ) : null}
-        <PierreEntryIcon
-          pathValue={node.path}
-          kind="file"
-          theme={resolvedTheme}
-          className="size-3.5 text-muted-foreground"
-        />
-        <span className="truncate">
-          <QualifiedLabel name={node.name} />
-        </span>
-        {node.stat && (
-          <span className={TREE_ROW_STAT_CLASS}>
-            <DiffStatLabel additions={node.stat.additions} deletions={node.stat.deletions} />
+      <div key={`file:${node.path}`}>
+        <button
+          aria-expanded={open}
+          className={TREE_ROW_CLASS}
+          data-scroll-anchor-ignore
+          onClick={() => onTogglePath(node.path)}
+          style={{ paddingLeft: `${String(leftPadding)}px` }}
+          type="button"
+        >
+          {hasDirectoryNodes || depth > 0 ? (
+            <span aria-hidden="true" className="size-3.5 shrink-0" />
+          ) : null}
+          <PierreEntryIcon
+            pathValue={node.path}
+            kind="file"
+            theme={resolvedTheme}
+            className="size-3.5 text-muted-foreground"
+          />
+          <span className="truncate">
+            <QualifiedLabel name={node.name} />
           </span>
-        )}
-      </button>
+          {node.stat && (
+            <span className={TREE_ROW_STAT_CLASS}>
+              <DiffStatLabel additions={node.stat.additions} deletions={node.stat.deletions} />
+            </span>
+          )}
+        </button>
+        <ChatGrow open={open}>
+          <ChangedFileDiff diffs={diffs} path={node.path} resolvedTheme={resolvedTheme} />
+        </ChatGrow>
+      </div>
     );
   };
 

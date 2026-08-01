@@ -25,6 +25,7 @@ import {
 import { useMemo } from "react";
 
 import { useClientSettings } from "../../hooks/useSettings";
+import { useTheme } from "../../hooks/useTheme";
 import {
   THINKING_INDICATOR_PAINTERS,
   type ThinkingIndicatorPainter,
@@ -142,10 +143,12 @@ export interface ChatAppearanceSettings {
   readonly streamAnimation: ChatStreamAnimation;
   readonly thinkingIndicator: ChatThinkingIndicator;
   readonly changedFilesLayout: ChatChangedFilesLayout;
+  /** `null` where the indicator follows the type it sits in, which is the default. */
+  readonly indicatorColor: string | null;
 }
 
 /**
- * All three axes, read once.
+ * Every axis, read once.
  *
  * The transcript subscribes here rather than in each row, so a settings change
  * is one re-render of the list owner instead of one per message on screen.
@@ -154,17 +157,24 @@ export interface ChatAppearanceSettings {
  * against the contract before they reach any of this, in the browser
  * (`clientPersistenceStorage.ts`) and on the desktop (`ipc/methods/clientSettings.ts`)
  * alike, so an unknown variant never gets this far.
+ *
+ * The indicator's colour is resolved for the theme on screen here, because that
+ * is the only half of the setting anything can paint with.
  */
 export function useChatAppearance(): ChatAppearanceSettings {
-  const { chatChangedFilesLayout, chatStreamAnimation, chatThinkingIndicator } =
+  const { chatChangedFilesLayout, chatIndicatorColor, chatStreamAnimation, chatThinkingIndicator } =
     useClientSettings();
+  const { resolvedTheme } = useTheme();
+  const indicatorColor =
+    resolvedTheme === "dark" ? chatIndicatorColor.dark : chatIndicatorColor.light;
 
   return useMemo(
     () => ({
       streamAnimation: chatStreamAnimation,
       thinkingIndicator: chatThinkingIndicator,
       changedFilesLayout: chatChangedFilesLayout,
+      indicatorColor,
     }),
-    [chatChangedFilesLayout, chatStreamAnimation, chatThinkingIndicator],
+    [chatChangedFilesLayout, chatStreamAnimation, chatThinkingIndicator, indicatorColor],
   );
 }

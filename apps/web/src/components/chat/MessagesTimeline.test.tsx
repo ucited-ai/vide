@@ -286,14 +286,12 @@ describe("MessagesTimeline", () => {
       />,
     );
 
-    expect(markup).toContain("sticky top-2 z-10");
-    expect(markup).not.toContain("self-start");
+    /* The turn's own receipt, on the turn's gutter: one row that states what
+       changed, and the list behind it. */
+    expect(markup).toContain("chat-turn-row");
+    expect(markup).toContain("Changed 1 file");
+    expect(markup).toContain('data-changed-files-turn="turn-with-files"');
     expect(markup).toContain("whitespace-nowrap");
-    expect(markup).toContain("!size-[22px]");
-    expect(markup).toContain("size-3");
-    expect(markup).toContain('aria-label="Collapse all folders"');
-    expect(markup).toContain('aria-label="Open diff"');
-    expect(markup).toContain("1 changed file");
   });
 
   it("uses LegendList isNearEnd when deciding whether the live edge is visible", async () => {
@@ -523,8 +521,10 @@ describe("MessagesTimeline", () => {
       />,
     );
 
-    expect(markup).toContain("Context compacted");
-    expect(markup).toContain("Work Log");
+    /* A note is not a tool call, and the group says so rather than calling it
+       one. Its own label is behind the disclosure, with the calls. */
+    expect(markup).toContain("1 log entry");
+    expect(markup).toContain('data-work-group-state="done"');
   });
 
   it("formats changed file paths from the workspace root", () => {
@@ -549,7 +549,9 @@ describe("MessagesTimeline", () => {
       />,
     );
 
-    expect(markup).toContain("vide/apps/web/src/session-logic.ts");
+    /* The group counts the files a patch touched rather than the patches, which
+       is what "Edited 1 file" has to mean to be worth reading. */
+    expect(markup).toContain("Edited 1 file");
     expect(markup).not.toContain("C:/Users/mike/dev-stuff/vide/apps/web/src/session-logic.ts");
   });
 
@@ -630,6 +632,102 @@ describe("MessagesTimeline", () => {
     expect(markup).not.toContain('data-testid="file-diff"');
   });
 
+  it("gives a running turn one live status line at the top of its work", () => {
+    const turnId = TurnId.make("turn-live");
+    const markup = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildProps()}
+        isWorking
+        activeTurnInProgress
+        activeTurnStartedAt={MESSAGE_CREATED_AT}
+        latestTurn={{
+          turnId,
+          state: "running",
+          startedAt: MESSAGE_CREATED_AT,
+          completedAt: null,
+        }}
+        runningTurnId={turnId}
+        timelineEntries={[
+          {
+            id: "entry-1",
+            kind: "work",
+            createdAt: MESSAGE_CREATED_AT,
+            entry: {
+              id: "work-1",
+              createdAt: MESSAGE_CREATED_AT,
+              turnId,
+              label: "Searching for API endpoints",
+              tone: "thinking",
+            },
+          },
+        ]}
+      />,
+    );
+
+    /* The phrase is the turn's own, read off the newest thing it produced, and
+       the indicator runs beside it. */
+    expect(markup).toContain('data-turn-head-state="live"');
+    expect(markup).toContain("Searching for API endpoints");
+    expect(markup).toContain("chat-thinking-indicator");
+    /* The live group has nothing to open: its label is already reading the calls
+       out one at a time. */
+    expect(markup).toContain('data-work-group-state="live"');
+    expect(markup).toContain("chat-shimmer");
+  });
+
+  it("collapses a settled turn into the line that was watching it", () => {
+    const turnId = TurnId.make("turn-settled");
+    const markup = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildProps()}
+        latestTurn={{
+          turnId,
+          state: "completed",
+          startedAt: "2026-03-17T19:12:00.000Z",
+          completedAt: "2026-03-17T19:12:22.000Z",
+        }}
+        timelineEntries={[
+          {
+            id: "entry-1",
+            kind: "work",
+            createdAt: "2026-03-17T19:12:05.000Z",
+            entry: {
+              id: "work-1",
+              createdAt: "2026-03-17T19:12:05.000Z",
+              turnId,
+              label: "Ran command",
+              tone: "tool",
+            },
+          },
+          {
+            id: "entry-2",
+            kind: "message",
+            createdAt: "2026-03-17T19:12:20.000Z",
+            message: {
+              id: MessageId.make("message-answer"),
+              role: "assistant",
+              text: "Done.",
+              turnId,
+              createdAt: "2026-03-17T19:12:20.000Z",
+              updatedAt: "2026-03-17T19:12:22.000Z",
+              streaming: false,
+            },
+          },
+        ]}
+      />,
+    );
+
+    expect(markup).toContain('data-turn-head-state="done"');
+    expect(markup).toContain("Worked for");
+    expect(markup).toContain("22s");
+    /* Closed, and clickable to open again — the work is one click away rather
+       than gone. */
+    expect(markup).toContain('aria-expanded="false"');
+    expect(markup).not.toContain("Ran command");
+    /* The answer hangs off the same gutter every other row does. */
+    expect(markup).toContain("chat-turn-body");
+  });
+
   it("renders a failure marker for failed tool lifecycle entries", () => {
     const markup = renderToStaticMarkup(
       <MessagesTimeline
@@ -652,7 +750,9 @@ describe("MessagesTimeline", () => {
       />,
     );
 
-    expect(markup).toContain("lucide-x");
-    expect(markup).toContain('aria-label="Tool call failed"');
+    /* A failed call still has to be visible with the group closed, so the
+       group's own glyph carries the failure. */
+    expect(markup).toContain("lucide-circle-alert");
+    expect(markup).toContain("text-destructive");
   });
 });

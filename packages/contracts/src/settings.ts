@@ -194,6 +194,25 @@ export const DEFAULT_PALETTE: Palette = {
   dark: DEFAULT_THEME_PALETTE,
 };
 
+/*
+ * What colour the live indicator is painted in, per theme.
+ *
+ * Not a palette slot: the ladder is what the whole app is painted from, and this
+ * is one mark on one row. It is the only place the monochrome direction is
+ * deliberately open — the indicator is the one thing in the app that is allowed
+ * to be a colour, because it is the one thing that is only ever there while
+ * something is happening.
+ *
+ * `null` means it follows the text it sits in, which is the default and what the
+ * mock calls an unset --orb-color.
+ */
+export const ChatIndicatorColor = Schema.Struct({
+  light: Schema.NullOr(PaletteColor).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
+  dark: Schema.NullOr(PaletteColor).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
+});
+export type ChatIndicatorColor = typeof ChatIndicatorColor.Type;
+export const DEFAULT_CHAT_INDICATOR_COLOR: ChatIndicatorColor = { light: null, dark: null };
+
 /** `#rrggbb` as the palette stores colour, at full opacity. */
 export function hexToPaletteColor(hex: string): PaletteColor {
   const numeric = Number.parseInt(hex.slice(1), 16);
@@ -213,6 +232,9 @@ const clientSettingsFields = {
   autoOpenPlanSidebar: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   chatChangedFilesLayout: ChatChangedFilesLayout.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_CHAT_CHANGED_FILES_LAYOUT)),
+  ),
+  chatIndicatorColor: ChatIndicatorColor.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_CHAT_INDICATOR_COLOR)),
   ),
   chatStreamAnimation: ChatStreamAnimation.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_CHAT_STREAM_ANIMATION)),
@@ -806,6 +828,9 @@ export type ServerSettingsPatch = typeof ServerSettingsPatch.Type;
 export const ClientSettingsPatch = Schema.Struct({
   autoOpenPlanSidebar: Schema.optionalKey(Schema.Boolean),
   chatChangedFilesLayout: Schema.optionalKey(ChatChangedFilesLayout),
+  // Both themes every time, for the same reason the palette is sent whole: one
+  // half of a two-theme setting is not a state anything should be able to reach.
+  chatIndicatorColor: Schema.optionalKey(ChatIndicatorColor),
   chatStreamAnimation: Schema.optionalKey(ChatStreamAnimation),
   chatThinkingIndicator: Schema.optionalKey(ChatThinkingIndicator),
   confirmThreadArchive: Schema.optionalKey(Schema.Boolean),

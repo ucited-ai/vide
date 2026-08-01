@@ -2,96 +2,88 @@ import { TurnId } from "@vide/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vite-plus/test";
 
+import { type TurnFileDiffs } from "../../hooks/useTurnFileDiffs";
 import { ChangedFilesCard, ChangedFilesTree } from "./ChangedFilesTree";
 
+const NO_DIFFS: TurnFileDiffs = { byPath: new Map(), isPending: false, error: null };
+
+const DIFF_TARGET = {
+  turnId: TurnId.make("turn-1"),
+  checkpointTurnCount: 2,
+  environmentId: null,
+  threadId: null,
+};
+
 describe("ChangedFilesCard", () => {
-  it("keeps its compact header sticky while preserving singular labels", () => {
+  it("states the count and the weight on one line, and keeps the singular", () => {
     const markup = renderToStaticMarkup(
       <ChangedFilesCard
-        turnId={TurnId.make("turn-1")}
-        files={[{ path: "README.md", kind: "modified", additions: 2, deletions: 1 }]}
-        expanded
-        showCompactPreview={false}
         allDirectoriesExpanded
+        diffTarget={DIFF_TARGET}
+        expanded
+        files={[{ path: "README.md", kind: "modified", additions: 2, deletions: 1 }]}
         layout="tree"
-        resolvedTheme="light"
         onExpandedChange={() => {}}
-        onToggleAllDirectories={() => {}}
         onOpenTurnDiff={() => {}}
+        onToggleAllDirectories={() => {}}
+        resolvedTheme="light"
+        turnId={TurnId.make("turn-1")}
       />,
     );
 
     expect(markup).toContain('data-changed-files-state="expanded"');
     expect(markup).toContain('aria-expanded="true"');
-    expect(markup).toContain("whitespace-nowrap");
-    expect(markup).toContain("!size-[22px]");
-    expect(markup).toContain("size-3");
-    expect(markup).toContain('aria-label="Collapse all folders"');
-    expect(markup).toContain('aria-label="Open diff"');
     expect(markup).toContain('role="group" aria-label="2 additions, 1 deletions"');
-    expect(markup).toContain("1 changed file");
-    expect(markup).not.toContain("1 changed files");
+    expect(markup).toContain("Changed 1 file");
+    expect(markup).not.toContain("Changed 1 files");
+    /* The way out to the panel, and the tree's own control, sit after the list —
+       the head row is the count and nothing else. */
+    expect(markup).toContain('aria-label="Open diff"');
+    expect(markup).toContain('aria-label="Collapse all folders"');
   });
 
-  it("renders a scope and representative-file preview for a large latest change", () => {
+  it("keeps a collapsed change to its one line", () => {
     const markup = renderToStaticMarkup(
       <ChangedFilesCard
-        turnId={TurnId.make("turn-1")}
-        files={[
-          { path: "apps/web/src/App.tsx", kind: "modified", additions: 120, deletions: 20 },
-          { path: "apps/web/src/App.test.tsx", kind: "modified", additions: 30, deletions: 2 },
-          {
-            path: "packages/shared/src/git.ts",
-            kind: "modified",
-            additions: 15,
-            deletions: 4,
-          },
-          { path: "README.md", kind: "modified", additions: 3, deletions: 0 },
-        ]}
-        expanded={false}
-        showCompactPreview
         allDirectoriesExpanded={false}
-        layout="tree"
-        resolvedTheme="light"
-        onExpandedChange={() => {}}
-        onToggleAllDirectories={() => {}}
-        onOpenTurnDiff={() => {}}
-      />,
-    );
-
-    expect(markup).toContain('data-changed-files-state="preview"');
-    expect(markup).toContain('aria-expanded="false"');
-    expect(markup).toContain("apps");
-    expect(markup).toContain("2 files");
-    expect(markup).toContain("packages");
-    expect(markup).toContain("root");
-    expect(markup).toContain("App.tsx");
-    expect(markup).toContain("git.ts");
-    expect(markup).toContain("README.md");
-    expect(markup).toContain("Show all 4 files");
-    expect(markup).not.toContain("App.test.tsx");
-  });
-
-  it("keeps older collapsed changes to a one-line receipt", () => {
-    const markup = renderToStaticMarkup(
-      <ChangedFilesCard
-        turnId={TurnId.make("turn-1")}
+        diffTarget={DIFF_TARGET}
+        expanded={false}
         files={[{ path: "apps/web/src/App.tsx", kind: "modified", additions: 120, deletions: 20 }]}
-        expanded={false}
-        showCompactPreview={false}
-        allDirectoriesExpanded={false}
         layout="tree"
-        resolvedTheme="light"
         onExpandedChange={() => {}}
-        onToggleAllDirectories={() => {}}
         onOpenTurnDiff={() => {}}
+        onToggleAllDirectories={() => {}}
+        resolvedTheme="light"
+        turnId={TurnId.make("turn-1")}
       />,
     );
 
     expect(markup).toContain('data-changed-files-state="collapsed"');
-    expect(markup).toContain("1 changed file");
-    expect(markup).not.toContain("Show all");
+    expect(markup).toContain("Changed 1 file");
+    /* Closed means nothing inside is mounted at all: a diff nobody has opened is
+       not worth parsing on the chance that they will. */
     expect(markup).not.toContain("App.tsx");
+    expect(markup).not.toContain('aria-label="Open diff"');
+  });
+
+  it("leaves the fold-all control to the tree", () => {
+    const markup = renderToStaticMarkup(
+      <ChangedFilesCard
+        allDirectoriesExpanded
+        diffTarget={DIFF_TARGET}
+        expanded
+        files={[{ path: "README.md", kind: "modified", additions: 2, deletions: 1 }]}
+        layout="rows"
+        onExpandedChange={() => {}}
+        onOpenTurnDiff={() => {}}
+        onToggleAllDirectories={() => {}}
+        resolvedTheme="light"
+        turnId={TurnId.make("turn-1")}
+      />,
+    );
+
+    expect(markup).toContain('data-changed-files-layout="rows"');
+    expect(markup).not.toContain('aria-label="Collapse all folders"');
   });
 });
 
@@ -145,11 +137,12 @@ describe("ChangedFilesTree", () => {
     ({ files, visibleLabels, hiddenLabels }) => {
       const markup = renderToStaticMarkup(
         <ChangedFilesTree
-          turnId={TurnId.make("turn-1")}
-          files={files}
           allDirectoriesExpanded={false}
+          diffs={NO_DIFFS}
+          files={files}
+          openPaths={new Set()}
+          onTogglePath={() => {}}
           resolvedTheme="light"
-          onOpenTurnDiff={() => {}}
         />,
       );
 
@@ -221,11 +214,12 @@ describe("ChangedFilesTree", () => {
     ({ files, visibleLabels }) => {
       const markup = renderToStaticMarkup(
         <ChangedFilesTree
-          turnId={TurnId.make("turn-1")}
-          files={files}
           allDirectoriesExpanded
+          diffs={NO_DIFFS}
+          files={files}
+          openPaths={new Set()}
+          onTogglePath={() => {}}
           resolvedTheme="light"
-          onOpenTurnDiff={() => {}}
         />,
       );
 

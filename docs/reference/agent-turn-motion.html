@@ -1,0 +1,2066 @@
+<!doctype html>
+<html lang="en" data-theme="dark" data-fx="assemble" data-orb="orbits" data-files="rows">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark light" />
+    <title>vIDE — agent turn motion</title>
+    <style>
+      /*
+       * Standalone motion mock for the vIDE agent turn. No assets, fonts or network.
+       *
+       * This is the reference the app's turn is built against — open it beside the
+       * app when changing how a turn moves. It is deliberately not code the app
+       * imports: it runs on a scripted timeline with invented content, which is what
+       * makes the motion editable at all, and none of that survives contact with a
+       * real provider. What ports is the vocabulary below.
+       *
+       * Three independent variant axes, switchable in the toolbar:
+       *   data-fx     assemble · fade · blur · wipe · sweep · phrase   (text streaming)
+       *   data-orb    orbits · scan · mark · sonar · swarm · helix     (thinking indicator)
+       *   data-files  rows · stat · tree · cards · split · strip       (changed files)
+       *
+       * All three are client settings in the app: `chatStreamAnimation`,
+       * `chatThinkingIndicator` and `chatChangedFilesLayout`, offered by the Theme
+       * settings panel and tabulated in `apps/web/src/components/chat/chatAppearance.ts`.
+       *
+       * LAYOUT RULE — one hanging-indent column for the whole turn:
+       *   icons live inside --gutter, every piece of text starts at --gutter.
+       *
+       * HANDOVER CONTRACT — and where each piece landed:
+       *   --gutter      --chat-turn-gutter, with `.chat-turn-row` / `.chat-turn-body`
+       *   --orb-color   the `chatIndicatorColor` setting, handed to the canvas as a prop
+       *   --orb-size    --chat-thinking-indicator-size, in em so it follows the type
+       *   --orb-speed   INDICATOR_CLOCK in `chat/ThinkingIndicator.tsx`
+       *   --word-anim / --word-dur / --word-ease   [data-chat-stream-animation] in vide-theme.css
+       *   .head[data-state="live" | "done"]           `chat/TurnHeadRow.tsx`, one row for both
+       *   .work[data-state="idle" | "live" | "done"]  `chat/WorkGroupRow.tsx`
+       *   .grow[data-on]                              `.chat-grow`, via `chat/ChatGrow.tsx`
+       *   [data-stream="on"] .word                    `.chat-stream-word`, delays from
+       *                                               `chatStreamReveal.ts` — the app reveals on
+       *                                               its own clock, not on the provider's
+       *   .shimmer                                    `.chat-shimmer`
+       *
+       * Two things here the app cannot copy: the mock's `swap()` measures with a
+       * cloned probe and morphs the box, which `chat/ChatSwapText.tsx` does with a
+       * ResizeObserver so it also follows the reader's text size; and the mock
+       * collapses a finished turn with `grow`, where the app removes the rows from a
+       * virtualized list instead — a turn can be longer than the viewport.
+       */
+      :root {
+        --page: #e8e8ea;
+        --surface: #fbfbfc;
+        --sunken: #f2f2f4;
+        --rail: #f0f0f2;
+        --ink: #16171a;
+        --ink-2: #55565e;
+        --ink-3: #86878f;
+        --ink-4: #a6a7ae;
+        --edge: rgb(0 0 0 / 9%);
+        --edge-soft: rgb(0 0 0 / 6%);
+        --wash: rgb(0 0 0 / 4%);
+        --wash-2: rgb(0 0 0 / 7%);
+        --sheen: #000005;
+        --add: #1a7f4b;
+        --del: #b4342c;
+        --font:
+          -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable", "Segoe UI",
+          system-ui, sans-serif;
+        --mono: ui-monospace, "SF Mono", "SFMono-Regular", "JetBrains Mono", Menlo, monospace;
+        --ease: cubic-bezier(0.32, 0.72, 0, 1);
+        --snap: cubic-bezier(0.14, 0.92, 0.22, 1);
+        --gutter: 22px;
+        --orb-size: 1.2em;
+        --orb-speed: 1;
+        --word-anim: assemble;
+        --word-dur: 440ms;
+        --word-ease: var(--snap);
+        color-scheme: light;
+      }
+
+      :root[data-theme="dark"] {
+        --page: #0a0b0c;
+        --surface: #151618;
+        --sunken: #1b1c1f;
+        --rail: #121315;
+        --ink: #ececef;
+        --ink-2: #a0a1a9;
+        --ink-3: #74757e;
+        --ink-4: #5c5d65;
+        --edge: rgb(255 255 255 / 9%);
+        --edge-soft: rgb(255 255 255 / 6%);
+        --wash: rgb(255 255 255 / 5%);
+        --wash-2: rgb(255 255 255 / 9%);
+        --sheen: #ffffff;
+        --add: #4cc38a;
+        --del: #f0776c;
+        color-scheme: dark;
+      }
+
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        height: 100%;
+      }
+
+      body {
+        margin: 0;
+        padding: 12px;
+        color: var(--ink);
+        background: var(--page);
+        font-family: var(--font);
+        font-size: 13.5px;
+        line-height: 1.5;
+        letter-spacing: -0.003em;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      button {
+        margin: 0;
+        border: 0;
+        background: none;
+        color: inherit;
+        font: inherit;
+        cursor: pointer;
+      }
+
+      button:focus-visible,
+      select:focus-visible {
+        border-radius: 6px;
+        outline: 1.5px solid color-mix(in srgb, var(--ink) 45%, transparent);
+        outline-offset: 2px;
+      }
+
+      /* --------------------------------------------------------------- app */
+      .app {
+        display: grid;
+        overflow: hidden;
+        height: 100%;
+        grid-template-columns: 216px minmax(0, 1fr);
+        border: 1px solid var(--edge);
+        border-radius: 13px;
+        background: var(--surface);
+        box-shadow: 0 30px 80px -40px rgb(0 0 0 / 60%);
+      }
+
+      /* -------------------------------------------------------------- rail */
+      .rail {
+        display: flex;
+        overflow: hidden;
+        flex-direction: column;
+        padding: 12px 10px;
+        border-right: 1px solid var(--edge-soft);
+        background: var(--rail);
+      }
+
+      .lights {
+        display: flex;
+        gap: 6px;
+        padding: 2px 4px 14px;
+      }
+
+      .lights i {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--wash-2);
+      }
+
+      .rail h2 {
+        margin: 12px 0 5px;
+        padding: 0 6px;
+        color: var(--ink-4);
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.11em;
+        text-transform: uppercase;
+      }
+
+      .rail a {
+        display: block;
+        overflow: hidden;
+        padding: 5px 7px;
+        border-radius: 7px;
+        color: var(--ink-2);
+        font-size: 12.5px;
+        white-space: nowrap;
+        text-decoration: none;
+        text-overflow: ellipsis;
+      }
+
+      .rail a:hover {
+        background: var(--wash);
+      }
+
+      .rail a.on {
+        color: var(--ink);
+        background: var(--wash-2);
+      }
+
+      .rail .grow-space {
+        flex: 1;
+      }
+
+      .rail footer {
+        padding: 8px 7px 2px;
+        border-top: 1px solid var(--edge-soft);
+        color: var(--ink-4);
+        font-size: 11.5px;
+      }
+
+      /* -------------------------------------------------------------- main */
+      .main {
+        display: flex;
+        min-width: 0;
+        flex-direction: column;
+      }
+
+      .bar {
+        display: flex;
+        overflow: hidden;
+        flex-shrink: 0;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+        min-height: 46px;
+        padding: 7px 14px;
+        border-bottom: 1px solid var(--edge-soft);
+      }
+
+      .bar strong {
+        margin-right: auto;
+        font-size: 13px;
+        font-weight: 560;
+      }
+
+      .pick {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 27px;
+        padding: 0 8px;
+        border: 1px solid var(--edge);
+        border-radius: 8px;
+        color: var(--ink-4);
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .pick::after {
+        position: absolute;
+        right: 8px;
+        border-top: 3.5px solid var(--ink-4);
+        border-right: 3px solid transparent;
+        border-left: 3px solid transparent;
+        content: "";
+        pointer-events: none;
+      }
+
+      .pick select {
+        height: 100%;
+        padding: 0 16px 0 0;
+        border: 0;
+        appearance: none;
+        color: var(--ink);
+        background: none;
+        font-family: inherit;
+        font-size: 11.5px;
+        font-weight: 400;
+        letter-spacing: normal;
+        text-transform: none;
+        cursor: pointer;
+      }
+
+      .icon-btn {
+        display: grid;
+        width: 27px;
+        height: 27px;
+        place-items: center;
+        border: 1px solid var(--edge);
+        border-radius: 8px;
+        color: var(--ink-3);
+        transition:
+          color 200ms var(--ease),
+          background 200ms var(--ease);
+      }
+
+      .icon-btn:hover {
+        color: var(--ink);
+        background: var(--wash);
+      }
+
+      .icon-btn svg {
+        width: 14px;
+        height: 14px;
+        fill: none;
+        stroke: currentcolor;
+        stroke-width: 1.5;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      .swatch {
+        width: 27px;
+        height: 27px;
+        padding: 2px;
+        border: 1px solid var(--edge);
+        border-radius: 8px;
+        background: none;
+        cursor: pointer;
+      }
+
+      .swatch::-webkit-color-swatch-wrapper {
+        padding: 0;
+      }
+
+      .swatch::-webkit-color-swatch {
+        border: 0;
+        border-radius: 5px;
+      }
+
+      /* ------------------------------------------------------------ thread */
+      .thread {
+        overflow: hidden auto;
+        flex: 1;
+        scrollbar-width: thin;
+      }
+
+      .col {
+        width: min(760px, 100%);
+        margin: 0 auto;
+        padding: 30px 24px 28px;
+      }
+
+      .user {
+        display: flex;
+        justify-content: flex-end;
+        margin-bottom: 22px;
+        opacity: 0;
+      }
+
+      .user span {
+        max-width: 76%;
+        padding: 8px 13px;
+        border-radius: 15px;
+        background: var(--sunken);
+        box-shadow: 0 0 0 1px var(--edge-soft);
+      }
+
+      .user.in {
+        animation: rise 420ms var(--ease) both;
+      }
+
+      @keyframes rise {
+        from {
+          opacity: 0;
+          transform: translateY(6px);
+          filter: blur(3px);
+        }
+        to {
+          opacity: 1;
+          transform: none;
+          filter: blur(0);
+        }
+      }
+
+      /* -------------------------------------------------------- status line */
+      .head {
+        display: grid;
+        width: 100%;
+        grid-template-columns: var(--gutter) 1fr auto;
+        align-items: center;
+        padding: 3px 7px 3px 0;
+        border-radius: 8px;
+        font-size: 12.5px;
+        opacity: 0;
+        cursor: default;
+      }
+
+      .head.in {
+        animation: rise 460ms var(--ease) both;
+      }
+
+      .head[data-state="done"] {
+        cursor: pointer;
+      }
+
+      .head[data-state="done"]:hover {
+        background: var(--wash);
+      }
+
+      .head-mid {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .orb {
+        display: inline-flex;
+        align-items: center;
+        height: var(--orb-size);
+        color: var(--orb-color, var(--ink));
+      }
+
+      .orb canvas {
+        display: block;
+        width: var(--orb-size);
+        height: var(--orb-size);
+      }
+
+      /* text that swaps in place — nothing ever flips or jumps */
+      .swap {
+        position: relative;
+        display: inline-block;
+        height: 1.55em;
+      }
+
+      .head .swap {
+        transition: width 380ms var(--ease);
+      }
+
+      .work .swap {
+        width: 100%;
+      }
+
+      .swap > span {
+        position: absolute;
+        top: 0;
+        left: 0;
+        overflow: hidden;
+        max-width: 100%;
+        color: var(--ink-3);
+        line-height: 1.55;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+        transition: opacity 280ms var(--ease);
+      }
+
+      /* more specific than .shimmer so a swap always beats the running sheen */
+      .swap > span.swap-in {
+        animation: snapIn 360ms var(--snap) both;
+      }
+
+      .swap > span.swap-out {
+        animation: snapOut 220ms var(--snap) forwards;
+      }
+
+      @keyframes snapIn {
+        from {
+          opacity: 0;
+          transform: translateX(-11px) scaleX(1.12);
+          filter: blur(2.2px);
+        }
+        to {
+          opacity: 1;
+          transform: none;
+          filter: blur(0);
+        }
+      }
+
+      @keyframes snapOut {
+        to {
+          opacity: 0;
+          transform: translateX(9px) scaleX(1.08);
+          filter: blur(2px);
+        }
+      }
+
+      /* the sheen: travels through whatever type is live right now */
+      .shimmer {
+        background-image: linear-gradient(
+          100deg,
+          var(--shimmer-base, var(--ink-3)) 0 42%,
+          var(--sheen) 50%,
+          var(--shimmer-base, var(--ink-3)) 58% 100%
+        );
+        background-repeat: no-repeat;
+        background-size: 300% 100%;
+        color: transparent;
+        -webkit-background-clip: text;
+        background-clip: text;
+        animation: sheen 3.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+      }
+
+      @keyframes sheen {
+        from {
+          background-position: 118% 0;
+        }
+        to {
+          background-position: -30% 0;
+        }
+      }
+
+      .sep,
+      .time {
+        color: var(--ink-4);
+        font-variant-numeric: tabular-nums;
+      }
+
+      .head[data-state="done"] .sep {
+        display: none;
+      }
+
+      .chev {
+        width: 11px;
+        height: 11px;
+        fill: none;
+        stroke: var(--ink-4);
+        stroke-width: 1.6;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        opacity: 0;
+        transform: rotate(90deg);
+        transition:
+          opacity 300ms var(--ease),
+          transform 340ms var(--ease);
+      }
+
+      .head[data-state="done"] .chev {
+        opacity: 1;
+      }
+
+      .head[data-state="done"][aria-expanded="false"] .chev {
+        transform: rotate(0deg);
+      }
+
+      /* ---------------------------------------------- one open/close mechanic */
+      .grow {
+        display: grid;
+        grid-template-rows: 0fr;
+        transition: grid-template-rows 480ms var(--ease);
+      }
+
+      .grow[data-on="true"] {
+        grid-template-rows: 1fr;
+      }
+
+      .grow > .clip {
+        overflow: hidden;
+        min-height: 0;
+      }
+
+      /* -------------------------------------------------------------- trace */
+      .trace {
+        transition-duration: 560ms;
+      }
+
+      .trace > .clip > div {
+        padding: 12px 0 2px;
+        opacity: 0;
+        transform: translateY(-8px);
+        transition:
+          opacity 380ms var(--ease),
+          transform 520ms var(--snap);
+      }
+
+      .trace[data-on="true"] > .clip > div {
+        opacity: 1;
+        transform: none;
+      }
+
+      .rule {
+        height: 1px;
+        margin-bottom: 14px;
+        background: var(--edge);
+        transform: scaleX(0);
+        transform-origin: 0 50%;
+        transition: transform 700ms var(--ease);
+      }
+
+      .trace[data-on="true"] .rule {
+        transform: scaleX(1);
+      }
+
+      /* thoughts read at answer brightness — they are content, not chrome */
+      .think p {
+        margin: 0;
+        padding: 0 0 4px var(--gutter);
+        color: var(--ink);
+        font-size: 13.5px;
+        line-height: 1.62;
+      }
+
+      .think p.shimmer {
+        --shimmer-base: var(--ink);
+      }
+
+      /* ------------------------------------------------------ collapsible row */
+      .row-head {
+        display: grid;
+        width: 100%;
+        grid-template-columns: var(--gutter) 1fr auto;
+        align-items: center;
+        padding: 4px 7px 4px 0;
+        border-radius: 8px;
+        font-size: 12.5px;
+        text-align: left;
+        transition: background 200ms var(--ease);
+      }
+
+      .row-head:hover {
+        background: var(--wash);
+      }
+
+      .work[data-state="live"] .row-head {
+        cursor: default;
+      }
+
+      .work[data-state="live"] .row-head:hover {
+        background: none;
+      }
+
+      .glyph {
+        display: block;
+        width: 13px;
+        height: 13px;
+        fill: none;
+        stroke: var(--ink-4);
+        stroke-width: 1.4;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        transition: stroke 300ms var(--ease);
+      }
+
+      .work[data-state="live"] .glyph {
+        stroke: var(--ink-2);
+        filter: drop-shadow(0 0 5px color-mix(in srgb, var(--sheen) 32%, transparent));
+      }
+
+      .end {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--ink-4);
+        font-variant-numeric: tabular-nums;
+      }
+
+      .chev-sm {
+        width: 10px;
+        height: 10px;
+        fill: none;
+        stroke: var(--ink-4);
+        stroke-width: 1.7;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        opacity: 0;
+        transition:
+          opacity 260ms var(--ease),
+          transform 340ms var(--ease);
+      }
+
+      .row-head:hover .chev-sm,
+      .row-head:focus-visible .chev-sm,
+      [data-open="true"] > .clip > .row-head .chev-sm,
+      [data-open="true"] > .row-head .chev-sm {
+        opacity: 1;
+      }
+
+      [data-open="true"] > .clip > .row-head .chev-sm,
+      [data-open="true"] > .row-head .chev-sm {
+        transform: rotate(90deg);
+      }
+
+      .body > .clip > div {
+        padding: 4px 0 2px var(--gutter);
+        opacity: 0;
+        filter: blur(4px);
+        transition:
+          opacity 300ms var(--ease),
+          filter 300ms var(--ease);
+      }
+
+      .body[data-on="true"] > .clip > div {
+        opacity: 1;
+        filter: blur(0);
+      }
+
+      /* --------------------------------------------------------- tool group */
+      .work {
+        margin-bottom: 12px;
+      }
+
+      .sum {
+        position: absolute;
+        top: 0;
+        left: 0;
+        color: var(--ink-3);
+        line-height: 1.55;
+        white-space: nowrap;
+        opacity: 0;
+        transform: translateX(-9px);
+        transition:
+          opacity 340ms var(--ease),
+          transform 380ms var(--snap);
+      }
+
+      .work[data-state="done"] .sum {
+        opacity: 1;
+        transform: none;
+      }
+
+      .work[data-state="done"] .swap > span:not(.sum) {
+        opacity: 0;
+      }
+
+      .call {
+        display: grid;
+        padding: 5px 0;
+        border-top: 1px solid var(--edge-soft);
+      }
+
+      .call:first-child {
+        border-top: 0;
+      }
+
+      .call code {
+        overflow: hidden;
+        color: var(--ink-2);
+        font-family: var(--mono);
+        font-size: 11.5px;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+      }
+
+      .call em {
+        color: var(--ink-4);
+        font-size: 11.5px;
+        font-style: normal;
+      }
+
+      /* ------------------------------------------------------------- answer */
+      .answer {
+        padding: 4px 0 0 var(--gutter);
+        opacity: 0;
+        transition: opacity 400ms var(--ease);
+      }
+
+      .answer.in {
+        opacity: 1;
+      }
+
+      .answer p {
+        margin: 0 0 11px;
+        font-size: 13.5px;
+        line-height: 1.62;
+      }
+
+      .answer p:last-child {
+        margin-bottom: 0;
+      }
+
+      /* ------------------------------------------- streaming variants (fx) */
+      .word {
+        display: inline-block;
+        opacity: 0;
+      }
+
+      [data-stream="on"] .word {
+        animation: var(--word-anim) var(--word-dur) var(--word-ease) var(--d) both;
+      }
+
+      [data-fx="fade"] {
+        --word-anim: fadeIn;
+        --word-dur: 560ms;
+        --word-ease: var(--ease);
+      }
+
+      [data-fx="blur"] {
+        --word-anim: dissolve;
+        --word-dur: 820ms;
+        --word-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+      }
+
+      [data-fx="wipe"] {
+        --word-anim: wipe;
+        --word-dur: 460ms;
+        --word-ease: var(--ease);
+      }
+
+      [data-fx="phrase"] {
+        --word-anim: fadeIn;
+        --word-dur: 620ms;
+        --word-ease: var(--ease);
+      }
+
+      @keyframes assemble {
+        from {
+          opacity: 0;
+          transform: translate(var(--dx), var(--dy)) scaleX(1.16);
+          filter: blur(2.4px);
+        }
+        58% {
+          opacity: 1;
+        }
+        to {
+          opacity: 1;
+          transform: none;
+          filter: blur(0);
+        }
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(2px);
+        }
+        to {
+          opacity: 1;
+          transform: none;
+        }
+      }
+
+      @keyframes dissolve {
+        from {
+          opacity: 0;
+          filter: blur(7px);
+        }
+        60% {
+          opacity: 1;
+        }
+        to {
+          opacity: 1;
+          filter: blur(0);
+        }
+      }
+
+      @keyframes wipe {
+        from {
+          opacity: 1;
+          clip-path: inset(0 100% 0 0);
+        }
+        to {
+          opacity: 1;
+          clip-path: inset(0 0 0 0);
+        }
+      }
+
+      /* sweep reveals the block itself — no per-word motion at all */
+      [data-fx="sweep"] [data-stream="on"] .word {
+        animation: none;
+        opacity: 1;
+      }
+
+      [data-fx="sweep"] [data-stream="on"] {
+        -webkit-mask-image: linear-gradient(
+          104deg,
+          #000 0 34%,
+          rgb(0 0 0 / 35%) 48%,
+          transparent 60%
+        );
+        mask-image: linear-gradient(104deg, #000 0 34%, rgb(0 0 0 / 35%) 48%, transparent 60%);
+        -webkit-mask-size: 320% 100%;
+        mask-size: 320% 100%;
+        -webkit-mask-repeat: no-repeat;
+        mask-repeat: no-repeat;
+        animation: sweepIn var(--total, 3s) linear both;
+      }
+
+      @keyframes sweepIn {
+        from {
+          -webkit-mask-position: 100% 0;
+          mask-position: 100% 0;
+        }
+        to {
+          -webkit-mask-position: 0% 0;
+          mask-position: 0% 0;
+        }
+      }
+
+      /* -------------------------------------------------------- changed files */
+      .files > .clip {
+        padding-top: 16px;
+      }
+
+      .file {
+        display: grid;
+        border-top: 1px solid var(--edge-soft);
+      }
+
+      .file:first-child,
+      .dir + .file {
+        border-top: 0;
+      }
+
+      .file .row-head {
+        grid-template-columns: minmax(0, 1fr) auto;
+        font-size: 12px;
+      }
+
+      .path {
+        overflow: hidden;
+        color: var(--ink-2);
+        font-family: var(--mono);
+        white-space: nowrap;
+        text-overflow: ellipsis;
+      }
+
+      .path .dirname {
+        color: var(--ink-4);
+      }
+
+      .add,
+      .del {
+        font-family: var(--mono);
+        font-size: 11px;
+      }
+
+      .add {
+        color: var(--add);
+      }
+
+      .del {
+        color: var(--del);
+      }
+
+      .dir {
+        display: none;
+        padding: 8px 0 3px;
+        color: var(--ink-4);
+        font-family: var(--mono);
+        font-size: 11px;
+      }
+
+      .bars {
+        display: none;
+        gap: 2px;
+      }
+
+      .bars i {
+        width: 6px;
+        height: 6px;
+        border-radius: 1px;
+        background: var(--wash-2);
+      }
+
+      .bars i.a {
+        background: var(--add);
+      }
+
+      .bars i.d {
+        background: var(--del);
+      }
+
+      .diff {
+        padding: 2px 0 8px;
+        font-family: var(--mono);
+        font-size: 11.5px;
+        line-height: 1.75;
+      }
+
+      .diff span {
+        display: block;
+        padding: 0 8px;
+        border-radius: 3px;
+        color: var(--ink-3);
+        white-space: pre-wrap;
+      }
+
+      .diff span[data-k="+"] {
+        color: var(--ink);
+        background: color-mix(in srgb, var(--add) 14%, transparent);
+      }
+
+      .diff span[data-k="-"] {
+        color: var(--ink-2);
+        background: color-mix(in srgb, var(--del) 13%, transparent);
+      }
+
+      .split {
+        display: grid;
+        overflow: hidden;
+        grid-template-columns: 1fr 1fr;
+        gap: 1px;
+        margin: 2px 0 8px;
+        border-radius: 5px;
+        background: var(--edge-soft);
+      }
+
+      .split > div {
+        padding: 4px 0;
+        background: var(--surface);
+      }
+
+      /* files · stat — proportional add/delete blocks */
+      [data-files="stat"] .bars {
+        display: flex;
+      }
+
+      /* files · tree — directory headings, file names only */
+      [data-files="tree"] .dir {
+        display: block;
+      }
+
+      [data-files="tree"] .path .dirname {
+        display: none;
+      }
+
+      [data-files="tree"] .file .row-head {
+        padding-left: 12px;
+      }
+
+      /* files · cards — every file is its own quiet card */
+      [data-files="cards"] .file {
+        margin-bottom: 6px;
+        padding: 2px 8px;
+        border: 1px solid var(--edge-soft);
+        border-radius: 9px;
+      }
+
+      [data-files="cards"] .file .row-head {
+        padding-right: 0;
+      }
+
+      [data-files="cards"] .file .body > .clip > div {
+        padding-left: 0;
+      }
+
+      /* files · strip — dense, borderless, no gutter */
+      [data-files="strip"] .file {
+        border-top: 0;
+      }
+
+      [data-files="strip"] .file .row-head {
+        padding: 1px 7px 1px 0;
+        font-size: 11.5px;
+      }
+
+      [data-files="strip"] .diff {
+        line-height: 1.6;
+      }
+
+      [data-files="strip"] .file .body > .clip > div {
+        padding-left: 0;
+      }
+
+      /* ----------------------------------------------------------- composer */
+      .composer-wrap {
+        flex-shrink: 0;
+        width: min(760px, 100%);
+        margin: 0 auto;
+        padding: 8px 24px 20px;
+      }
+
+      .composer {
+        display: flex;
+        align-items: flex-end;
+        gap: 10px;
+        padding: 11px 12px 11px 14px;
+        border: 1px solid var(--edge);
+        border-radius: 13px;
+        background: var(--sunken);
+      }
+
+      .composer div {
+        flex: 1;
+        min-height: 2.9em;
+        color: var(--ink-2);
+        font-size: 13px;
+      }
+
+      .composer div.sending {
+        animation: lift 400ms var(--ease) forwards;
+      }
+
+      @keyframes lift {
+        30% {
+          transform: translateY(3px);
+        }
+        to {
+          opacity: 0;
+          transform: translateY(-12px);
+          filter: blur(2px);
+        }
+      }
+
+      .composer span {
+        display: grid;
+        width: 26px;
+        height: 26px;
+        flex-shrink: 0;
+        place-items: center;
+        border-radius: 50%;
+        color: var(--surface);
+        background: var(--ink);
+      }
+
+      .composer span svg {
+        width: 13px;
+        height: 13px;
+        fill: none;
+        stroke: currentcolor;
+        stroke-width: 1.9;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      /* ----------------------------------------------------- reduced motion */
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          animation-duration: 1ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 120ms !important;
+        }
+
+        .shimmer {
+          color: var(--shimmer-base, var(--ink-3));
+          background-image: none;
+          -webkit-text-fill-color: currentcolor;
+        }
+      }
+
+      @media (width < 900px) {
+        .app {
+          grid-template-columns: minmax(0, 1fr);
+        }
+
+        .rail {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="app">
+      <aside class="rail">
+        <div class="lights" aria-hidden="true"><i></i><i></i><i></i></div>
+        <h2>Workspace</h2>
+        <a href="#" class="on">vIDE</a>
+        <h2>Threads</h2>
+        <a href="#" class="on">Agent motion system</a>
+        <a href="#">Review panel polish</a>
+        <a href="#">Composer shortcuts</a>
+        <a href="#">Diff viewer states</a>
+        <a href="#">Preview panel resize</a>
+        <div class="grow-space"></div>
+        <footer>main · 3 files changed</footer>
+      </aside>
+
+      <main class="main">
+        <header class="bar">
+          <strong>Agent motion system</strong>
+
+          <label class="pick"
+            >Stream
+            <select id="fx" aria-label="Streaming variant">
+              <option value="assemble">Assemble</option>
+              <option value="fade">Fade</option>
+              <option value="blur">Blur</option>
+              <option value="wipe">Wipe</option>
+              <option value="sweep">Sweep</option>
+              <option value="phrase">Phrase</option>
+            </select>
+          </label>
+
+          <label class="pick"
+            >Orb
+            <select id="orbPick" aria-label="Indicator variant">
+              <option value="orbits">Orbits</option>
+              <option value="scan">Scan</option>
+              <option value="mark">Mark</option>
+              <option value="sonar">Sonar</option>
+              <option value="swarm">Swarm</option>
+              <option value="helix">Helix</option>
+            </select>
+          </label>
+
+          <label class="pick"
+            >Files
+            <select id="filePick" aria-label="Changed files variant">
+              <option value="rows">Rows</option>
+              <option value="stat">Stat</option>
+              <option value="tree">Tree</option>
+              <option value="cards">Cards</option>
+              <option value="split">Split</option>
+              <option value="strip">Strip</option>
+            </select>
+          </label>
+
+          <input class="swatch" id="colour" type="color" value="#8c8d95" title="Indicator colour" />
+          <button
+            class="icon-btn"
+            id="auto"
+            type="button"
+            title="Follow text colour"
+            aria-label="Follow text colour"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M12 5v14" /></svg>
+          </button>
+          <button
+            class="icon-btn"
+            id="replay"
+            type="button"
+            title="Replay turn"
+            aria-label="Replay turn"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M20 12a8 8 0 1 1-2.4-5.7" />
+              <path d="M20 4v5h-5" />
+            </svg>
+          </button>
+          <button
+            class="icon-btn"
+            id="theme"
+            type="button"
+            title="Toggle theme"
+            aria-label="Toggle theme"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9Z" />
+            </svg>
+          </button>
+        </header>
+
+        <div class="thread" id="thread">
+          <div class="col">
+            <div class="user" id="user">
+              <span
+                >Make thinking, tool calls and the answer feel like one calm, continuous flow.</span
+              >
+            </div>
+
+            <button class="head" id="head" type="button" data-state="live" aria-expanded="true">
+              <span class="orb" id="orb" aria-hidden="true"></span>
+              <span class="head-mid">
+                <span class="swap" id="status"></span>
+                <span class="sep">·</span>
+                <span class="time" id="time">0:00</span>
+              </span>
+              <svg class="chev" viewBox="0 0 12 12" aria-hidden="true">
+                <path d="m4.5 2.5 3.5 3.5-3.5 3.5" />
+              </svg>
+            </button>
+
+            <div class="grow trace" id="trace" data-on="false">
+              <div class="clip">
+                <div>
+                  <div class="rule"></div>
+                  <div id="steps"></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="answer" id="answer" data-stream="off"></div>
+
+            <div class="grow files" id="files" data-on="false" data-open="false">
+              <div class="clip">
+                <button class="row-head" id="files-head" type="button" aria-expanded="false">
+                  <svg class="glyph" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M13 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z" />
+                    <path d="M13 2v6h6M9 14h6M12 11v6" />
+                  </svg>
+                  <span id="files-label">Changed 3 files</span>
+                  <span class="end">
+                    <span class="add" id="files-add">+85</span>
+                    <span class="del" id="files-del">−18</span>
+                    <svg class="chev-sm" viewBox="0 0 12 12" aria-hidden="true">
+                      <path d="m4.5 2.5 3.5 3.5-3.5 3.5" />
+                    </svg>
+                  </span>
+                </button>
+                <div class="grow body" id="files-body" data-on="false">
+                  <div class="clip"><div id="file-list"></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="composer-wrap">
+          <div class="composer">
+            <div id="prompt"></div>
+            <span aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6" /></svg>
+            </span>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <script>
+      (() => {
+        "use strict";
+
+        const $ = (id) => document.getElementById(id);
+        const root = document.documentElement;
+        const thread = $("thread");
+        const user = $("user");
+        const head = $("head");
+        const status = $("status");
+        const trace = $("trace");
+        const steps = $("steps");
+        const answer = $("answer");
+        const files = $("files");
+        const fileList = $("file-list");
+        const filesBody = $("files-body");
+        const prompt = $("prompt");
+        const time = $("time");
+        const orbEl = $("orb");
+
+        const slow = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+        /* ----------------------------------------------------------- content */
+        const PROMPT =
+          "Make thinking, tool calls and the answer feel like one calm, continuous flow.";
+
+        const TURN = [
+          {
+            think:
+              "The loader and the answer are two different objects today. If the indicator stays with the type instead of becoming a spinner, one line can carry the whole turn.",
+            status: "Reading",
+            label: "Read 3 files",
+            calls: [
+              {
+                live: "Searching the chat components",
+                cmd: 'rg -n "status|streaming" apps/web/src/components/chat',
+                out: "42 matches · 6 files",
+              },
+              {
+                live: "Reading MessagesTimeline.tsx",
+                cmd: "read apps/web/src/components/chat/MessagesTimeline.tsx",
+                out: "318 lines",
+              },
+              {
+                live: "Reading AgentActivity.tsx",
+                cmd: "read apps/web/src/components/chat/AgentActivity.tsx",
+                out: "204 lines",
+              },
+            ],
+          },
+          {
+            think:
+              "Every tool call of one thought belongs in the same row, so the trace stays a single column and the detail is one click away instead of always open.",
+            status: "Working",
+            label: "Edited 3 files · ran the tests",
+            calls: [
+              {
+                live: "Rewriting the activity states",
+                cmd: "apply_patch AgentActivity.tsx",
+                out: "1 hunk · the loader is replaced by the live indicator",
+              },
+              {
+                live: "Running the interaction tests",
+                cmd: "vp test run AgentActivity.test.tsx",
+                out: "3 passed · no layout shift recorded",
+              },
+            ],
+          },
+        ];
+
+        const ANSWER = [
+          "The indicator now stays inline with the type, the tool calls of one thought collapse into a single row, and the words arrive without moving anything around them.",
+          "When the turn ends only the answer, one history line and the changed files are left — everything else is one click away.",
+        ];
+
+        const FILES = [
+          {
+            path: "apps/web/src/components/chat/AgentActivity.tsx",
+            add: 64,
+            del: 12,
+            diff: [
+              "-  const [spinning, setSpinning] = useState(false)",
+              "+  const [phase, setPhase] = useState<TurnPhase>('idle')",
+              "",
+              "-  {spinning && <Spinner size={20} />}",
+              "+  <ThinkingIndicator phase={phase} />",
+              "+  {calls.length > 0 && <ToolGroup calls={calls} label={summary} />}",
+            ],
+          },
+          {
+            path: "apps/web/src/components/chat/MessagesTimeline.tsx",
+            add: 9,
+            del: 4,
+            diff: [
+              "-  {message.tools.map((tool) => <ToolRow key={tool.id} {...tool} />)}",
+              "+  {groupByThought(message.tools).map((group) => (",
+              "+    <ToolGroup key={group.id} {...group} />",
+              "+  ))}",
+            ],
+          },
+          {
+            path: "apps/web/src/vide-theme.css",
+            add: 12,
+            del: 2,
+            diff: [
+              "+  --gutter: 22px;",
+              "+  --orb-size: 1.2em;",
+              "+  --orb-speed: 1;",
+              "-  --agent-loader-size: 32px;",
+            ],
+          },
+        ];
+
+        /* ---------------------------------------------------------------- orb */
+        /* Six dotted indicators on one painter. `orbits` and `scan` are ports of
+           the working / searching states of thinking-orbs
+           (github.com/Jakubantalik/thinking-orbs, inline size-20 tuning); mark,
+           sonar, swarm and helix are ours, in the same dotted language. */
+
+        const hash = (a, b) => {
+          const h = Math.sin(a * 12.9898 + b * 78.233) * 43758.5453;
+          return h - Math.floor(h);
+        };
+
+        /** Spin + tilt, unit space in, unit space out. */
+        const proj = (yaw, tilt) => {
+          const sy = Math.sin(yaw);
+          const cw = Math.cos(yaw);
+          const st = Math.sin(tilt);
+          const ct = Math.cos(tilt);
+          return (x, y, z) => {
+            const x1 = x * cw + z * sy;
+            const z1 = -x * sy + z * cw;
+            return [x1, y * ct - z1 * st, y * st + z1 * ct];
+          };
+        };
+
+        /** The V from logo-master.svg as line segments in unit space. */
+        const V_SEGS = [
+          [0.06, 0.078, 0.5, 0.921, 9],
+          [0.582, 0.893, 0.932, 0.078, 9],
+          [0.726, 0.208, 0.81, 0.208, 3],
+          [0.684, 0.295, 0.779, 0.295, 3],
+          [0.64, 0.384, 0.747, 0.384, 3],
+          [0.598, 0.475, 0.713, 0.475, 3],
+        ];
+
+        // 1.62 across, 1.28 down — the mark keeps its 240:190 proportion
+        const V_DOTS = V_SEGS.flatMap(([ax, ay, bx, by, n], s) =>
+          Array.from({ length: n }, (_, i) => {
+            const u = i / (n - 1);
+            return {
+              x: (ax + (bx - ax) * u - 0.5) * 1.62,
+              y: (0.5 - (ay + (by - ay) * u)) * 1.28,
+              a: hash(s * 7 + i, 2.4) * Math.PI * 2,
+              h: hash(s * 7 + i, 6.1),
+            };
+          }),
+        );
+
+        const MODES = {
+          // particles on tilted orbits — thinking-orbs "working"
+          orbits(t, R, rs) {
+            const dots = [];
+            const p = proj(t * 0.12, 0.3);
+            for (let o = 0; o < 3; o++) {
+              const h1 = hash(o, 1.7);
+              const h2 = hash(o, 5.2);
+              const h3 = hash(o, 8.9);
+              const ro = 0.45 + 0.52 * h1;
+              const th = h1 * 2 * Math.PI;
+              const phi = Math.acos(2 * h2 - 1);
+              const nx = Math.sin(phi) * Math.cos(th);
+              const ny = Math.cos(phi);
+              const nz = Math.sin(phi) * Math.sin(th);
+              const ul = Math.max(1e-6, Math.hypot(nx, ny));
+              const ux = -ny / ul;
+              const uy = nx / ul;
+              const vx = -nz * uy;
+              const vy = nz * ux;
+              const vz = nx * uy - ny * ux;
+              const spin = (0.25 + 0.55 * h3) * (h3 > 0.5 ? 1 : -1);
+              const put = (a, radius, alpha) => {
+                const ca = Math.cos(a);
+                const sa = Math.sin(a);
+                const [x, y, z] = p(
+                  (ux * ca + vx * sa) * ro,
+                  (uy * ca + vy * sa) * ro,
+                  vz * sa * ro,
+                );
+                const d = (z / ro + 1) / 2;
+                dots.push({ x: x * R, y: y * R, z, r: radius(d) * rs, a: alpha(d) });
+              };
+              for (let k = 0; k < 10; k++) {
+                put(
+                  (k / 10) * 2 * Math.PI,
+                  () => 2.16,
+                  (d) => 0.25 * (0.4 + 0.6 * d),
+                );
+              }
+              for (let m = 0; m < 3; m++) {
+                put(
+                  t * spin + (m / 3) * 2 * Math.PI + h2 * 6,
+                  (d) => 2.88 + 3.84 * d,
+                  (d) => 0.6 + 0.34 * d,
+                );
+              }
+            }
+            return dots;
+          },
+
+          // a scan meridian sweeps a dotted globe — thinking-orbs "searching"
+          scan(t, R, rs) {
+            const dots = [];
+            const spin = 0.5;
+            const p = proj(t * spin, 0.4 + 0.06 * Math.sin(t * 0.35));
+            const beam = t * (spin + 1.2 * 4.3);
+            for (let li = 0; li <= 6; li++) {
+              const lat = -Math.PI / 2 + (li / 6) * Math.PI;
+              const cl = Math.cos(lat);
+              const sl = Math.sin(lat);
+              const n = Math.max(1, Math.round(Math.abs(cl) * 14));
+              for (let lj = 0; lj < n; lj++) {
+                const lon = (lj / n) * 2 * Math.PI;
+                const [x, y, z] = p(cl * Math.cos(lon), sl, cl * Math.sin(lon));
+                const d = (z + 1) / 2;
+                const da = Math.atan2(
+                  Math.sin(lon + t * spin - beam),
+                  Math.cos(lon + t * spin - beam),
+                );
+                const boost = Math.exp(-(da * da) / 0.18) * Math.max(0, z);
+                dots.push({
+                  x: x * R,
+                  y: y * R,
+                  z,
+                  r: (1.4 + 3.6 * d + 2.2 * boost) * rs,
+                  a: 0.3 + 0.7 * Math.min(1, boost + 0.18 + 0.5 * d),
+                });
+              }
+            }
+            return dots;
+          },
+
+          // ours: the V in dots, drifting off register and settling back
+          mark(t, R, rs) {
+            const pulse = (1 - Math.cos(t * 0.85)) / 2;
+            return V_DOTS.map((v) => {
+              const amp = pulse ** 2 * (0.1 + 0.2 * v.h);
+              const drift = Math.sin(t * 0.9 + v.h * 6) * 0.03;
+              return {
+                x: (v.x + Math.cos(v.a) * amp) * R,
+                y: (v.y + Math.sin(v.a) * amp + drift) * R,
+                z: 0,
+                r: (2.6 - 0.9 * pulse) * rs,
+                a: 0.9 - 0.45 * pulse,
+              };
+            });
+          },
+
+          // ours: rings of dots leaving the centre, like a slow sonar
+          sonar(t, R, rs) {
+            const dots = [{ x: 0, y: 0, z: 0, r: 2.6 * rs, a: 0.85 }];
+            for (let ring = 0; ring < 3; ring++) {
+              const u = (t * 0.13 + ring / 3) % 1;
+              const rad = 0.12 + 0.86 * u;
+              const n = 6 + Math.round(14 * u);
+              const fade = Math.sin(Math.PI * u) ** 0.7;
+              for (let i = 0; i < n; i++) {
+                const a = (i / n) * 2 * Math.PI + t * 0.14 + ring;
+                dots.push({
+                  x: Math.cos(a) * rad * R,
+                  y: Math.sin(a) * rad * R,
+                  z: 0,
+                  r: (2.4 - 1.1 * u) * rs,
+                  a: 0.72 * fade,
+                });
+              }
+            }
+            return dots;
+          },
+
+          // ours: a small swarm gathering and letting go, never quite in sync
+          swarm(t, R, rs) {
+            return Array.from({ length: 22 }, (_, i) => {
+              const h1 = hash(i, 1.1);
+              const h2 = hash(i, 3.3);
+              const breath = (1 + Math.sin(t * 0.5 + h1 * 6.283)) / 2;
+              const a = h1 * 6.283 + t * 0.08 * (h2 > 0.5 ? 1 : -1);
+              const rad = (0.22 + 0.72 * h2) * (0.34 + 0.66 * breath);
+              return {
+                x: Math.cos(a) * rad * R,
+                y: Math.sin(a) * rad * R,
+                z: 0,
+                r: (1.9 + 1.5 * (1 - breath)) * rs,
+                a: 0.35 + 0.55 * (1 - rad),
+              };
+            });
+          },
+
+          // ours: two dotted strands winding around a vertical axis
+          helix(t, R, rs) {
+            const dots = [];
+            const p = proj(t * 0.55, 0.22);
+            for (let k = 0; k < 2; k++) {
+              for (let i = 0; i < 15; i++) {
+                const u = i / 14;
+                const a = u * Math.PI * 2.3 + k * Math.PI + t * 0.15;
+                const [x, y, z] = p(Math.cos(a) * 0.52, (u - 0.5) * 1.7, Math.sin(a) * 0.52);
+                const d = (z + 1) / 2;
+                dots.push({
+                  x: x * R,
+                  y: y * R,
+                  z,
+                  r: (1.5 + 2.6 * d) * rs,
+                  a: 0.3 + 0.6 * d,
+                });
+              }
+            }
+            return dots;
+          },
+        };
+
+        const orb = { ctx: null, raf: 0, size: 15, tint: "255,255,255", clock: 1 };
+
+        const orbFrame = (t) => {
+          const c = orb.size / 2;
+          const R = c * 0.86;
+          const rs = (orb.size / 300) ** 0.6;
+          const dots = MODES[root.dataset.orb](t, R, rs);
+          dots.sort((a, b) => a.z - b.z);
+          orb.ctx.clearRect(0, 0, orb.size, orb.size);
+          for (const d of dots) {
+            orb.ctx.fillStyle = `rgba(${orb.tint},${Math.min(1, Math.max(0, d.a))})`;
+            orb.ctx.beginPath();
+            orb.ctx.arc(c + d.x, c - d.y, Math.max(0.3, d.r), 0, Math.PI * 2);
+            orb.ctx.fill();
+          }
+        };
+
+        const orbLoop = () => {
+          orbFrame((performance.now() / 1000) * orb.clock);
+          orb.raf = requestAnimationFrame(orbLoop);
+        };
+
+        const orbStop = () => {
+          cancelAnimationFrame(orb.raf);
+          orb.raf = 0;
+        };
+
+        /** Re-measure, re-read the tint, restart — on shape, theme, colour, resize. */
+        const orbSetup = () => {
+          const canvas = orbEl.querySelector("canvas");
+          const dpr = Math.min(2, window.devicePixelRatio || 1);
+          orb.size = Math.round(canvas.getBoundingClientRect().width) || 15;
+          canvas.width = Math.round(orb.size * dpr);
+          canvas.height = Math.round(orb.size * dpr);
+          orb.ctx = canvas.getContext("2d");
+          orb.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+          orb.tint = (getComputedStyle(canvas).color.match(/\d+/g) || [128, 128, 128])
+            .slice(0, 3)
+            .join(",");
+          orb.clock = 3.6 * (Number(getComputedStyle(root).getPropertyValue("--orb-speed")) || 1);
+          orbStop();
+          if (slow.matches || head.dataset.state === "done") orbFrame(0.6);
+          else orbLoop();
+        };
+
+        /* ------------------------------------------------------------ engine */
+        let run = 0;
+        const timers = new Set();
+
+        const at = (ms, fn) => {
+          const mine = run;
+          const id = setTimeout(() => {
+            timers.delete(id);
+            if (mine === run) fn();
+          }, ms);
+          timers.add(id);
+        };
+
+        const scroll = () =>
+          requestAnimationFrame(() =>
+            thread.scrollTo({
+              top: thread.scrollHeight,
+              behavior: slow.matches ? "auto" : "smooth",
+            }),
+          );
+
+        const ESCAPES = { "&": "&amp;", "<": "&lt;", ">": "&gt;" };
+        const esc = (s) => String(s).replace(/[&<>]/g, (c) => ESCAPES[c]);
+
+        const label = (text) => {
+          const span = document.createElement("span");
+          span.className = "shimmer";
+          span.textContent = text;
+          return span;
+        };
+
+        /** Width of `text` in the box's own type, so the line morphs instead of jumping. */
+        const fit = (box, text) => {
+          const probe = box.firstElementChild.cloneNode(false);
+          probe.textContent = text;
+          probe.style.cssText = "position:absolute;visibility:hidden;max-width:none";
+          box.append(probe);
+          box.style.width = `${Math.ceil(probe.getBoundingClientRect().width)}px`;
+          probe.remove();
+        };
+
+        /** Crossfade text in place; `grow` also morphs the box width. */
+        const swap = (box, text, grow) => {
+          const out = box.firstElementChild;
+          if (grow) fit(box, text);
+          const next = out.cloneNode(false);
+          next.textContent = text;
+          next.classList.add("swap-in");
+          out.classList.add("swap-out");
+          box.prepend(next);
+          at(400, () => {
+            out.remove();
+            next.classList.remove("swap-in"); // hand the element back to the sheen
+          });
+        };
+
+        const noise = (i) => {
+          const x = Math.sin((i + 1) * 12.9898) * 43758.5453;
+          return x - Math.floor(x);
+        };
+
+        const step = () => (slow.matches ? 8 : 40);
+
+        /** Reveal delay of word `i` — the phrase variant arrives in chunks of three. */
+        const delayOf = (i) =>
+          root.dataset.fx === "phrase"
+            ? Math.floor(i / 3) * step() * 2.7
+            : i * step() + noise(i) * step() * 0.5;
+
+        const streamMs = (text) => Math.round(delayOf(text.match(/\S+/g).length - 1)) + 620;
+
+        /** Lay every word out up front — the reveal cannot reflow anything. */
+        const fill = (node, text, from) => {
+          text.match(/\S+/g).forEach((word, i) => {
+            const n = noise(from + i);
+            const el = document.createElement("span");
+            el.className = "word";
+            el.textContent = word;
+            el.style.setProperty("--d", `${Math.round(delayOf(from + i))}ms`);
+            el.style.setProperty("--dx", `${(Math.cos(n * 6.283) * 8).toFixed(1)}px`);
+            el.style.setProperty("--dy", `${(Math.sin(n * 6.283) * 5).toFixed(1)}px`);
+            node.append(el, document.createTextNode(" "));
+          });
+        };
+
+        /** Wire a head + .grow body pair into a click-to-open row. */
+        const collapsible = (wrap, button, body) => {
+          button.addEventListener("click", () => {
+            if (wrap.dataset.state === "live") return;
+            const open = wrap.dataset.open !== "true";
+            wrap.dataset.open = String(open);
+            body.dataset.on = String(open);
+            button.setAttribute("aria-expanded", String(open));
+            scroll();
+          });
+        };
+
+        const WRENCH = `<svg class="glyph" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5-5l2.1 2.1-2.4 2.4-2.1-2.1a4 4 0 0 0 5 5l-7.6 7.6a2 2 0 0 0 2.8 2.8l7.6-7.6a4 4 0 0 0 5-5l-2.1 2.1-2.4-2.4 2.1-2.1Z"/></svg>`;
+        const CHEV = `<svg class="chev-sm" viewBox="0 0 12 12" aria-hidden="true"><path d="m4.5 2.5 3.5 3.5-3.5 3.5"/></svg>`;
+
+        const buildSteps = () =>
+          TURN.map((data) => {
+            const think = document.createElement("div");
+            think.className = "grow think";
+            think.dataset.on = "false";
+            think.innerHTML = '<div class="clip"><p></p></div>';
+
+            const work = document.createElement("div");
+            work.className = "grow work";
+            work.dataset.on = "false";
+            work.dataset.state = "idle";
+            work.dataset.open = "false";
+            work.innerHTML = `<div class="clip">
+              <button class="row-head" type="button" aria-expanded="false">
+                ${WRENCH}
+                <span class="swap"><span class="shimmer"></span><span class="sum">${esc(data.label)}</span></span>
+                <span class="end">${CHEV}</span>
+              </button>
+              <div class="grow body" data-on="false"><div class="clip"><div>
+                ${data.calls
+                  .map(
+                    (c) =>
+                      `<div class="call"><code>${esc(c.cmd)}</code><em>${esc(c.out)}</em></div>`,
+                  )
+                  .join("")}
+              </div></div></div>
+            </div>`;
+
+            collapsible(work, work.querySelector(".row-head"), work.querySelector(".body"));
+            steps.append(think, work);
+            return { data, think, work, line: work.querySelector(".swap") };
+          });
+
+        /* ------------------------------------------------------ changed files */
+        const unified = (lines) =>
+          `<div class="diff">${lines
+            .map((l) => `<span data-k="${l.slice(0, 1)}">${esc(l) || " "}</span>`)
+            .join("")}</div>`;
+
+        /** Same hunk as two columns: removals left, additions right, context both. */
+        const split = (lines) => {
+          const left = [];
+          const right = [];
+          lines.forEach((l) => {
+            const k = l.slice(0, 1);
+            if (k === "-") left.push(l);
+            else if (k === "+") right.push(l);
+            else {
+              while (left.length < right.length) left.push("");
+              while (right.length < left.length) right.push("");
+              left.push(l);
+              right.push(l);
+            }
+          });
+          while (left.length < right.length) left.push("");
+          while (right.length < left.length) right.push("");
+          const col = (rows) =>
+            `<div class="diff">${rows
+              .map((l) => `<span data-k="${l.slice(0, 1)}">${esc(l) || " "}</span>`)
+              .join("")}</div>`;
+          return `<div class="split">${col(left)}${col(right)}</div>`;
+        };
+
+        /** Five blocks showing the add/delete ratio of a file. */
+        const bars = (add, del) => {
+          const a = Math.max(1, Math.round((add / (add + del)) * 5));
+          return `<span class="bars" aria-hidden="true">${Array.from(
+            { length: 5 },
+            (_, i) => `<i class="${i < a ? "a" : "d"}"></i>`,
+          ).join("")}</span>`;
+        };
+
+        const renderFiles = () => {
+          const mode = root.dataset.files;
+          fileList.replaceChildren();
+          let add = 0;
+          let del = 0;
+          let dir = "";
+
+          FILES.forEach((file) => {
+            add += file.add;
+            del += file.del;
+            const cut = file.path.lastIndexOf("/") + 1;
+
+            if (mode === "tree" && file.path.slice(0, cut) !== dir) {
+              dir = file.path.slice(0, cut);
+              const head = document.createElement("div");
+              head.className = "dir";
+              head.textContent = dir;
+              fileList.append(head);
+            }
+
+            const row = document.createElement("div");
+            row.className = "file";
+            row.dataset.open = "false";
+            row.innerHTML = `
+              <button class="row-head" type="button" aria-expanded="false">
+                <span class="path"><span class="dirname">${esc(file.path.slice(0, cut))}</span>${esc(file.path.slice(cut))}</span>
+                <span class="end">
+                  ${bars(file.add, file.del)}
+                  <span class="add">+${file.add}</span><span class="del">−${file.del}</span>${CHEV}
+                </span>
+              </button>
+              <div class="grow body" data-on="false"><div class="clip">
+                ${mode === "split" ? split(file.diff) : unified(file.diff)}
+              </div></div>`;
+            collapsible(row, row.querySelector(".row-head"), row.querySelector(".body"));
+            fileList.append(row);
+          });
+
+          $("files-label").textContent = `Changed ${FILES.length} files`;
+          $("files-add").textContent = `+${add}`;
+          $("files-del").textContent = `−${del}`;
+        };
+
+        /* -------------------------------------------------------------- turn */
+        const mmss = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+
+        const play = () => {
+          run += 1;
+          timers.forEach(clearTimeout);
+          timers.clear();
+
+          prompt.classList.remove("sending");
+          prompt.textContent = PROMPT;
+          user.classList.remove("in");
+          head.classList.remove("in");
+          head.dataset.state = "live";
+          head.setAttribute("aria-expanded", "true");
+          status.replaceChildren(label("Thinking"));
+          fit(status, "Thinking");
+          time.textContent = "0:00";
+          trace.dataset.on = "false";
+          answer.dataset.stream = "off";
+          answer.classList.remove("in");
+          answer.replaceChildren();
+          steps.replaceChildren();
+          files.dataset.on = "false";
+          files.dataset.open = "false";
+          filesBody.dataset.on = "false";
+          $("files-head").setAttribute("aria-expanded", "false");
+          thread.scrollTop = 0;
+          orbSetup();
+
+          const rows = buildSteps();
+          renderFiles();
+          const dwell = slow.matches ? 140 : 860;
+          let t = 120;
+          let started = 0;
+          let ticker = 0;
+
+          at(t, () => prompt.classList.add("sending"));
+          at((t += 320), () => {
+            prompt.textContent = "";
+            user.classList.add("in");
+            scroll();
+          });
+
+          at((t += 440), () => {
+            head.classList.add("in");
+            trace.dataset.on = "true";
+            started = performance.now();
+            const tick = () => {
+              time.textContent = mmss((performance.now() - started) / 1000);
+              ticker = requestAnimationFrame(tick);
+            };
+            tick();
+            scroll();
+          });
+
+          t += 620;
+
+          rows.forEach((row, i) => {
+            const p = row.think.querySelector("p");
+            const ms = streamMs(row.data.think);
+
+            at(t, () => {
+              row.think.dataset.on = "true";
+              fill(p, row.data.think, 0);
+              p.style.setProperty("--total", `${ms}ms`);
+              p.dataset.stream = "on";
+              if (i > 0) swap(status, "Thinking", true);
+              scroll();
+            });
+
+            t += ms;
+
+            // a finished thought keeps a sheen while its own tools are running
+            at(t, () => p.classList.add("shimmer"));
+
+            t += 240;
+
+            at(t, () => {
+              row.work.dataset.on = "true";
+              row.work.dataset.state = "live";
+              swap(status, row.data.status, true);
+              scroll();
+            });
+
+            row.data.calls.forEach((call, j) => {
+              at(t + j * dwell, () => swap(row.line, call.live));
+            });
+
+            t += row.data.calls.length * dwell;
+
+            at(t, () => {
+              row.work.dataset.state = "done";
+              p.classList.remove("shimmer");
+              scroll();
+            });
+
+            t += 260;
+          });
+
+          const answerMs = streamMs(ANSWER.join(" "));
+
+          at(t, () => {
+            swap(status, "Writing", true);
+            answer.classList.add("in");
+            let index = 0;
+            ANSWER.forEach((text) => {
+              const el = document.createElement("p");
+              answer.append(el);
+              fill(el, text, index);
+              index += text.match(/\S+/g).length;
+            });
+            answer.style.setProperty("--total", `${answerMs}ms`);
+            answer.dataset.stream = "on";
+            scroll();
+          });
+
+          at(t + answerMs + 200, () => {
+            files.dataset.on = "true";
+            scroll();
+          });
+
+          at(t + answerMs + 560, () => {
+            cancelAnimationFrame(ticker);
+            time.textContent = mmss((performance.now() - started) / 1000);
+            head.dataset.state = "done";
+            head.setAttribute("aria-expanded", "false");
+            swap(status, "Worked for", true);
+            trace.dataset.on = "false";
+            orbStop();
+            orbFrame(0.6);
+            scroll();
+          });
+        };
+
+        /* ----------------------------------------------------------- wiring */
+        head.addEventListener("click", () => {
+          if (head.dataset.state !== "done") return;
+          const open = head.getAttribute("aria-expanded") !== "true";
+          head.setAttribute("aria-expanded", String(open));
+          trace.dataset.on = String(open);
+          scroll();
+        });
+
+        collapsible(files, $("files-head"), filesBody);
+
+        $("fx").addEventListener("change", (e) => {
+          root.dataset.fx = e.target.value;
+          play();
+        });
+
+        $("orbPick").addEventListener("change", (e) => {
+          root.dataset.orb = e.target.value;
+          orbSetup();
+        });
+
+        $("filePick").addEventListener("change", (e) => {
+          root.dataset.files = e.target.value;
+          renderFiles();
+        });
+
+        $("colour").addEventListener("input", (e) => {
+          root.style.setProperty("--orb-color", e.target.value);
+          orbSetup();
+        });
+
+        $("auto").addEventListener("click", () => {
+          root.style.removeProperty("--orb-color");
+          orbSetup();
+        });
+
+        $("replay").addEventListener("click", play);
+
+        const flip = () => {
+          root.dataset.theme = root.dataset.theme === "dark" ? "light" : "dark";
+          orbSetup();
+        };
+
+        $("theme").addEventListener("click", flip);
+
+        document.addEventListener("keydown", (e) => {
+          if (e.metaKey || e.ctrlKey || e.altKey || e.target.tagName === "SELECT") return;
+          const key = e.key.toLowerCase();
+          if (key === "r") play();
+          if (key === "t") flip();
+        });
+
+        window.addEventListener("resize", orbSetup);
+        slow.addEventListener("change", play);
+
+        orbEl.innerHTML = "<canvas></canvas>";
+        play();
+      })();
+    </script>
+  </body>
+</html>

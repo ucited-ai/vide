@@ -507,16 +507,20 @@ describe("deriveMessagesTimelineRows", () => {
     });
 
     const foldRow = collapsedRows.find(
-      (row): row is Extract<(typeof collapsedRows)[number], { kind: "turn-fold" }> =>
-        row.kind === "turn-fold",
+      (row): row is Extract<(typeof collapsedRows)[number], { kind: "turn-head" }> =>
+        row.kind === "turn-head",
     );
     expect(foldRow?.turnId).toBe("turn-1");
+    expect(foldRow?.state).toBe("done");
     expect(foldRow?.expanded).toBe(false);
     // User message boundary (00:00:00) → terminal message updatedAt (00:00:22).
-    expect(foldRow?.label).toBe("Worked for 22s");
+    // The duration travels beside the label so the head can keep it in the column
+    // its live timer counted in.
+    expect(foldRow?.label).toBe("Worked for");
+    expect(foldRow?.duration).toBe("22s");
     expect(collapsedRows.map((row) => row.id)).toEqual([
       "user-entry",
-      "turn-fold:turn-1",
+      "turn-head:turn-1",
       "assistant-final-entry",
     ]);
 
@@ -531,13 +535,13 @@ describe("deriveMessagesTimelineRows", () => {
 
     expect(expandedRows.map((row) => row.id)).toEqual([
       "user-entry",
-      "turn-fold:turn-1",
+      "turn-head:turn-1",
       "assistant-thought-entry",
       "work-entry-1",
       "assistant-final-entry",
     ]);
     expect(
-      expandedRows.find((row) => row.kind === "turn-fold" && row.expanded === true),
+      expandedRows.find((row) => row.kind === "turn-head" && row.expanded === true),
     ).toBeDefined();
   });
 
@@ -630,12 +634,13 @@ describe("deriveMessagesTimelineRows", () => {
     });
 
     const foldRow = rows.find(
-      (row): row is Extract<(typeof rows)[number], { kind: "turn-fold" }> =>
-        row.kind === "turn-fold",
+      (row): row is Extract<(typeof rows)[number], { kind: "turn-head" }> =>
+        row.kind === "turn-head",
     );
     // User message (00:00:00) → trailing work entry (00:00:12).
     expect(foldRow?.turnId).toBe("turn-1");
-    expect(foldRow?.label).toBe("Worked for 12s");
+    expect(foldRow?.label).toBe("Worked for");
+    expect(foldRow?.duration).toBe("12s");
   });
 
   it("uses latest-turn timings and the stopped label for an interrupted latest turn", () => {
@@ -668,9 +673,11 @@ describe("deriveMessagesTimelineRows", () => {
 
     expect(rows).toEqual([
       expect.objectContaining({
-        kind: "turn-fold",
+        kind: "turn-head",
+        state: "done",
         turnId: "turn-1",
-        label: "You stopped after 47s",
+        label: "You stopped after",
+        duration: "47s",
         expanded: false,
       }),
     ]);
@@ -734,11 +741,13 @@ describe("deriveMessagesTimelineRows", () => {
       revertTurnCountByUserMessageId: new Map(),
     });
 
+    // The new turn has no entries of its own yet, so its head waits at the end of
+    // the list — which is where its first entry is about to appear.
     expect(rows.map((row) => row.id)).toEqual([
-      "turn-fold:turn-1",
+      "turn-head:turn-1",
       "assistant-final-entry",
       "user-followup-entry",
-      "working-indicator-row",
+      "turn-head:live",
     ]);
     const finalRow = rows.find((row) => row.id === "assistant-final-entry");
     expect(finalRow?.kind === "message" && finalRow.showAssistantMeta).toBe(true);
@@ -786,11 +795,11 @@ describe("deriveMessagesTimelineRows", () => {
       revertTurnCountByUserMessageId: new Map(),
     });
 
-    expect(rows.some((row) => row.kind === "turn-fold")).toBe(false);
+    expect(rows.some((row) => row.kind === "turn-head" && row.state === "done")).toBe(false);
     expect(rows.map((row) => row.id)).toEqual([
+      "turn-head:turn-1",
       "assistant-thought-entry",
       "work-entry-1",
-      "working-indicator-row",
     ]);
   });
 
@@ -849,9 +858,11 @@ describe("deriveMessagesTimelineRows", () => {
       revertTurnCountByUserMessageId: new Map(),
     });
 
-    expect(rows.filter((row) => row.kind === "turn-fold").map((row) => row.turnId)).toEqual([
-      "turn-1",
-    ]);
+    expect(
+      rows
+        .filter((row) => row.kind === "turn-head" && row.state === "done")
+        .map((row) => (row.kind === "turn-head" ? row.turnId : null)),
+    ).toEqual(["turn-1"]);
     expect(rows.map((row) => row.id)).toContain("running-work-entry");
   });
 
@@ -941,7 +952,7 @@ describe("deriveMessagesTimelineRows", () => {
     expect(assistantRow?.showAssistantCopyButton).toBe(false);
   });
 
-  it("models work log overflow expansion as inserted list rows", () => {
+  it("keeps every tool call of one stretch of work in one row", () => {
     const timelineEntries = [
       {
         id: "work-entry-1",
@@ -981,35 +992,156 @@ describe("deriveMessagesTimelineRows", () => {
       },
     ];
 
-    const baseInput = {
+    const rows = deriveMessagesTimelineRows({
       timelineEntries,
       isWorking: false,
       activeTurnStartedAt: null,
       turnDiffSummaryByAssistantMessageId: new Map(),
       revertTurnCountByUserMessageId: new Map(),
-    };
-    const collapsedRows = deriveMessagesTimelineRows(baseInput);
-    const expandedRows = deriveMessagesTimelineRows({
-      ...baseInput,
-      expandedWorkGroupIds: new Set(["work-group:work-entry-1"]),
     });
 
-    expect(collapsedRows.map((row) => row.id)).toEqual(["work-3", "work-toggle:work-entry-1"]);
-    expect(collapsedRows.find((row) => row.kind === "work-toggle")).toMatchObject({
-      groupId: "work-group:work-entry-1",
-      hiddenCount: 2,
-      expanded: false,
-      onlyToolEntries: true,
-    });
-    expect(expandedRows.map((row) => row.id)).toEqual([
+    expect(rows.map((row) => row.id)).toEqual(["work-entry-1"]);
+    const workRow = rows.find((row) => row.kind === "work");
+    expect(workRow?.kind === "work" && workRow.groupedEntries.map((entry) => entry.id)).toEqual([
       "work-1",
       "work-2",
       "work-3",
-      "work-toggle:work-entry-1",
     ]);
-    expect(expandedRows.find((row) => row.kind === "work-toggle")).toMatchObject({
-      expanded: true,
+    expect(workRow?.kind === "work" && workRow.live).toBe(false);
+  });
+
+  it("marks the tail of a running turn live, and the thought above it with it", () => {
+    const rows = deriveMessagesTimelineRows({
+      timelineEntries: [
+        {
+          id: "assistant-thought-entry",
+          kind: "message",
+          createdAt: "2026-01-01T00:00:05Z",
+          message: {
+            id: "assistant-thought" as never,
+            role: "assistant",
+            text: "Looking around first.",
+            turnId: "turn-1" as never,
+            createdAt: "2026-01-01T00:00:05Z",
+            updatedAt: "2026-01-01T00:00:06Z",
+            streaming: false,
+          },
+        },
+        {
+          id: "work-entry-1",
+          kind: "work",
+          createdAt: "2026-01-01T00:00:08Z",
+          entry: {
+            id: "work-1",
+            createdAt: "2026-01-01T00:00:08Z",
+            turnId: "turn-1" as never,
+            label: "Reading files",
+            toolTitle: "Read",
+            tone: "tool" as const,
+          },
+        },
+      ],
+      latestTurn: {
+        turnId: "turn-1" as never,
+        state: "running",
+        startedAt: "2026-01-01T00:00:00Z",
+        completedAt: null,
+      },
+      runningTurnId: "turn-1" as never,
+      isWorking: true,
+      activeTurnStartedAt: "2026-01-01T00:00:00Z",
+      turnDiffSummaryByAssistantMessageId: new Map(),
+      revertTurnCountByUserMessageId: new Map(),
     });
+
+    // The head sits at the turn's first entry, not at the end of the list: it is
+    // where the work will fold into once the turn is over.
+    expect(rows.map((row) => row.id)).toEqual([
+      "turn-head:turn-1",
+      "assistant-thought-entry",
+      "work-entry-1",
+    ]);
+    const head = rows.find((row) => row.kind === "turn-head");
+    expect(head?.kind === "turn-head" && head.state).toBe("live");
+    // The newest thing the turn produced is the tool call, so that is the phrase.
+    expect(head?.kind === "turn-head" && head.label).toBe("Read");
+    expect(head?.kind === "turn-head" && head.startedAt).toBe("2026-01-01T00:00:00Z");
+
+    const thought = rows.find((row) => row.id === "assistant-thought-entry");
+    expect(thought?.kind === "message" && thought.isLiveThought).toBe(true);
+    expect(thought?.kind === "message" && thought.isLiveTurnMessage).toBe(true);
+    const work = rows.find((row) => row.kind === "work");
+    expect(work?.kind === "work" && work.live).toBe(true);
+  });
+
+  it("reads the live phrase off what the turn is doing", () => {
+    const buildRows = (text: string, streaming: boolean) =>
+      deriveMessagesTimelineRows({
+        timelineEntries: [
+          {
+            id: "assistant-entry",
+            kind: "message",
+            createdAt: "2026-01-01T00:00:05Z",
+            message: {
+              id: "assistant-1" as never,
+              role: "assistant",
+              text,
+              turnId: "turn-1" as never,
+              createdAt: "2026-01-01T00:00:05Z",
+              updatedAt: "2026-01-01T00:00:06Z",
+              streaming,
+            },
+          },
+        ],
+        latestTurn: {
+          turnId: "turn-1" as never,
+          state: "running",
+          startedAt: "2026-01-01T00:00:00Z",
+          completedAt: null,
+        },
+        runningTurnId: "turn-1" as never,
+        isWorking: true,
+        activeTurnStartedAt: "2026-01-01T00:00:00Z",
+        turnDiffSummaryByAssistantMessageId: new Map(),
+        revertTurnCountByUserMessageId: new Map(),
+      });
+
+    const label = (rows: ReturnType<typeof deriveMessagesTimelineRows>) => {
+      const head = rows.find((row) => row.kind === "turn-head");
+      return head?.kind === "turn-head" ? head.label : null;
+    };
+
+    expect(label(buildRows("Half a sen", true))).toBe("Writing");
+    expect(label(buildRows("A note to itself.", false))).toBe("Thinking");
+  });
+
+  it("puts the head of a turn that has produced nothing yet at the end", () => {
+    const rows = deriveMessagesTimelineRows({
+      timelineEntries: [
+        {
+          id: "user-entry",
+          kind: "message",
+          createdAt: "2026-01-01T00:00:00Z",
+          message: {
+            id: "user-1" as never,
+            role: "user",
+            text: "Build it",
+            turnId: null,
+            createdAt: "2026-01-01T00:00:00Z",
+            updatedAt: "2026-01-01T00:00:00Z",
+            streaming: false,
+          },
+        },
+      ],
+      isWorking: true,
+      activeTurnStartedAt: "2026-01-01T00:00:00Z",
+      turnDiffSummaryByAssistantMessageId: new Map(),
+      revertTurnCountByUserMessageId: new Map(),
+    });
+
+    expect(rows.map((row) => row.id)).toEqual(["user-entry", "turn-head:live"]);
+    const head = rows.find((row) => row.kind === "turn-head");
+    expect(head?.kind === "turn-head" && head.label).toBe("Thinking");
   });
 });
 

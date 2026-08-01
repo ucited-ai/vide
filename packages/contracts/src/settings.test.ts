@@ -120,6 +120,17 @@ describe("ClientSettings chat appearance", () => {
     expect(settings.chatStreamAnimation).toBe("assemble");
     expect(settings.chatThinkingIndicator).toBe("orbits");
     expect(settings.chatChangedFilesLayout).toBe("tree");
+    // Unset means the indicator follows the type it sits in, which is not the
+    // same as storing whatever colour that happens to be today.
+    expect(settings.chatIndicatorColor).toEqual({ light: null, dark: null });
+  });
+
+  it("keeps the indicator colour to the form the runtime hands to a canvas", () => {
+    expect(
+      decodeClientSettings({ chatIndicatorColor: { light: "rgb(76 195 138 / 100%)" } })
+        .chatIndicatorColor,
+    ).toEqual({ light: "rgb(76 195 138 / 100%)", dark: null });
+    expect(() => decodeClientSettings({ chatIndicatorColor: { light: "#4cc38a" } })).toThrow();
   });
 
   it("rejects a variant that is not on the list", () => {

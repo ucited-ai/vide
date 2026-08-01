@@ -1,9 +1,11 @@
-import { type TurnId } from "@vide/contracts";
 import { type ChatChangedFilesLayout } from "@vide/contracts/settings";
 import { memo } from "react";
 
 import { type TurnDiffFileChange } from "../../types";
+import { type TurnFileDiffs } from "../../hooks/useTurnFileDiffs";
 import { cn } from "~/lib/utils";
+import { ChangedFileDiff } from "./ChangedFileDiff";
+import { ChatGrow } from "./ChatGrow";
 import { chatChangedFilesLayoutStyle } from "./chatAppearance";
 import { DiffStatLabel } from "./DiffStatLabel";
 import { PierreEntryIcon } from "./PierreEntryIcon";
@@ -51,44 +53,58 @@ function WeightBar({ additions, deletions }: { additions: number; deletions: num
 }
 
 export const ChangedFilesList = memo(function ChangedFilesList(props: {
-  turnId: TurnId;
   files: ReadonlyArray<TurnDiffFileChange>;
   layout: Exclude<ChatChangedFilesLayout, "tree">;
   resolvedTheme: "light" | "dark";
-  onOpenTurnDiff: (turnId: TurnId, filePath?: string) => void;
+  openPaths: ReadonlySet<string>;
+  diffs: TurnFileDiffs;
+  onTogglePath: (path: string) => void;
 }) {
   const style = chatChangedFilesLayoutStyle(props.layout);
 
   return (
     <div className={style.container} data-changed-files-layout={props.layout}>
-      {props.files.map((file) => (
-        <button
-          key={file.path}
-          type="button"
-          title={file.path}
-          className={cn(ROW_CLASS, style.row)}
-          onClick={() => props.onOpenTurnDiff(props.turnId, file.path)}
-        >
-          <PierreEntryIcon
-            pathValue={file.path}
-            kind="file"
-            theme={props.resolvedTheme}
-            className="size-3.5 shrink-0 text-muted-foreground"
-          />
-          <span className="min-w-0 truncate">
-            {/* Checkpoint paths are already workspace-relative, so there is no
-                root to strip — but the cut and the inking still belong to the
-                one helper every surface shows a file through. */}
-            <FilePathLabel path={file.path} workspaceRoot={undefined} />
-          </span>
-          <span className="ml-auto flex shrink-0 items-center gap-2 font-mono text-(length:--text-caption) tabular-nums">
-            {style.showWeight ? (
-              <WeightBar additions={file.additions} deletions={file.deletions} />
-            ) : null}
-            <DiffStatLabel additions={file.additions} deletions={file.deletions} />
-          </span>
-        </button>
-      ))}
+      {props.files.map((file) => {
+        const open = props.openPaths.has(file.path);
+        return (
+          <div key={file.path}>
+            <button
+              aria-expanded={open}
+              className={cn(ROW_CLASS, style.row)}
+              data-scroll-anchor-ignore
+              onClick={() => props.onTogglePath(file.path)}
+              title={file.path}
+              type="button"
+            >
+              <PierreEntryIcon
+                pathValue={file.path}
+                kind="file"
+                theme={props.resolvedTheme}
+                className="size-3.5 shrink-0 text-muted-foreground"
+              />
+              <span className="min-w-0 truncate">
+                {/* Checkpoint paths are already workspace-relative, so there is no
+                    root to strip — but the cut and the inking still belong to the
+                    one helper every surface shows a file through. */}
+                <FilePathLabel path={file.path} workspaceRoot={undefined} />
+              </span>
+              <span className="ml-auto flex shrink-0 items-center gap-2 font-mono text-(length:--text-caption) tabular-nums">
+                {style.showWeight ? (
+                  <WeightBar additions={file.additions} deletions={file.deletions} />
+                ) : null}
+                <DiffStatLabel additions={file.additions} deletions={file.deletions} />
+              </span>
+            </button>
+            <ChatGrow open={open}>
+              <ChangedFileDiff
+                diffs={props.diffs}
+                path={file.path}
+                resolvedTheme={props.resolvedTheme}
+              />
+            </ChatGrow>
+          </div>
+        );
+      })}
     </div>
   );
 });

@@ -76,6 +76,64 @@ describe("streaming variants are backed by the stylesheet", () => {
     expect(theme).toContain("--chat-thinking-indicator-size");
     expect(theme).toContain(".chat-thinking-indicator canvas");
   });
+
+  it("staggers the reveal off the delay each word is handed", () => {
+    // Without this the delays computed per word land nowhere and every word of a
+    // buffered paragraph animates in the same frame — which is the failure the
+    // reveal was rebuilt to fix, and it looks like a single flash, not a bug.
+    expect(theme).toContain("animation-delay: var(--chat-stream-delay, 0ms)");
+    expect(theme).toContain("var(--chat-stream-dx, 0)");
+  });
+});
+
+/*
+ * The turn's own mechanics, for the same reason: each is a rule the components
+ * only reference by class name, so a rename in the stylesheet compiles cleanly
+ * and silently stops a turn from opening, swapping or shimmering.
+ */
+describe("the agent turn is backed by the stylesheet", () => {
+  const theme = NodeFS.readFileSync(
+    NodeURL.fileURLToPath(import.meta.resolve("../../vide-theme.css")),
+    "utf8",
+  );
+
+  it("gives the whole turn one column, and the reading column one width", () => {
+    expect(theme).toContain("--chat-turn-gutter:");
+    expect(theme).toContain(".chat-turn-row {");
+    expect(theme).toContain(".chat-turn-body {");
+    // The transcript and the composer are the same column by construction.
+    expect(theme).toContain("--chat-column-width:");
+    expect(theme).toContain("--chat-column-inset:");
+    expect(theme).toContain(
+      "max-width: calc(var(--composer-max-width) + 2 * var(--chat-column-inset))",
+    );
+  });
+
+  it("gives it one open/close mechanic", () => {
+    expect(theme).toContain(".chat-grow {");
+    expect(theme).toContain("grid-template-rows: 0fr;");
+    expect(theme).toContain('.chat-grow[data-open="true"]');
+    expect(theme).toContain(".chat-grow > .chat-grow-clip");
+  });
+
+  it("swaps a label in place, and morphs the box it sits in", () => {
+    expect(theme).toContain(".chat-swap {");
+    expect(theme).toContain("transition: width var(--chat-turn-swap-duration)");
+    expect(theme).toContain('.chat-swap-item[data-swap="in"]');
+    expect(theme).toContain('.chat-swap-item[data-swap="out"]');
+    expect(theme).toContain(".chat-swap-probe {");
+    expect(theme).toContain("@keyframes chat-swap-in {");
+    expect(theme).toContain("@keyframes chat-swap-out {");
+  });
+
+  it("runs a sheen through live type, and stops it where motion is not wanted", () => {
+    expect(theme).toContain(".chat-shimmer {");
+    expect(theme).toContain("var(--chat-sheen)");
+    expect(theme).toContain("@keyframes chat-sheen {");
+    const reduced = theme.slice(theme.lastIndexOf("@media (prefers-reduced-motion: reduce)"));
+    expect(reduced).toContain(".chat-shimmer");
+    expect(reduced).toContain("animation-name: none;");
+  });
 });
 
 describe("changed-files layouts", () => {

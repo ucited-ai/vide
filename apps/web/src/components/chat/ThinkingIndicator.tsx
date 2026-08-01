@@ -14,9 +14,9 @@ import { chatThinkingIndicatorPainter } from "./chatAppearance";
  * `thinkingIndicatorPainters.ts`; this owns the clock, the pixels and the
  * lifecycle.
  *
- * It takes its colour from `currentColor` and its size from CSS, so it sits in
- * a line of text the way a glyph does and the stylesheet stays in charge of
- * both.
+ * It takes its size from CSS and, unless the user has chosen a colour, its colour
+ * from `currentColor` — so it sits in a line of text the way a glyph does and the
+ * stylesheet stays in charge of both.
  */
 
 /** Seconds of painter time per wall-clock second. The mock's tempo, kept. */
@@ -27,7 +27,30 @@ const STILL_FRAME = 0.6;
 
 const FALLBACK_SIZE = 14;
 
-export function ThinkingIndicator({ variant }: { variant: ChatThinkingIndicator }) {
+export function ThinkingIndicator({
+  variant,
+  color = null,
+  frozen = false,
+}: {
+  readonly variant: ChatThinkingIndicator;
+  /**
+   * The colour the user chose, as the palette stores one (`rgb(r g b / a%)`).
+   *
+   * Handed in rather than read off computed style like the fallback is: a colour
+   * that lives in a setting has to reach the canvas the moment it changes, and a
+   * value read once per layout would keep painting the old one until the line
+   * around it happened to resize.
+   */
+  readonly color?: string | null;
+  /**
+   * Hold a single frame instead of running.
+   *
+   * What a finished turn leaves behind: the indicator stays in the line it has
+   * been in all along rather than being swapped for a tick, so nothing about the
+   * row moves as the turn settles — it simply stops.
+   */
+  readonly frozen?: boolean;
+}) {
   const [canvas, setCanvas] = useState<HTMLCanvasElement | null>(null);
   const { resolvedTheme } = useTheme();
   const prefersReducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
@@ -52,7 +75,7 @@ export function ThinkingIndicator({ variant }: { variant: ChatThinkingIndicator 
       // `currentColor` resolved once per layout rather than per frame: reading
       // computed style is a style recalculation, and 60 of those a second for a
       // colour that only moves with the theme is not a trade worth making.
-      tint = (getComputedStyle(canvas).color.match(/\d+/g) ?? ["128", "128", "128"])
+      tint = ((color ?? getComputedStyle(canvas).color).match(/\d+/g) ?? ["128", "128", "128"])
         .slice(0, 3)
         .join(",");
     };
@@ -82,7 +105,7 @@ export function ThinkingIndicator({ variant }: { variant: ChatThinkingIndicator 
     const start = () => {
       cancelAnimationFrame(frame);
       measure();
-      if (prefersReducedMotion) {
+      if (prefersReducedMotion || frozen) {
         render(STILL_FRAME);
         return;
       }
@@ -98,7 +121,7 @@ export function ThinkingIndicator({ variant }: { variant: ChatThinkingIndicator 
       cancelAnimationFrame(frame);
       observer.disconnect();
     };
-  }, [canvas, prefersReducedMotion, resolvedTheme, variant]);
+  }, [canvas, color, frozen, prefersReducedMotion, resolvedTheme, variant]);
 
   return (
     <span aria-hidden="true" className="chat-thinking-indicator">
