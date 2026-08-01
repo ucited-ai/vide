@@ -493,15 +493,25 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
 
   return (
     <TooltipProvider delay={0}>
-      {/* `h-screen max-h-96` sized this against the window rather than against
-          the space the popup actually has, so on a short window the surface
-          stayed 100vh tall and its bottom — the traits controls — was clipped by
-          the popup viewport instead of the list giving up rows. Capping at the
-          popup's own available height makes the list the part that shrinks.
-          Both steps share this box — same width, same height — so advancing
-          from one to the other reads as one control, not a different popup. */}
+      {/* No fixed height: the box is as tall as what is in it, capped so it
+          stops short of the popup's own available height rather than running
+          into the edge. A fixed `h-96` made a three-option second step as tall
+          as a full model list, and both steps share this box, so advancing
+          between them reads as one control rather than a different popup. */}
       <div
-        className="dropdown-glass model-picker-surface relative flex h-96 max-h-(--available-height) w-screen max-w-100 flex-col overflow-hidden rounded-lg text-popover-foreground [clip-path:inset(0_round_var(--radius-lg))]"
+        className={cn(
+          "dropdown-glass model-picker-surface relative flex w-screen max-w-88 flex-col overflow-hidden rounded-(--popup-radius) text-popover-foreground [clip-path:inset(0_round_var(--popup-radius))]",
+          /*
+           * The list step needs a definite height or its virtualised rows have
+           * nothing to shrink against: with only a max-height the box grew to
+           * the full list and stopped scrolling. The options step has no list,
+           * so it is as tall as the few controls in it and merely capped, which
+           * is what keeps it from opening a menu the size of a model catalogue.
+           */
+          step === "options"
+            ? "max-h-[calc(var(--available-height)-1.5rem)]"
+            : "h-[min(22rem,calc(var(--available-height)-1.5rem))]",
+        )}
         data-model-picker-content="true"
       >
         {step === "options" && props.traitsInput ? (
@@ -726,7 +736,7 @@ function ModelOptionsStep(props: {
         </div>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
-        <TraitsStepContent {...props.traitsInput} />
+        <TraitsStepContent {...props.traitsInput} onAfterSelect={props.onRequestClose} />
       </div>
     </div>
   );

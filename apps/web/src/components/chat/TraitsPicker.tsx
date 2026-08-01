@@ -15,7 +15,7 @@ import {
   getProviderOptionDescriptors,
   isClaudeUltrathinkPrompt,
 } from "@vide/shared/model";
-import { memo, type ReactNode, useCallback, useId, useState } from "react";
+import { memo, useCallback, useState } from "react";
 import type { VariantProps } from "class-variance-authority";
 import { CheckIcon, ChevronDownIcon, ZapIcon } from "lucide-react";
 import { Button, buttonVariants } from "../ui/button";
@@ -32,7 +32,6 @@ import { useComposerDraftStore, DraftId } from "../../composerDraftStore";
 import { getProviderModelCapabilities } from "../../providerModels";
 import { cn } from "~/lib/utils";
 import { Badge } from "../ui/badge";
-import { Switch } from "../ui/switch";
 
 type ProviderOptions = ReadonlyArray<ProviderOptionSelection>;
 
@@ -484,47 +483,6 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl(props: Trai
   );
 });
 
-/** The name of a trait, in the ink every trait row uses for it. */
-function TraitsInlineLabel(props: { children: ReactNode; className?: string }) {
-  return (
-    <span
-      className={cn(
-        "shrink-0 font-medium text-(length:--text-caption) text-muted-foreground",
-        props.className,
-      )}
-    >
-      {props.children}
-    </span>
-  );
-}
-
-/**
- * A boolean trait is a switch, not a two-stop slider: it has an off state rather
- * than a low end, and reading it as the bottom of a scale is wrong.
- */
-function TraitsSwitchRow(props: {
-  label: string;
-  isOn: boolean;
-  onChange: (enabled: boolean) => void;
-}) {
-  const switchId = useId();
-
-  return (
-    <div className="flex min-h-(--popup-item-height) w-full min-w-0 items-center justify-between gap-(--popup-item-gap) px-(--popup-item-padding-inline)">
-      <label htmlFor={switchId}>
-        <TraitsInlineLabel className="cursor-default">{props.label}</TraitsInlineLabel>
-      </label>
-      <Switch
-        id={switchId}
-        aria-label={props.label}
-        checked={props.isOn}
-        onCheckedChange={props.onChange}
-        className="shrink-0"
-      />
-    </div>
-  );
-}
-
 /** A hairline break between traits groups, standing in for a Base UI menu
  * separator: this step renders inside a Popover rather than a Menu, so there
  * is no Menu.Root for a real MenuSeparator to anchor to. */
@@ -586,6 +544,200 @@ function TraitsStepOptionRow(props: {
 }
 
 /**
+ * An ordered scale as a stepped track: the name of the level above it, the
+ * stops beneath it, and the reached ones filled in.
+ *
+ * A scale is not a set of choices — "medium" only means anything relative to
+ * "low" and "high" — and a vertical list of radio rows says nothing about that
+ * order beyond the accident of its own arrangement. The track states it: how far
+ * along you are is a position, and each stop is lighter than the one before it,
+ * so "more" reads as "further and brighter" without a second colour entering
+ * the app.
+ *
+ * The stop count comes from the descriptor, so a model with four effort levels
+ * gets four stops and one with six gets six, with no per-model branching.
+ */
+function TraitsScaleTrack(props: {
+  label: string;
+  options: ReadonlyArray<{ id: string; label: string; isDefault?: boolean | undefined }>;
+  selectedId: string | null;
+  isDisabled: boolean;
+  onSelect: (optionId: string) => void;
+}) {
+  const selectedIndex = Math.max(
+    0,
+    props.options.findIndex((option) => option.id === props.selectedId),
+  );
+  const lastIndex = Math.max(1, props.options.length - 1);
+  const selected = props.options[selectedIndex];
+
+  const selectAt = (index: number, group: HTMLElement) => {
+    const clamped = Math.min(props.options.length - 1, Math.max(0, index));
+    const next = props.options[clamped];
+    if (!next || next.id === props.selectedId) return;
+    props.onSelect(next.id);
+    // Roving tabindex: the stop that just became current is the one that has to
+    // be focusable, or the next arrow press has nowhere to come from.
+    group.querySelectorAll("button")[clamped]?.focus();
+  };
+
+  /*
+   * Which stop the pointer is over. The stops are spread edge to edge and are
+   * one stop wide, so their centres run from half a stop in to half a stop from
+   * the end — the usable travel is the track minus one stop.
+   */
+  const stopIndexAtX = (clientX: number, group: HTMLElement) => {
+    const rect = group.getBoundingClientRect();
+    const travel = Math.max(1, rect.width - rect.height);
+    return Math.round(((clientX - rect.left - rect.height / 2) / travel) * lastIndex);
+  };
+
+  return (
+    <div className="px-(--popup-item-padding-inline) pt-1.5 pb-3">
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="font-medium text-(length:--text-caption) text-muted-foreground">
+          {props.label}
+        </span>
+        <span className="truncate text-(length:--text-ui) text-foreground">
+          {selected?.label ?? "—"}
+          {selected?.isDefault === true ? (
+            <>
+              {" "}
+              <DefaultBadge />
+            </>
+          ) : null}
+        </span>
+      </div>
+      <div
+        role="radiogroup"
+        aria-label={props.label}
+        aria-disabled={props.isDisabled || undefined}
+        /*
+         * Dragging, not only clicking. A track you can merely tap is a row of
+         * radio buttons wearing a track's clothes; holding it and feeling the
+         * levels go by is the whole reason for the shape. The group takes the
+         * pointer rather than the stops, so the drag survives leaving one.
+         */
+        onPointerDown={(event) => {
+          if (props.isDisabled || event.button !== 0) return;
+          event.preventDefault();
+          event.currentTarget.setPointerCapture(event.pointerId);
+          selectAt(stopIndexAtX(event.clientX, event.currentTarget), event.currentTarget);
+        }}
+        onPointerMove={(event) => {
+          if (props.isDisabled || !event.currentTarget.hasPointerCapture(event.pointerId)) return;
+          selectAt(stopIndexAtX(event.clientX, event.currentTarget), event.currentTarget);
+        }}
+        onPointerUp={(event) => {
+          if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+            event.currentTarget.releasePointerCapture(event.pointerId);
+          }
+        }}
+        onKeyDown={(event) => {
+          if (props.isDisabled) return;
+          if (event.key === "ArrowRight" || event.key === "ArrowUp") {
+            event.preventDefault();
+            selectAt(selectedIndex + 1, event.currentTarget);
+          } else if (event.key === "ArrowLeft" || event.key === "ArrowDown") {
+            event.preventDefault();
+            selectAt(selectedIndex - 1, event.currentTarget);
+          }
+        }}
+        className={cn(
+          "group/track relative mt-2.5 flex h-4 touch-none items-center justify-between",
+          props.isDisabled ? "" : "cursor-pointer",
+          props.isDisabled ? "pointer-events-none opacity-64" : "",
+        )}
+      >
+        <span aria-hidden className="absolute inset-x-1.5 h-px bg-border" />
+        <span
+          aria-hidden
+          className="absolute left-1.5 h-px bg-foreground/60 transition-[width]"
+          style={{ width: `calc((100% - 0.75rem) * ${selectedIndex / lastIndex})` }}
+        />
+        {props.options.map((option, index) => {
+          const reached = index <= selectedIndex;
+          return (
+            <button
+              key={option.id}
+              type="button"
+              role="radio"
+              aria-checked={index === selectedIndex}
+              aria-label={option.label}
+              title={option.label}
+              tabIndex={index === selectedIndex ? 0 : -1}
+              // The group above owns the pointer so a press can become a drag.
+              // These stay real buttons for focus, keyboard and screen readers,
+              // and unlike the option rows they do take focus: arrow keys are
+              // the point of a track and never arrive while the popup's search
+              // field still holds it.
+              className="relative z-10 flex size-4 cursor-pointer items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <span
+                className={cn(
+                  "rounded-full transition-all",
+                  // The whole track answers to hovering any part of it: the
+                  // stops swell slightly, which is what tells you it is a thing
+                  // you may grab rather than a row of dots.
+                  index === selectedIndex
+                    ? "size-2.5 bg-foreground group-hover/track:size-3"
+                    : reached
+                      ? "size-1.5 bg-foreground/55 group-hover/track:size-2"
+                      : "size-1.5 bg-muted-foreground/35 group-hover/track:size-2 group-hover/track:bg-muted-foreground/55",
+                )}
+              />
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * A boolean as one row with its two states side by side, rather than a switch
+ * stacked under everything else. Beside the scale above it this keeps the whole
+ * step two lines tall instead of a column of unrelated controls.
+ */
+function TraitsSegmentedRow(props: {
+  label: string;
+  isOn: boolean;
+  onChange: (enabled: boolean) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 px-(--popup-item-padding-inline) py-1.5">
+      <span className="min-w-0 truncate text-(length:--text-ui) text-foreground">
+        {props.label}
+      </span>
+      <div
+        role="radiogroup"
+        aria-label={props.label}
+        className="flex shrink-0 items-center gap-0.5 rounded-(--popup-item-radius) bg-(--wash-hover) p-0.5"
+      >
+        {[true, false].map((value) => (
+          <button
+            key={value ? "on" : "off"}
+            type="button"
+            role="radio"
+            aria-checked={props.isOn === value}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => props.onChange(value)}
+            className={cn(
+              "rounded-[calc(var(--popup-item-radius)-2px)] px-2 py-0.5 text-(length:--text-caption) transition-colors",
+              props.isOn === value
+                ? "bg-(--surface-raised-1) text-foreground shadow-[0_1px_2px_rgb(0_0_0/12%)]"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {value ? "On" : "Off"}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
  * The traits controls as the model picker's second step, styled as a native
  * menu section rather than a form: a hairline separator marks a new group
  * instead of a wide gap, and every option row shares one height with
@@ -593,7 +745,9 @@ function TraitsStepOptionRow(props: {
  * shape of what renders follows entirely from the descriptors the model
  * declares.
  */
-export const TraitsStepContent = memo(function TraitsStepContentImpl(props: TraitsControlProps) {
+export const TraitsStepContent = memo(function TraitsStepContentImpl(
+  props: TraitsControlProps & { onAfterSelect?: (() => void) | undefined },
+) {
   const {
     hasAnyControls,
     selectDescriptors,
@@ -613,35 +767,76 @@ export const TraitsStepContent = memo(function TraitsStepContentImpl(props: Trai
       {selectDescriptors.map((descriptor, index) => {
         const isLocked = isSelectLocked(descriptor);
         const selectedValue = getSelectValue(descriptor);
+        /*
+         * An ordered scale gets the track; anything else stays a list. Picking a
+         * level on the track is the last thing anyone does in this step, so it
+         * also closes the popup — the alternative is a menu that stays open
+         * after its only remaining question has been answered.
+         */
+        const scale = splitDescriptorScale(descriptor);
+        const showTrack = isScaleDescriptor(descriptor, scale);
 
         return (
           <div key={descriptor.id} className="flex w-full min-w-0 flex-col">
             {index > 0 ? <TraitsStepDivider /> : null}
-            <div className="px-(--popup-item-padding-inline) pt-1.5 pb-0.5 font-medium text-(length:--text-caption) text-muted-foreground">
-              {descriptor.label}
-            </div>
+            {showTrack ? (
+              <>
+                <TraitsScaleTrack
+                  label={descriptor.label}
+                  options={scale.stops}
+                  selectedId={selectedValue}
+                  isDisabled={isLocked}
+                  onSelect={(optionId) => {
+                    handleSelectChange(descriptor, optionId);
+                    props.onAfterSelect?.();
+                  }}
+                />
+                {scale.promptInjected.map((option) => (
+                  <TraitsStepOptionRow
+                    key={option.id}
+                    label={option.label}
+                    isSelected={option.id === selectedValue}
+                    isDefault={option.isDefault === true}
+                    isDisabled={isLocked}
+                    onSelect={() => {
+                      handleSelectChange(descriptor, option.id);
+                      props.onAfterSelect?.();
+                    }}
+                  />
+                ))}
+              </>
+            ) : (
+              <>
+                <div className="px-(--popup-item-padding-inline) pt-1.5 pb-0.5 font-medium text-(length:--text-caption) text-muted-foreground">
+                  {descriptor.label}
+                </div>
+                {descriptor.options.map((option) => (
+                  <TraitsStepOptionRow
+                    key={option.id}
+                    label={option.label}
+                    isSelected={option.id === selectedValue}
+                    isDefault={option.isDefault === true}
+                    isDisabled={isLocked}
+                    onSelect={() => {
+                      handleSelectChange(descriptor, option.id);
+                      props.onAfterSelect?.();
+                    }}
+                  />
+                ))}
+              </>
+            )}
             {isLocked ? (
               <div className="px-(--popup-item-padding-inline) pb-1 text-(length:--text-caption) text-muted-foreground/80">
                 {ULTRATHINK_BODY_TEXT_HINT}
               </div>
             ) : null}
-            {descriptor.options.map((option) => (
-              <TraitsStepOptionRow
-                key={option.id}
-                label={option.label}
-                isSelected={option.id === selectedValue}
-                isDefault={option.isDefault === true}
-                isDisabled={isLocked}
-                onSelect={() => handleSelectChange(descriptor, option.id)}
-              />
-            ))}
           </div>
         );
       })}
       {booleanDescriptors.map((descriptor, index) => (
         <div key={descriptor.id} className="flex w-full min-w-0 flex-col">
           {index > 0 || selectDescriptors.length > 0 ? <TraitsStepDivider /> : null}
-          <TraitsSwitchRow
+          <TraitsSegmentedRow
             label={descriptor.label}
             isOn={descriptor.currentValue === true}
             onChange={(enabled) => handleBooleanChange(descriptor, enabled)}
