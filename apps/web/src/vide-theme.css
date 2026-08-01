@@ -1,28 +1,15 @@
 /*
- * Vide — surface, type, and motion layer
- *
- * Kept in its own file so upstream merges land in index.css and this file stays
- * ours. Everything here is either a token override or a new utility; no upstream
- * selector is edited in place.
- *
- * It is imported at the top of index.css, because CSS `@import` is only valid
- * there. Upstream then declares `:root`, `.dark`, and the sidebar-version blocks
- * further down at equal specificity and would win on source order, so the blocks
- * below triple their selector (`:root:root:root`, `.dark.dark.dark`) to outrank it
- * without reaching for !important.
- *
- * The organising idea is a surface ladder. Upstream builds dark mode from
- * neutral-950 and then paints the sidebar pure #000, so chrome sits *below* the
- * content pane and the whole app bottoms out at black. That is inverted. Here
- * the content pane is the darkest surface and every chrome surface — sidebar,
- * composer, popover — steps *up* from it. Nothing is transparent and nothing is
- * pure black: depth comes from opaque greys at measured intervals, which is
- * what keeps large panels from reading as holes.
+ * This file stays separate so upstream index.css merges do not touch Vide's
+ * theme. It is imported first, so repeated root and dark selectors deliberately
+ * outrank upstream declarations without !important.
  */
 
 /* ------------------------------------------------------------- typography */
 
 @theme inline {
+  --default-transition-duration: var(--duration-fast);
+  --default-transition-timing-function: var(--ease-out);
+
   /* SF Pro. DM Sans reads as a web page no matter how it is styled. */
   --font-sans:
     -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI Variable",
@@ -40,7 +27,8 @@
      like the context strip beneath the composer. */
   --surface-recessed: #f1f1f2;
   --surface-chrome: #fdfdfd;
-  --surface-raised-1: #ffffff;
+  /* One tone for every surface the user acts through — see the dark ladder. */
+  --surface-raised-1: var(--surface-chrome);
 
   --ink: #17171a;
   --ink-secondary: #5f5f68;
@@ -56,21 +44,19 @@
   /* macOS control radii. */
   --radius: 0.5rem;
 
-  /*
-   * Motion. Three curves, each for a different job, and one duration scale.
-   * Consistency here reads as "smooth" far more than any individual animation:
-   * the app feels settled because everything decelerates the same way.
-   *
-   * The soft and drop curves are near-exponential — most of the distance is
-   * covered early and the tail is long, which is what makes a surface look like
-   * it comes to rest rather than stopping.
-   */
+  /* The motion vocabulary distinguishes small state changes, surfaces, and exits. */
   --ease-out: cubic-bezier(0.22, 0.61, 0.36, 1); /* small state changes */
-  --ease-soft: cubic-bezier(0.16, 1, 0.3, 1); /* panels, sidebar, drawers */
+  --ease-soft: cubic-bezier(0.32, 0.72, 0, 1);
   --ease-in-out: cubic-bezier(0.45, 0, 0.25, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
 
+  /* Hover, colour, and other small state changes. */
   --duration-fast: 120ms;
-  --duration-base: 220ms;
+  --duration-base: 260ms;
+  /* Whole-area changes: maximise, restore, route-level transitions. */
+  --duration-slow: 400ms;
+  /* Menus and dialogs opening or closing. Its own rung because a popup has to
+     land faster than a panel — it is a response to a click, not a layout. */
   --duration-popup: 150ms;
 
   /*
@@ -84,53 +70,21 @@
   --text-title: 15px;
 
   /*
-   * Popup geometry.
-   *
-   * One set of numbers for every dropdown, dropup, submenu, select, combobox and
-   * autocomplete in the app. Nothing in components/ui may carry a popup
-   * measurement of its own: the whole point is that retuning a popup here
-   * retunes all of them, and that a popup cannot quietly drift away from its
-   * neighbours.
-   *
-   * These started as a correction. Upstream's menus inherit a 128px width floor
-   * and 4px rows, which read as cramped next to a native menu. That correction
-   * overshot — 15rem wide, 32px rows and 10px of inline padding is *chunky*, and
-   * chunky is the single word for what separated this app from the Codex desktop
-   * app it is modelled on. This is the third pass: a native contextual menu,
-   * measured.
-   *
-   * The three that carry the look:
-   *
-   * - 28px rows. --text-ui at its 1.45 line height is 19.6px, so 28 is one line
-   *   of UI text plus four points above and below. 32 left a visible band of
-   *   dead space under every label; 24 was tried and put descenders against the
-   *   bottom of the highlight.
-   * - 8px inline padding, not 10. Added to the 4px of popup padding the label
-   *   lands 12px from the surface edge, which is where macOS puts it.
-   * - a 13rem floor, not 15. A floor is only ever for the small menus — the big
-   *   ones size to their content — and 240px forced a three-item menu to be as
-   *   wide as the project picker.
-   *
-   * The two radii are concentric on purpose. An item inset by --popup-padding
-   * inside a --popup-radius surface only looks like it belongs to that surface
-   * if its own radius is the outer one minus the inset: 10 - 4 = 6. This is also
-   * what makes the highlight read as an inset pill rather than a full-bleed
-   * band — the inset is real, and 6px is enough curvature to see it.
+   * All popup primitives share this geometry. The item radius stays concentric
+   * with the surface radius after accounting for the popup inset.
    */
   --popup-min-width: 13rem;
-  --popup-radius: 10px;
+  --popup-radius: 12px;
   --popup-padding: 0.25rem;
 
-  /* The ceiling a popup surface may grow to. Base UI publishes
-     --available-height on the positioner and the surface inherits it; the
-     fallback only matters for the frame before it has measured. */
+  /* Base UI publishes --available-height on the positioner after measuring. */
   --popup-max-height: var(--available-height, 100vh);
   /* A list you type into is capped tighter than a menu you only click: the
      field has to stay within reach of the trigger it dropped out of. */
   --popup-list-max-height: min(var(--popup-max-height), 22rem);
 
   --popup-item-height: 28px;
-  --popup-item-radius: 6px;
+  --popup-item-radius: 8px;
   --popup-item-padding-inline: 0.5rem;
   --popup-item-gap: 0.5rem;
   /* Row glyphs. Lucide at 16px and stroke 2 competes with the label beside it;
@@ -191,23 +145,17 @@
 }
 
 .dark.dark.dark {
-  /*
-   * Dark. The sidebar sits above the content pane, but only just: an earlier
-   * revision put eleven points of luminance between them and the two surfaces
-   * read as separate windows rather than one app. Eight points is enough to
-   * establish the order and small enough that the seam disappears.
-   */
   --surface-content: #131416;
-  --surface-recessed: #17181b;
-  --surface-chrome: #1b1c20;
+  --surface-recessed: #191a1e;
+  --surface-chrome: #232429;
 
   /*
-   * Popups and dialogs sit well clear of the chrome beneath them. The step from
-   * chrome to raised is deliberately larger than the one from content to chrome:
-   * a sidebar shares the window with what surrounds it, while a popup is
-   * temporarily on top of everything and has to read that way at a glance.
+   * Popups and dialogs are chrome, not a step above it. What separates one from
+   * the surface beneath is its edge and its shadow — the same way a window is
+   * separated from the desktop — rather than being painted a lighter colour.
+   * Kept as its own name so a theme can pull them apart again.
    */
-  --surface-raised-1: #2c2d33;
+  --surface-raised-1: var(--surface-chrome);
 
   --ink: #ededf0;
   --ink-secondary: #9a9aa4;
@@ -252,11 +200,19 @@
   --primary: var(--ink);
   --primary-foreground: var(--surface-content);
   --ring: var(--ink-tertiary);
+
+  /*
+   * Cast shadows, and the one part of the palette that does NOT follow the
+   * ladder: a shadow is absence of light, so it stays black in both themes.
+   * Deriving it from `--ink` inverts it in the dark theme and the surface gains
+   * a white halo instead of an elevation — which is exactly what happened to
+   * the environment panel. Two steps, matching how far a surface is lifted.
+   */
+  --elevation-popup: 0 1rem 2.5rem -1.125rem rgb(0 0 0 / 55%);
+  --elevation-dialog: 0 1.5rem 4rem -1.5rem rgb(0 0 0 / 65%);
 }
 
-/* Chrome surfaces sit one step above the content pane. Doubling the class
-   outranks upstream's `.dark [data-sidebar-version=...]` block, which paints
-   these same tokens pure black. */
+/* Repeated selectors outrank upstream's dark sidebar token overrides. */
 :root:root:root [data-sidebar-version="v1"],
 :root:root:root [data-sidebar-version="v2"],
 .dark.dark.dark [data-sidebar-version="v1"],
@@ -302,14 +258,6 @@
   min-height: 30px;
 }
 
-/*
- * Section labels sit at the same size as the rows beneath them, not smaller.
- * An earlier revision shrank them to caption size on the theory that a signpost
- * should recede — but in a sidebar the section name is what you navigate by, and
- * shrinking it made the whole column read as undifferentiated. Weight and colour
- * do the receding instead, which keeps the heading legible while still letting
- * the project names dominate.
- */
 :root:root:root [data-app-sidebar] [data-sidebar="group-label"],
 :root:root:root [data-app-sidebar] [data-slot="sidebar-group-label"] {
   font-size: var(--text-ui);
@@ -343,17 +291,8 @@
 /* -------------------------------------------------------- the transcript */
 
 /*
- * The transcript ends where the composer starts.
- *
- * The composer is an overlay: its own box is opaque, but the strip to either
- * side of it is not, so scrolling text used to keep painting through that gap
- * and slide behind the input. Masking the viewport cuts the content off at the
- * composer's top edge instead.
- *
- * A short fade rather than a hard cut, so a line leaving the viewport dissolves
- * instead of being sliced through the middle of its letterforms. The inset is
- * the composer's measured height, set as a variable by MessagesTimeline, so the
- * cut follows the input as it grows.
+ * The mask prevents transcript text from painting beside the overlay composer.
+ * MessagesTimeline publishes the measured composer height used by the fade.
  */
 :root:root:root .chat-timeline-viewport {
   --chat-timeline-fade: 1.5rem;
@@ -404,19 +343,7 @@
   backdrop-filter: none;
 }
 
-/*
- * Popups and dialogs are opaque, like every other surface in the ladder.
- *
- * `.dropdown-glass` in index.css paints them at ~84% over a 16px backdrop blur,
- * which dissolved --surface-raised-1 the moment it was mapped to --popover. The
- * composer's glass was neutralised when the ladder went in; this one was missed,
- * so the theme claimed nothing was transparent while every menu still was.
- *
- * `.dialog-glass` was the last one left. It mixes --background rather than
- * --popover, so a dialog was both translucent *and* on the wrong rung: the
- * content pane showing through a surface that is supposed to be two steps above
- * it. Pointing it at --popover puts dialogs on the same surface as the menus.
- */
+/* Existing glass classes must be neutralised to keep popup surfaces opaque. */
 :root:root:root .dropdown-glass,
 :root:root:root .dialog-glass {
   background: var(--popover);
@@ -474,27 +401,10 @@
   transform: scaleX(0.94);
 }
 
-/*
- * Closing is instant.
- *
- * Base UI holds a popup in the DOM until its exit transition finishes, so any
- * closing animation is time between the click and the menu being gone. Opening
- * is a reveal and worth animating; closing is a dismissal, and the only thing an
- * exit animation communicates is delay. Zeroing the duration lets Base UI
- * unmount on the same frame as the click.
- */
+/* Exit duration stays zero because Base UI delays unmount until the transition finishes. */
 :root:root:root [data-popup-surface][data-ending-style] {
   transition-duration: 0s;
 }
-
-/*
- * The right panel and the terminal drawer used to carry keyframe entrances here.
- * They no longer can: both now stay mounted and collapse instead of unmounting,
- * so a keyframe bound to a static attribute fires once — the first time the
- * element enters the tree — and never again on a toggle. The width transition in
- * PreviewPanelShell and the grid-row transition in ChatView are what animate
- * them now, and unlike a keyframe those run in both directions.
- */
 
 @keyframes vide-fade-in {
   from {
@@ -545,21 +455,8 @@
   }
 
   /*
-   * Fade the sidebar's contents across the width animation.
-   *
-   * Animating width means the text inside is laid out again on every frame: at
-   * the start there is almost no room, so labels wrap and truncate, and as space
-   * arrives they unwrap and settle. The result flickers, and reads as if the
-   * panel contained something else on the way in than it does at rest.
-   *
-   * Fading hides the reflow rather than trying to prevent it. The timings are
-   * deliberately asymmetric: on the way out the content leaves at once, before
-   * the squeeze can be seen; on the way in it waits until the width is most of
-   * the way there and only then appears, already at its final measurements.
-   *
-   * This is the case the earlier popup cross-fade was not. There, the surface
-   * did not reflow and the fade only delayed readable text. Here there is real
-   * churn to cover.
+   * The fade hides row reflow during the sidebar width transition. Its asymmetric
+   * timing removes content before collapse and restores it after layout settles.
    */
   [data-slot="sidebar"][data-state="expanded"] [data-slot="sidebar-inner"] {
     opacity: 1;
@@ -570,16 +467,39 @@
     opacity: 0;
     transition: opacity 80ms var(--ease-out);
   }
+}
 
-  /*
-   * The right panel needs no cross-fade. Its content holds its own width and is
-   * clipped by the shell (see PreviewPanelShell), so nothing inside re-wraps
-   * while the width animates. Fading it was covering a reflow that no longer
-   * happens, at the cost of delaying content behind a panel already in place.
-   *
-   * The left sidebar still needs one: its rows are sized off the panel, so they
-   * genuinely do re-lay-out as it opens.
-   */
+/*
+ * The bottom drawer rolls open and shut on its grid row rather than on a pixel
+ * height, so it never has to know how tall its terminal is.
+ *
+ * `@starting-style` is what makes *opening* animate at all. The wrapper is only
+ * mounted once the drawer is wanted, so its first paint already carried the open
+ * value and there was nothing to transition from — opening snapped, while
+ * closing, from an element that had been on the page all along, glided. Closing
+ * had already been patched around in ChatView with a grace period that keeps the
+ * element mounted; this is the same problem at the other end, and the platform
+ * answers it directly with a first-paint value to leave from.
+ *
+ * Where `@starting-style` is unsupported this degrades to what it did before:
+ * an instant open. Nothing else depends on it.
+ */
+:root:root:root [data-terminal-drawer-open] {
+  transition: grid-template-rows var(--duration-base) var(--ease-soft);
+}
+
+:root:root:root [data-terminal-drawer-open="true"] {
+  grid-template-rows: 1fr;
+}
+
+:root:root:root [data-terminal-drawer-open="false"] {
+  grid-template-rows: 0fr;
+}
+
+@starting-style {
+  :root:root:root [data-terminal-drawer-open="true"] {
+    grid-template-rows: 0fr;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -616,10 +536,6 @@
  * beside the app type, while making the explorer a raised card only amplified
  * the split. These roles keep the whole panel on one floor and make its compact
  * rhythm adjustable without reaching back into either library's shadow DOM.
- *
- * The diff surface steps retain the old visual ordering, but the percentages
- * live here now. Collapsing them all to --surface-content was tried first and
- * made additions, deletions, headers, and empty buffers indistinguishable.
  */
 :root:root:root {
   --code-font-size: 12.5px;
@@ -639,60 +555,104 @@
   --panel-raw-patch-max-height: 72vh;
 
   /*
-   * The explorer's width beside an open file, as one value because two elements
-   * need it: the wrapper that animates from zero, and the pane inside it that has
-   * to keep its measured width so the tree does not re-wrap on every frame.
-   *
-   * `cqw`, not `%`. A percentage resolves against each element's own parent, so
-   * the inner pane would have shrunk along with the collapsing wrapper — which is
-   * the reflow this structure exists to prevent. A container unit resolves against
-   * the row, which never moves, so both elements read the same number throughout.
+   * Both explorer layers use cqw because percentages would resolve against
+   * different parents and reflow the inner pane during collapse.
    */
   --file-explorer-width: max(16rem, min(22rem, 46cqw));
 
+  /*
+   * The diff's surfaces, as one ladder.
+   *
+   * Every step below is mixed from --panel-diff-code-surface, because that is
+   * the value handed to Pierre as --diffs-bg and so the floor the rows actually
+   * paint on. They used to be mixed from --surface-content, which is a
+   * different colour: in light the code sat in a grey trough inside a near-white
+   * card and the file header came out the same grey as the code beneath it, and
+   * in dark an added line landed darker than the unchanged code around it.
+   *
+   * Steps are sized by perceived distance from that floor rather than by mix
+   * percentage, which is why the two hue ladders do not share numbers. Equal
+   * percentages of --success and --destructive do not read as equal weight: red
+   * is the stronger pigment against a light base and the weaker one against a
+   * dark base, so the addition ladder holds at one set of percentages while the
+   * deletion ladder takes its own in the dark block below.
+   */
   --panel-diff-viewport-surface: color-mix(
     in srgb,
     var(--surface-content) 94%,
     var(--surface-chrome)
   );
-  --panel-diff-file-surface: color-mix(in srgb, var(--surface-chrome) 92%, var(--surface-content));
   --panel-diff-code-surface: color-mix(in srgb, var(--surface-chrome) 90%, var(--surface-content));
-  --panel-diff-context-surface: color-mix(in srgb, var(--surface-content) 97%, var(--ink));
-  --panel-diff-hover-surface: color-mix(in srgb, var(--surface-content) 94%, var(--ink));
-  --panel-diff-separator-surface: color-mix(in srgb, var(--surface-content) 95%, var(--ink));
-  --panel-diff-buffer-surface: color-mix(in srgb, var(--surface-content) 90%, var(--ink));
-  --panel-diff-header-surface: color-mix(in srgb, var(--surface-chrome) 94%, var(--ink));
-
-  --panel-diff-addition-surface: color-mix(in srgb, var(--surface-content) 92%, var(--success));
-  --panel-diff-addition-number-surface: color-mix(
+  /* Unchanged code is the file's own surface, not a band inside it. The flat
+     field is what the separator and the tinted rows get to read against. */
+  --panel-diff-context-surface: var(--panel-diff-code-surface);
+  /*
+   * Not a surface, despite the name Pierre gives it: this is blended into
+   * whatever the row already is — 3% of it in light, 9% in dark — so what it
+   * wants is a wash ink at full strength. It held a near-surface grey, which
+   * made 3% of it a no-op and left the diff with no row hover at all. The dark
+   * value is dialled back so the heavier blend still lands on --wash-hover
+   * instead of past it.
+   */
+  --panel-diff-hover-surface: var(--ink);
+  /* A file header and a hunk separator are the same thing — structure between
+     code — so they hold one tone rather than two that nearly match. */
+  --panel-diff-separator-surface: color-mix(
     in srgb,
-    var(--surface-content) 88%,
+    var(--panel-diff-code-surface) 93%,
+    var(--ink)
+  );
+  --panel-diff-header-surface: color-mix(in srgb, var(--panel-diff-code-surface) 93%, var(--ink));
+  /* A stripe in a 45° hatch, not a fill: Pierre draws the buffer as thin
+     diagonals over the code surface, and at the old weight they read as
+     texture rather than as absence. */
+  --panel-diff-buffer-surface: color-mix(in srgb, var(--panel-diff-code-surface) 96%, var(--ink));
+
+  /* The row's tint, its gutter at 1.5× that, and intra-line emphasis at 2×. */
+  --panel-diff-addition-surface: color-mix(
+    in srgb,
+    var(--panel-diff-code-surface) 88%,
     var(--success)
   );
+  --panel-diff-addition-number-surface: color-mix(
+    in srgb,
+    var(--panel-diff-code-surface) 82%,
+    var(--success)
+  );
+  /*
+   * Hovering a tinted row is the same wash as hovering anywhere else, laid over
+   * the row's own tint — so these follow their surface instead of restating its
+   * percentages. Pierre derives add/delete hover itself and reads neither of
+   * them today; they stay defined, and correct, against the day it does.
+   */
   --panel-diff-addition-hover-surface: color-mix(
     in srgb,
-    var(--surface-content) 85%,
-    var(--success)
+    var(--panel-diff-addition-surface) 96%,
+    var(--ink)
   );
   --panel-diff-addition-emphasis-surface: color-mix(
     in srgb,
-    var(--surface-content) 80%,
+    var(--panel-diff-code-surface) 76%,
     var(--success)
   );
-  --panel-diff-deletion-surface: color-mix(in srgb, var(--surface-content) 92%, var(--destructive));
+  --panel-diff-deletion-surface: color-mix(
+    in srgb,
+    var(--panel-diff-code-surface) 90%,
+    var(--destructive)
+  );
   --panel-diff-deletion-number-surface: color-mix(
     in srgb,
-    var(--surface-content) 88%,
+    var(--panel-diff-code-surface) 85%,
     var(--destructive)
   );
   --panel-diff-deletion-hover-surface: color-mix(
     in srgb,
-    var(--surface-content) 85%,
-    var(--destructive)
+    var(--panel-diff-deletion-surface) 96%,
+    var(--ink)
   );
   --panel-diff-deletion-emphasis-surface: color-mix(
     in srgb,
-    var(--surface-content) 80%,
+    var(--panel-diff-code-surface) 80%,
     var(--destructive)
   );
 
@@ -707,6 +667,32 @@
   --panel-loading-divider: var(--edge);
 }
 
+/*
+ * The two places in the diff where one value cannot serve both themes. Red gains
+ * weight against a dark base where the app's ink loses it, so matching the
+ * deletion ladder to the addition ladder takes a heavier mix here than in light;
+ * and Pierre's hover blend is three times stronger in dark, so the wash it
+ * blends has to be correspondingly weaker to arrive in the same place.
+ */
+.dark.dark.dark {
+  --panel-diff-hover-surface: color-mix(in srgb, var(--ink) 65%, var(--panel-diff-code-surface));
+  --panel-diff-deletion-surface: color-mix(
+    in srgb,
+    var(--panel-diff-code-surface) 86%,
+    var(--destructive)
+  );
+  --panel-diff-deletion-number-surface: color-mix(
+    in srgb,
+    var(--panel-diff-code-surface) 79%,
+    var(--destructive)
+  );
+  --panel-diff-deletion-emphasis-surface: color-mix(
+    in srgb,
+    var(--panel-diff-code-surface) 72%,
+    var(--destructive)
+  );
+}
+
 /* ------------------------------------- chat shell and picker proportions */
 
 :root:root:root {
@@ -719,9 +705,15 @@
   --header-control-size: 1.75rem;
   --header-control-icon-size: 0.875rem;
   --header-control-gap: 0.25rem;
+
+  /*
+   * The reserve bridges window-edge and header-padding coordinates so both
+   * control groups keep one continuous gap.
+   */
+  --header-inline-end-padding: 0.75rem;
   --header-panel-controls-reserve: calc(
-    var(--header-control-size) + var(--header-control-size) + var(--header-control-gap) +
-      var(--header-control-gap)
+    var(--workspace-controls-right) - var(--header-inline-end-padding) + 2 *
+      var(--header-control-size) + var(--header-control-gap) + var(--header-control-gap)
   );
 
   /*
@@ -729,26 +721,51 @@
    * surface sits inside that width. Clipping a fixed inner surface through the
    * animated shell preserves the closing motion without leaving a margin behind.
    */
-  --envcol-width: 18rem;
+  /* Clears the titlebar the panel hangs from. */
   --envcol-inset: 0.5rem;
-  --envcol-radius: var(--radius);
-  --envcol-header-height: 2.25rem;
-  --envcol-surface: var(--surface-chrome);
-
   /*
-   * Chat pickers share a compact footprint and icon rhythm. The ref picker gets
-   * a little extra width for remote names, while list height remains bounded so
-   * search and footer controls never leave the viewport.
+   * The gap to the window edge, matched to the gap the eye sees above the
+   * panel rather than to the inset above it. Those are not the same number: the
+   * titlebar keeps half its own height below the buttons, and that leftover
+   * reads as part of the top gap. Derived from the two measurements it depends
+   * on, so it stays matched if either changes.
    */
+  --envcol-inset-end: calc(
+    (var(--workspace-topbar-height) - var(--header-control-size)) / 2 + var(--envcol-inset)
+  );
+  /*
+   * Tighter on the side facing the chat. That edge is not a frame — nothing
+   * sits beyond it except the column the panel floats over — and matching it to
+   * the outer gap left a channel of dead space between panel and conversation.
+   */
+  --envcol-inset-start: 0.25rem;
+  --envcol-radius: 0.875rem;
+
   --chat-picker-width: 18rem;
   --chat-ref-picker-width: 20rem;
   --chat-picker-list-max-height: 16rem;
   --chat-ref-list-max-height: 14rem;
+  /*
+   * A floor as well as a ceiling. A branch picker is a place you search in, so
+   * it has to hold its shape while you type: without a floor it collapsed to the
+   * height of whatever the query happened to match, which meant the popup
+   * resized under the cursor on every keystroke and a repository with one branch
+   * opened a menu the size of a tooltip.
+   */
+  --chat-ref-list-min-height: 11rem;
   --chat-picker-icon-size: 0.875rem;
 
   /* The empty-chat question is display copy, not a fifth general UI text role. */
   --chat-hero-title-size: 1.5rem;
   --chat-hero-title-size-wide: 1.875rem;
+}
+
+/* The header switches to its wider inline padding at Tailwind's `sm`, and the
+   reserve above has to follow it or the run of controls breaks apart again. */
+@media (min-width: 40rem) {
+  :root:root:root {
+    --header-inline-end-padding: 1.25rem;
+  }
 }
 
 /* -------------------------------- environment column floating separation */
@@ -760,19 +777,16 @@
    * was rejected because this long-lived tool surface must stay fully opaque.
    */
   --envcol-edge: var(--edge);
-  --envcol-shadow: 0 1rem 2.5rem -1.125rem color-mix(in srgb, var(--ink) 55%, transparent);
-  --envcol-hidden-translate: calc(100% + var(--envcol-inset));
+  --envcol-surface: var(--surface-raised-1);
+  --envcol-shadow: var(--elevation-popup);
+
+  --envcol-enter-offset: 1.5rem;
+  --envcol-enter-scale: 0.97;
 }
 
-/* ----------------------------------------------- review surface proportions */
+/* --------------------------------------------------- review surface tokens */
 
 :root:root:root {
-  /*
-   * Review is a panel surface now, so its two chrome rows borrow the panel
-   * rhythm while file rows and icon controls stay aligned with popup lists.
-   * Menu widths remain named because both long refs and paths need a stable
-   * reading measure without leaking one-off geometry into the component.
-   */
   --review-toolbar-height: var(--panel-subheader-height);
   --review-control-size: var(--header-control-size);
   --review-icon-size: var(--popup-icon-size);
@@ -780,22 +794,28 @@
   --review-range-menu-width: 18rem;
   --review-jump-menu-width: 18rem;
   --review-options-menu-width: 16rem;
+  --review-git-menu-width: 14rem;
+  --review-tree-width: 16.5rem;
+  /* Prose stops at a readable measure even when the panel is dragged wide. */
+  --review-prose-width: 62ch;
   --review-loading-title-width: 8rem;
   --review-loading-stat-width: 5rem;
   --review-loading-line-height: 0.75rem;
+
+  /*
+   * The change-kind glyph on a file row. Quieter than the directory names above
+   * it, because it is the last thing on the row you need and the first thing you
+   * stop seeing once you know the shape of the review. Its slot is reserved on
+   * every row, glyph or not, so the glyphs line up in a column instead of
+   * tracking the ragged right edge of the counts.
+   */
+  --review-kind-ink: var(--ink-tertiary);
+  --review-kind-width: 0.75rem;
 }
 
 /* -------------------------------- composer column resilience */
 
-/*
- * The draft hero and context strip used to size themselves from the window, so
- * opening either side panel left their wide layouts painted into a narrow chat
- * column. Viewport breakpoints were tried first and failed whenever the window
- * stayed wide; these roles instead support the container-query ladder at the
- * composer's real width. The strip keeps its established inset as a named
- * offset, while the final ref dissolves at the clipped edge instead of gaining
- * an ellipsis or painting through the chips before it.
- */
+/* Side panels can narrow the composer without changing the viewport width. */
 :root:root:root {
   --composer-context-strip-width-offset: 2.75rem;
   --composer-context-strip-edge-fade: 1rem;
@@ -817,16 +837,8 @@
   );
 }
 
-/* -------------------------------- three-way workspace resilience */
+/* --------------------------------------- empty right panel cards */
 
 :root:root:root {
-  /*
-   * The inline workspace can never trade either primary surface below one
-   * compact reading measure. Environment width is a separate reservation:
-   * while it overlays chat, resizing consumes that reservation before chat's
-   * own minimum. Arithmetic-only dimensions stay as named TypeScript constants
-   * because pointer coordinates cannot consume CSS lengths directly.
-   */
-  --layout-chat-min-width: 20rem;
-  --layout-right-panel-min-width: 20rem;
+  --right-panel-card-hover: color-mix(in srgb, var(--card) 92%, var(--ink));
 }

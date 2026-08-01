@@ -1,4 +1,3 @@
-import { useAtomValue } from "@effect/atom-react";
 import { type ScopedThreadRef } from "@vide/contracts";
 import {
   isAtomCommandInterrupted,
@@ -50,7 +49,6 @@ import {
 } from "./GitActionsControl.logic";
 import { AnimatedHeight } from "./AnimatedHeight";
 import { Button } from "~/components/ui/button";
-import { Checkbox } from "~/components/ui/checkbox";
 import {
   Dialog,
   DialogDescription,
@@ -61,11 +59,8 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
-import { ScrollArea } from "~/components/ui/scroll-area";
-import { Textarea } from "~/components/ui/textarea";
 import { stackedThreadToast, toastManager, type ThreadToastData } from "~/components/ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
-import { useOpenInPreferredEditor } from "~/editorPreferences";
 import {
   useGitStackedAction,
   useSourceControlActionRunning,
@@ -76,13 +71,11 @@ import {
 import type { SourceControlActionScope } from "~/state/sourceControlActions";
 import { useThread } from "~/state/entities";
 import { useEnvironmentQuery } from "~/state/query";
-import { serverEnvironment } from "~/state/server";
 import { sourceControlEnvironment } from "~/state/sourceControl";
 import { threadEnvironment } from "~/state/threads";
 import { useAtomCommand } from "~/state/use-atom-command";
 import { vcsEnvironment } from "~/state/vcs";
 import { randomUUID } from "~/lib/utils";
-import { resolvePathLinkTarget } from "~/terminal-links";
 import { type DraftId, useComposerDraftStore } from "~/composerDraftStore";
 import { readLocalApi } from "~/localApi";
 import { getSourceControlPresentation } from "~/sourceControlPresentation";
@@ -323,10 +316,6 @@ function getMenuActionDisabledReason({
   }
   return `Create ${terminology.singular} is currently unavailable.`;
 }
-
-const COMMIT_DIALOG_TITLE = "Commit changes";
-const COMMIT_DIALOG_DESCRIPTION =
-  "Review and confirm your commit. Leave the message blank to auto-generate one.";
 
 export function GitActionItemIcon({
   icon,
@@ -1017,11 +1006,6 @@ export function useGitActions({
     "thread branch metadata update",
   );
   const activeEnvironmentId = activeThreadRef?.environmentId ?? null;
-  const serverConfig = useAtomValue(serverEnvironment.configValueAtom(activeEnvironmentId));
-  const openInPreferredEditor = useOpenInPreferredEditor(
-    activeEnvironmentId,
-    serverConfig?.availableEditors ?? [],
-  );
   const threadToastData = useMemo(
     () => (activeThreadRef ? { threadRef: activeThreadRef } : undefined),
     [activeThreadRef],
@@ -1037,10 +1021,6 @@ export function useGitActions({
     waitForShell: activeDraftThread !== null,
   });
   const setDraftThreadContext = useComposerDraftStore((store) => store.setDraftThreadContext);
-  const [isCommitDialogOpen, setIsCommitDialogOpen] = useState(false);
-  const [dialogCommitMessage, setDialogCommitMessage] = useState("");
-  const [excludedFiles, setExcludedFiles] = useState<ReadonlySet<string>>(new Set());
-  const [isEditingFiles, setIsEditingFiles] = useState(false);
   const [isPublishDialogOpen, setIsPublishDialogOpen] = useState(false);
   const [pendingDefaultBranchAction, setPendingDefaultBranchAction] =
     useState<PendingDefaultBranchAction | null>(null);
@@ -1141,9 +1121,6 @@ export function useGitActions({
   const gitStatusForActions = gitStatus;
 
   const allFiles = gitStatusForActions?.workingTree.files ?? [];
-  const selectedFiles = allFiles.filter((f) => !excludedFiles.has(f.path));
-  const allSelected = excludedFiles.size === 0;
-  const noneSelected = selectedFiles.length === 0;
 
   const { isInitPending, initRepository } = useGitRepositoryInit(
     sourceControlScope,
@@ -1552,24 +1529,6 @@ export function useGitActions({
     });
   };
 
-  const runDialogActionOnNewBranch = () => {
-    if (!isCommitDialogOpen) return;
-    const commitMessage = dialogCommitMessage.trim();
-
-    setIsCommitDialogOpen(false);
-    setDialogCommitMessage("");
-    setExcludedFiles(new Set());
-    setIsEditingFiles(false);
-
-    void runGitActionWithToast({
-      action: "commit",
-      ...(commitMessage ? { commitMessage } : {}),
-      ...(!allSelected ? { filePaths: selectedFiles.map((f) => f.path) } : {}),
-      featureBranch: true,
-      skipDefaultBranchPrompt: true,
-    });
-  };
-
   const runQuickAction = () => {
     if (quickAction.kind === "open_pr") {
       void openExistingPr();
@@ -1633,12 +1592,6 @@ export function useGitActions({
     }
   };
 
-  const openCommitDialog = () => {
-    setExcludedFiles(new Set());
-    setIsEditingFiles(false);
-    setIsCommitDialogOpen(true);
-  };
-
   const openDialogForMenuItem = (item: GitActionMenuItem) => {
     if (item.disabled) return;
     if (item.kind === "open_pr") {
@@ -1653,225 +1606,21 @@ export function useGitActions({
       void runGitActionWithToast({ action: "create_pr" });
       return;
     }
-    openCommitDialog();
+    /*
+     * Commit runs straight through, like every other action here. It used to
+     * raise a dialog for a message and a file selection, but review moved into
+     * the right panel, and a dialog is the one shape that surface cannot share
+     * a screen with — you cannot read a diff behind a modal covering it. The
+     * server generates the message when none is given.
+     */
+    void runGitActionWithToast({ action: "commit" });
   };
-
-  const runDialogAction = () => {
-    if (!isCommitDialogOpen) return;
-    const commitMessage = dialogCommitMessage.trim();
-    setIsCommitDialogOpen(false);
-    setDialogCommitMessage("");
-    setExcludedFiles(new Set());
-    setIsEditingFiles(false);
-    void runGitActionWithToast({
-      action: "commit",
-      ...(commitMessage ? { commitMessage } : {}),
-      ...(!allSelected ? { filePaths: selectedFiles.map((f) => f.path) } : {}),
-    });
-  };
-
-  const openChangedFileInEditor = useCallback(
-    (filePath: string) => {
-      if (!gitCwd) {
-        toastManager.add({
-          type: "error",
-          title: "Editor opening is unavailable.",
-          data: threadToastData,
-        });
-        return;
-      }
-      const target = resolvePathLinkTarget(filePath, gitCwd);
-      void (async () => {
-        const result = await openInPreferredEditor(target);
-        if (result._tag === "Success" || isAtomCommandInterrupted(result)) {
-          return;
-        }
-        const error = squashAtomCommandFailure(result);
-        toastManager.add(
-          stackedThreadToast({
-            type: "error",
-            title: "Unable to open file",
-            description: error instanceof Error ? error.message : "An error occurred.",
-            ...(threadToastData !== undefined ? { data: threadToastData } : {}),
-          }),
-        );
-      })();
-    },
-    [gitCwd, openInPreferredEditor, threadToastData],
-  );
 
   const canPublishRepository = isRepo && gitStatusForActions !== null && !hasPrimaryRemote;
 
   const dialogs =
     gitCwd === null ? null : (
       <>
-        <Dialog
-          open={isCommitDialogOpen}
-          onOpenChange={(open) => {
-            if (!open) {
-              setIsCommitDialogOpen(false);
-              setDialogCommitMessage("");
-              setExcludedFiles(new Set());
-              setIsEditingFiles(false);
-            }
-          }}
-        >
-          <DialogPopup>
-            <DialogHeader>
-              <DialogTitle>{COMMIT_DIALOG_TITLE}</DialogTitle>
-              <DialogDescription>{COMMIT_DIALOG_DESCRIPTION}</DialogDescription>
-            </DialogHeader>
-            <DialogPanel className="space-y-4">
-              <div className="space-y-3 rounded-xl bg-card p-3 text-(length:--text-ui) ring-1 ring-border">
-                <div className="grid grid-cols-[auto_1fr] items-center gap-x-2 gap-y-1">
-                  <span className="text-muted-foreground">Branch</span>
-                  <span className="flex items-center justify-between gap-2">
-                    <span className="font-medium">
-                      {gitStatusForActions?.refName ?? "(detached HEAD)"}
-                    </span>
-                    {isDefaultRef && (
-                      <span className="text-right text-warning">Warning: default refName</span>
-                    )}
-                  </span>
-                </div>
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      {isEditingFiles && allFiles.length > 0 && (
-                        <Checkbox
-                          checked={allSelected}
-                          indeterminate={!allSelected && !noneSelected}
-                          onCheckedChange={() => {
-                            setExcludedFiles(
-                              allSelected ? new Set(allFiles.map((f) => f.path)) : new Set(),
-                            );
-                          }}
-                        />
-                      )}
-                      <span className="text-muted-foreground">Files</span>
-                      {!allSelected && !isEditingFiles && (
-                        <span className="text-muted-foreground">
-                          ({selectedFiles.length} of {allFiles.length})
-                        </span>
-                      )}
-                    </div>
-                    {allFiles.length > 0 && (
-                      <Button
-                        variant="ghost"
-                        size="xs"
-                        onClick={() => setIsEditingFiles((prev) => !prev)}
-                      >
-                        {isEditingFiles ? "Done" : "Edit"}
-                      </Button>
-                    )}
-                  </div>
-                  {!gitStatusForActions || allFiles.length === 0 ? (
-                    <p className="font-medium">none</p>
-                  ) : (
-                    <div className="space-y-2">
-                      <ScrollArea className="h-44 rounded-lg bg-card ring-1 ring-black/5 dark:bg-white/[0.025] dark:ring-white/5">
-                        <div className="space-y-1 p-1">
-                          {allFiles.map((file) => {
-                            const isExcluded = excludedFiles.has(file.path);
-                            return (
-                              <div
-                                key={file.path}
-                                className="flex w-full items-center gap-2 rounded-md px-2 py-1 font-mono hover:bg-accent/50"
-                              >
-                                {isEditingFiles && (
-                                  <Checkbox
-                                    checked={!excludedFiles.has(file.path)}
-                                    onCheckedChange={() => {
-                                      setExcludedFiles((prev) => {
-                                        const next = new Set(prev);
-                                        if (next.has(file.path)) {
-                                          next.delete(file.path);
-                                        } else {
-                                          next.add(file.path);
-                                        }
-                                        return next;
-                                      });
-                                    }}
-                                  />
-                                )}
-                                <button
-                                  type="button"
-                                  className="flex flex-1 items-center justify-between gap-3 text-left truncate"
-                                  onClick={() => openChangedFileInEditor(file.path)}
-                                >
-                                  <span
-                                    className={`truncate${isExcluded ? " text-muted-foreground" : ""}`}
-                                  >
-                                    {file.path}
-                                  </span>
-                                  <span className="shrink-0">
-                                    {isExcluded ? (
-                                      <span className="text-muted-foreground">Excluded</span>
-                                    ) : (
-                                      <>
-                                        <span className="text-success">+{file.insertions}</span>
-                                        <span className="text-muted-foreground"> / </span>
-                                        <span className="text-destructive">-{file.deletions}</span>
-                                      </>
-                                    )}
-                                  </span>
-                                </button>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </ScrollArea>
-                      <div className="flex justify-end font-mono">
-                        <span className="text-success">
-                          +{selectedFiles.reduce((sum, f) => sum + f.insertions, 0)}
-                        </span>
-                        <span className="text-muted-foreground"> / </span>
-                        <span className="text-destructive">
-                          -{selectedFiles.reduce((sum, f) => sum + f.deletions, 0)}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-              <div className="space-y-1">
-                <p className="text-(length:--text-ui) font-medium">Commit message (optional)</p>
-                <Textarea
-                  value={dialogCommitMessage}
-                  onChange={(event) => setDialogCommitMessage(event.target.value)}
-                  placeholder="Leave empty to auto-generate"
-                  size="sm"
-                />
-              </div>
-            </DialogPanel>
-            <DialogFooter variant="bare">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setIsCommitDialogOpen(false);
-                  setDialogCommitMessage("");
-                  setExcludedFiles(new Set());
-                  setIsEditingFiles(false);
-                }}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={noneSelected}
-                onClick={runDialogActionOnNewBranch}
-              >
-                Commit on new refName
-              </Button>
-              <Button size="sm" disabled={noneSelected} onClick={runDialogAction}>
-                Commit
-              </Button>
-            </DialogFooter>
-          </DialogPopup>
-        </Dialog>
-
         <PublishRepositoryDialog
           open={isPublishDialogOpen}
           onOpenChange={setIsPublishDialogOpen}
@@ -1944,7 +1693,6 @@ export function useGitActions({
         hasPrimaryRemote,
       }),
     menuItems: gitActionMenuItems,
-    openCommitDialog,
     openPublishDialog: () => {
       setIsPublishDialogOpen(true);
     },

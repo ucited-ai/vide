@@ -1,5 +1,7 @@
 import { useAtomValue } from "@effect/atom-react";
+import type { FileDiffMetadata } from "@pierre/diffs/types";
 import { useParams } from "@tanstack/react-router";
+import { scopeThreadRef } from "@vide/client-runtime/environment";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
@@ -16,6 +18,7 @@ import {
   Columns2Icon,
   CopyIcon,
   EllipsisIcon,
+  FolderTreeIcon,
   ListTreeIcon,
   PilcrowIcon,
   RefreshCwIcon,
@@ -24,11 +27,15 @@ import {
 } from "lucide-react";
 import { type ReactElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useOpenInPreferredEditor } from "../editorPreferences";
-import { type DraftId } from "../composerDraftStore";
+import { type DraftId, useComposerDraftStore } from "../composerDraftStore";
 import { openDiffFilePrimaryAction } from "../diffFileActions";
 import { useCheckpointDiff } from "~/lib/checkpointDiffState";
 import { cn } from "~/lib/utils";
-import { selectThreadDiffPanelSelection, useDiffPanelStore } from "../diffPanelStore";
+import {
+  type DiffPanelSelection,
+  selectThreadDiffPanelSelection,
+  useDiffPanelStore,
+} from "../diffPanelStore";
 import { useTheme } from "../hooks/useTheme";
 import {
   buildFileDiffRenderKey,
@@ -45,6 +52,7 @@ import { resolveThreadRouteRef } from "../threadRoutes";
 import { useClientSettings, useUpdateClientSettings } from "../hooks/useSettings";
 import { formatShortTimestamp } from "../timestampFormat";
 import { DiffStatLabel } from "./chat/DiffStatLabel";
+import { GitActionItemIcon, GitQuickActionIcon, useGitActions } from "./GitActionsControl";
 import { AnnotatableCodeView, type AnnotatableCodeViewHandle } from "./diffs/AnnotatableCodeView";
 import { Button } from "./ui/button";
 import {
@@ -68,6 +76,7 @@ import {
   DropdownMenuTrigger,
 } from "./ui/menu";
 import { PopupSearchField } from "./ui/popup-search-field";
+import { ScrollSurface } from "./ui/scroll-surface";
 import { Skeleton } from "./ui/skeleton";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 import { useEnvironmentQuery } from "../state/query";
@@ -78,10 +87,17 @@ import { buildBaseRefChoices, filterBaseRefChoices } from "../lib/baseRefChoices
 import { resolveStorage } from "../lib/storage";
 import {
   buildGitApplyCommand,
+  persistReviewFilesPaneOpen,
+  persistReviewRichPreview,
   persistReviewViewMode,
+  readReviewFilesPaneOpen,
+  readReviewRichPreview,
   readReviewViewMode,
   type ReviewViewMode,
 } from "./reviewSurface";
+import { ReviewFileTree, type ReviewFileChangeKind } from "./diffs/ReviewFileTree";
+import { ReviewRichPreview } from "./diffs/ReviewRichPreview";
+import { resolveRichPreviewKind } from "~/lib/reviewRichPreview";
 
 type DiffThemeType = "light" | "dark";
 
@@ -91,6 +107,10 @@ interface CollapsedDiffFilesState {
 }
 
 const EMPTY_COLLAPSED_DIFF_FILE_KEYS: ReadonlySet<string> = new Set();
+
+/** Module constants so falling back off a turn scope keeps a stable identity. */
+const WORKING_TREE_SELECTION: DiffPanelSelection = { kind: "unstaged" };
+const BRANCH_SELECTION: DiffPanelSelection = { kind: "branch", baseRef: null };
 
 const DIFF_PANEL_UNSAFE_CSS = `
 [data-diffs-header],
@@ -197,6 +217,42 @@ const DIFF_PANEL_UNSAFE_CSS = `
 }
 `;
 
+/**
+ * The review diff's scroller.
+ *
+ * `AnnotatableCodeView` owns the scroll container itself now, so this only says
+ * how big it is. Scroll policy lives in the primitive.
+ */
+const REVIEW_DIFF_SURFACE_CLASS = "h-full";
+
+/** Pierre names five outcomes; the tree badges four, since a pure rename and a
+ *  rename-with-edits are the same news to someone scanning the list. */
+function resolveReviewFileChangeKind(type: FileDiffMetadata["type"]): ReviewFileChangeKind {
+  switch (type) {
+    case "new":
+      return "added";
+    case "deleted":
+      return "deleted";
+    case "rename-pure":
+    case "rename-changed":
+      return "renamed";
+    default:
+      return "changed";
+  }
+}
+
+/*
+ * Every icon-sized trigger in the review toolbar.
+ *
+ * The open state is the load-bearing part, not the hover: with four popups on
+ * one row and none of them marking their own trigger, an open menu floats free
+ * of whatever produced it and you have to guess which button you pressed.
+ * `data-popup-open` is what Base UI puts on the trigger, so the button stays lit
+ * for as long as its menu is up.
+ */
+const REVIEW_TRIGGER_CLASS =
+  "inline-flex size-(--review-control-size) shrink-0 items-center justify-center rounded-(--popup-item-radius) text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-popup-open:bg-accent data-popup-open:text-accent-foreground disabled:pointer-events-none disabled:opacity-64";
+
 function ReviewToolbarTooltip(props: { label: string; trigger: ReactElement }) {
   return (
     <Tooltip>
@@ -256,11 +312,19 @@ export default function DiffPanel({
   const [diffRenderMode, setDiffRenderMode] = useState<ReviewViewMode>(() =>
     readReviewViewMode(preferenceStorage),
   );
+  const [filesPaneOpen, setFilesPaneOpen] = useState(() =>
+    readReviewFilesPaneOpen(preferenceStorage),
+  );
+  const [richPreview, setRichPreview] = useState(() => readReviewRichPreview(preferenceStorage));
   const [wordDiffs, setWordDiffs] = useState(false);
   const [dontLoadFullFiles, setDontLoadFullFiles] = useState(true);
   const [baseRefQuery, setBaseRefQuery] = useState("");
   const [fileQuery, setFileQuery] = useState("");
   const [jumpTargetFileKey, setJumpTargetFileKey] = useState<string | null>(null);
+  const [activeTreeFileKey, setActiveTreeFileKey] = useState<string | null>(null);
+  // Keyed by file rather than a bare boolean, so "show the diff instead" applies
+  // to the file it was clicked on and does not follow you to the next one.
+  const [dismissedPreviewFileKey, setDismissedPreviewFileKey] = useState<string | null>(null);
   const [refreshVersion, setRefreshVersion] = useState(0);
   const [collapsedDiffFiles, setCollapsedDiffFiles] = useState<CollapsedDiffFilesState>(() => ({
     scopeKey: null,
@@ -272,41 +336,69 @@ export default function DiffPanel({
     persistReviewViewMode(preferenceStorage, diffRenderMode);
   }, [diffRenderMode, preferenceStorage]);
 
+  useEffect(() => {
+    persistReviewFilesPaneOpen(preferenceStorage, filesPaneOpen);
+  }, [filesPaneOpen, preferenceStorage]);
+
+  useEffect(() => {
+    persistReviewRichPreview(preferenceStorage, richPreview);
+  }, [preferenceStorage, richPreview]);
+
   const routeThreadRef = useParams({
     strict: false,
     select: (params) => resolveThreadRouteRef(params),
   });
-  const activeThreadId = routeThreadRef?.threadId ?? null;
-  const activeThread = useThread(routeThreadRef);
-  const activeProjectId = activeThread?.projectId ?? null;
+  const draftId = typeof composerDraftTarget === "string" ? composerDraftTarget : null;
+  const draftSession = useComposerDraftStore((store) => store.getDraftThread(composerDraftTarget));
+  /*
+   * A working-tree or branch diff needs a repo and a cwd; only turn scopes need a
+   * thread. The draft route carries no thread ref in its URL, but its session
+   * already holds the environment and the thread id the thread will be created
+   * with — so review works before the first send, and the scope picked while
+   * drafting survives promotion.
+   */
+  const diffThreadRef = useMemo(
+    () =>
+      routeThreadRef ??
+      (draftSession ? scopeThreadRef(draftSession.environmentId, draftSession.threadId) : null),
+    [draftSession, routeThreadRef],
+  );
+  const diffEnvironmentId = diffThreadRef?.environmentId ?? null;
+  const activeThreadId = diffThreadRef?.threadId ?? null;
+  // `waitForShell` while a draft session exists: a client-reserved thread id has
+  // no detail endpoint to poll until the first send creates it.
+  const activeThread = useThread(diffThreadRef, { waitForShell: draftSession !== null });
+  const activeProjectId = activeThread?.projectId ?? draftSession?.projectId ?? null;
   const activeProject = useProject(
-    activeThread && activeProjectId
+    diffEnvironmentId && activeProjectId
       ? {
-          environmentId: activeThread.environmentId,
+          environmentId: diffEnvironmentId,
           projectId: activeProjectId,
         }
       : null,
   );
-  const activeCwd = activeThread?.worktreePath ?? activeProject?.workspaceRoot;
-  const serverConfig = useAtomValue(
-    serverEnvironment.configValueAtom(activeThread?.environmentId ?? null),
-  );
+  // Once the thread exists it is the authority on its own worktree; before that
+  // the draft session is, since its target can still change.
+  const activeCwd =
+    (activeThread ? activeThread.worktreePath : (draftSession?.worktreePath ?? null)) ??
+    activeProject?.workspaceRoot;
+  const serverConfig = useAtomValue(serverEnvironment.configValueAtom(diffEnvironmentId));
   const openInPreferredEditor = useOpenInPreferredEditor(
-    activeThread?.environmentId ?? null,
+    diffEnvironmentId,
     serverConfig?.availableEditors ?? [],
   );
   const gitStatusQuery = useEnvironmentQuery(
-    activeThread !== null && activeThread !== undefined && activeCwd != null
+    diffEnvironmentId && activeCwd != null
       ? vcsEnvironment.status({
-          environmentId: activeThread.environmentId,
+          environmentId: diffEnvironmentId,
           input: { cwd: activeCwd },
         })
       : null,
   );
-  const diffSelection = useDiffPanelStore((state) =>
+  const storedDiffSelection = useDiffPanelStore((state) =>
     selectThreadDiffPanelSelection(
       state.byThreadKey,
-      routeThreadRef,
+      diffThreadRef,
       initialGitScope === "unstaged",
     ),
   );
@@ -328,13 +420,31 @@ export default function DiffPanel({
     [inferredCheckpointTurnCountByTurnId, turnDiffSummaries],
   );
 
+  /*
+   * Turn scopes need a thread; a working tree and a branch range need only a repo.
+   *
+   * A thread route means one exists even while its detail is still in flight, so
+   * that case keeps its stored turn scope rather than flashing a branch diff on
+   * the way to the turn diff. A draft holds only the thread id it reserved, and
+   * the selection is keyed by that id so it survives promotion — which means a
+   * stored turn scope can outlive the thread it was picked in. Fall back to a git
+   * scope there instead of rendering a panel with nothing in it.
+   */
+  const canReviewTurns = activeThread !== null || (routeThreadRef !== null && !draftSession);
+  const diffSelection =
+    canReviewTurns || storedDiffSelection.kind !== "turn"
+      ? storedDiffSelection
+      : initialGitScope === "unstaged"
+        ? WORKING_TREE_SELECTION
+        : BRANCH_SELECTION;
+
   useEffect(() => {
-    if (!routeThreadRef || diffSelection.kind !== "turn") return;
+    if (!diffThreadRef || diffSelection.kind !== "turn") return;
     useDiffPanelStore.getState().reconcileTurnSelection(
-      routeThreadRef,
+      diffThreadRef,
       orderedTurnDiffSummaries.map((summary) => summary.turnId),
     );
-  }, [diffSelection, orderedTurnDiffSummaries, routeThreadRef]);
+  }, [diffSelection, diffThreadRef, orderedTurnDiffSummaries]);
 
   const selectedTurnId = diffSelection.kind === "turn" ? diffSelection.turnId : null;
   const selectedGitScope = diffSelection.kind === "unstaged" ? "unstaged" : "branch";
@@ -360,8 +470,8 @@ export default function DiffPanel({
         ? "Latest turn"
         : `Turn ${selectedCheckpointTurnCount ?? "?"}`;
   const reviewSectionId = selectedTurn ? `turn:${selectedTurn.turnId}` : selectedGitScope;
-  const collapseScopeKey = routeThreadRef
-    ? `${routeThreadRef.environmentId}:${routeThreadRef.threadId}:${reviewSectionId}`
+  const collapseScopeKey = diffThreadRef
+    ? `${diffThreadRef.environmentId}:${diffThreadRef.threadId}:${reviewSectionId}`
     : null;
   const collapsedDiffFileKeys =
     collapsedDiffFiles.scopeKey === collapseScopeKey
@@ -394,9 +504,9 @@ export default function DiffPanel({
     { enabled: isGitRepo && selectedTurn !== undefined },
   );
   const primaryBranchDiffPreview = useEnvironmentQuery(
-    selectedTurnId === null && activeThread && activeCwd
+    selectedTurnId === null && diffEnvironmentId && activeCwd
       ? reviewEnvironment.diffPreview({
-          environmentId: activeThread.environmentId,
+          environmentId: diffEnvironmentId,
           input: {
             cwd: activeCwd,
             ...(selectedBaseRef ? { baseRef: selectedBaseRef } : {}),
@@ -411,9 +521,9 @@ export default function DiffPanel({
     serverConfig?.cwd !== undefined &&
     serverConfig.cwd !== activeCwd;
   const fallbackBranchDiffPreview = useEnvironmentQuery(
-    shouldRetryBranchDiffAtEnvironmentCwd && activeThread && serverConfig
+    shouldRetryBranchDiffAtEnvironmentCwd && diffEnvironmentId && serverConfig
       ? reviewEnvironment.diffPreview({
-          environmentId: activeThread.environmentId,
+          environmentId: diffEnvironmentId,
           input: {
             cwd: serverConfig.cwd,
             ...(selectedBaseRef ? { baseRef: selectedBaseRef } : {}),
@@ -431,10 +541,10 @@ export default function DiffPanel({
   const localBranchRefs = useEnvironmentQuery(
     selectedTurnId === null &&
       selectedGitScope === "branch" &&
-      activeThread &&
+      diffEnvironmentId &&
       branchDiffPreview.data?.cwd
       ? vcsEnvironment.listRefs({
-          environmentId: activeThread.environmentId,
+          environmentId: diffEnvironmentId,
           input: {
             cwd: branchDiffPreview.data.cwd,
             includeMatchingRemoteRefs: true,
@@ -447,10 +557,10 @@ export default function DiffPanel({
   const remoteBranchRefs = useEnvironmentQuery(
     selectedTurnId === null &&
       selectedGitScope === "branch" &&
-      activeThread &&
+      diffEnvironmentId &&
       branchDiffPreview.data?.cwd
       ? vcsEnvironment.listRefs({
-          environmentId: activeThread.environmentId,
+          environmentId: diffEnvironmentId,
           input: {
             cwd: branchDiffPreview.data.cwd,
             includeMatchingRemoteRefs: true,
@@ -497,20 +607,63 @@ export default function DiffPanel({
       }),
     );
   }, [renderablePatch]);
+  /*
+   * The file list, with no collapse state in it. Threading the collapsed flag
+   * through here gave this array a new identity on every toggle, which rippled
+   * into the tree, the jump list and every CodeView item. Which diffs are open
+   * is passed alongside instead, so a toggle changes only that.
+   */
   const codeViewFiles = useMemo(
     () =>
-      renderableFiles.map((fileDiff) => {
-        const fileKey = buildFileDiffRenderKey(fileDiff);
-        return {
-          fileDiff,
-          filePath: resolveFileDiffPath(fileDiff),
-          fileKey,
-          collapsed: collapsedDiffFileKeys.has(fileKey),
-        };
-      }),
-    [collapsedDiffFileKeys, renderableFiles],
+      renderableFiles.map((fileDiff) => ({
+        fileDiff,
+        filePath: resolveFileDiffPath(fileDiff),
+        fileKey: buildFileDiffRenderKey(fileDiff),
+      })),
+    [renderableFiles],
   );
   const diffFileKeys = useMemo(() => codeViewFiles.map((file) => file.fileKey), [codeViewFiles]);
+  /*
+   * The file the column is showing as a document instead of as a diff.
+   *
+   * Scoped to one file rather than applied to the whole list because the diff
+   * renderer owns its own scroller and virtualizes against it, so rendered
+   * documents cannot be interleaved between diffs without nesting scrollers.
+   * Reviewing stays the default view; this is the second look you ask for, and
+   * the file list beside it is how you ask.
+   */
+  const previewedFile = useMemo(() => {
+    if (!richPreview || activeTreeFileKey === null) return null;
+    if (activeTreeFileKey === dismissedPreviewFileKey) return null;
+    const file = codeViewFiles.find((candidate) => candidate.fileKey === activeTreeFileKey);
+    if (!file) return null;
+    const previewKind = resolveRichPreviewKind(file.filePath);
+    return previewKind ? { file, previewKind } : null;
+  }, [activeTreeFileKey, codeViewFiles, dismissedPreviewFileKey, richPreview]);
+  /*
+   * Built from `renderableFiles`, deliberately not from `codeViewFiles`.
+   *
+   * `codeViewFiles` carries each file's collapsed flag, so it gets a new
+   * identity on every expand and collapse. Deriving the tree from it meant one
+   * click on a diff header rebuilt every row's stats and re-ran
+   * `buildTurnDiffTree` over the whole change set — work whose result is
+   * identical every time, because which diffs are open says nothing about which
+   * files exist. The patch is the only thing the tree actually depends on.
+   */
+  const reviewTreeFiles = useMemo(
+    () =>
+      renderableFiles.map((fileDiff) => {
+        const stat = getDiffLineStat([fileDiff]);
+        return {
+          fileKey: buildFileDiffRenderKey(fileDiff),
+          filePath: resolveFileDiffPath(fileDiff),
+          additions: stat.additions,
+          deletions: stat.deletions,
+          changeKind: resolveReviewFileChangeKind(fileDiff.type),
+        };
+      }),
+    [renderableFiles],
+  );
   const allDiffFilesCollapsed = areAllDiffFilesCollapsed(diffFileKeys, collapsedDiffFileKeys);
   const diffLineStat = useMemo(() => getDiffLineStat(renderableFiles), [renderableFiles]);
   const matchingCodeViewFiles = useMemo(() => {
@@ -523,21 +676,21 @@ export default function DiffPanel({
     if (!selectedFilePath) return;
     const file = codeViewFiles.find((candidate) => candidate.filePath === selectedFilePath);
     if (!file) return;
-    codeViewRef.current?.scrollTo({ type: "item", id: file.fileKey, align: "start" });
+    codeViewRef.current?.scrollToFile(file.fileKey);
   }, [codeViewFiles, selectedFilePath, selectedFileRevealRequestId]);
 
   useEffect(() => {
     if (!jumpTargetFileKey) return;
     const file = codeViewFiles.find((candidate) => candidate.fileKey === jumpTargetFileKey);
-    if (!file || file.collapsed) return;
-    codeViewRef.current?.scrollTo({ type: "item", id: file.fileKey, align: "start" });
+    if (!file || collapsedDiffFileKeys.has(file.fileKey)) return;
+    codeViewRef.current?.scrollToFile(file.fileKey);
     setJumpTargetFileKey(null);
   }, [codeViewFiles, jumpTargetFileKey]);
 
   const openDiffFile = useCallback(
     (filePath: string) => {
       openDiffFilePrimaryAction({
-        threadRef: routeThreadRef,
+        threadRef: diffThreadRef,
         filePath,
         activeCwd,
         openInEditor: (targetPath) => {
@@ -546,10 +699,10 @@ export default function DiffPanel({
             if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
               console.warn("Failed to open diff file in editor.", {
                 operation: "open-diff-file",
-                ...(routeThreadRef
+                ...(diffThreadRef
                   ? {
-                      environmentId: routeThreadRef.environmentId,
-                      threadId: routeThreadRef.threadId,
+                      environmentId: diffThreadRef.environmentId,
+                      threadId: diffThreadRef.threadId,
                     }
                   : {}),
                 ...safeErrorLogAttributes(squashAtomCommandFailure(result)),
@@ -559,7 +712,7 @@ export default function DiffPanel({
         },
       });
     },
-    [activeCwd, openInPreferredEditor, routeThreadRef],
+    [activeCwd, diffThreadRef, openInPreferredEditor],
   );
   const toggleDiffFileCollapsed = useCallback(
     (fileKey: string) => {
@@ -598,6 +751,9 @@ export default function DiffPanel({
         return { scopeKey: collapseScopeKey, fileKeys: next };
       });
       setJumpTargetFileKey(fileKey);
+      // Survives the scroll, unlike the jump target: the tree keeps showing
+      // which file you were taken to long after the scroll has landed.
+      setActiveTreeFileKey(fileKey);
       setFileQuery("");
     },
     [collapseScopeKey],
@@ -624,17 +780,42 @@ export default function DiffPanel({
     void navigator.clipboard?.writeText(gitApplyCommand);
   }, [gitApplyCommand]);
 
+  // The draft id, when there is one, is what lets a commit made from here write
+  // its branch back to the draft session instead of to a thread that has no row yet.
+  const git = useGitActions({
+    gitCwd: activeCwd ?? null,
+    activeThreadRef: diffThreadRef,
+    enabled: isGitRepo,
+    ...(draftId ? { draftId } : {}),
+  });
+  const SourceControlIcon = git.sourceControlPresentation.Icon;
+  /*
+   * Every action, including the one the primary half performs.
+   *
+   * This used to drop whichever item matched the quick action's label, on the
+   * theory that the split button should not offer the same thing twice. Two
+   * problems: the labels are composed prose ("Commit, push & pull request"), so
+   * the comparison silently matched nothing or the wrong row, and a menu that is
+   * sometimes missing an entry reads as a bug rather than as tidiness. A
+   * complete, stable list costs one redundant row and answers "where is commit".
+   */
+  const gitMenuItems = git.menuItems;
+  const quickActionUnavailable = git.isBusy || git.quickAction.disabled;
+  const quickActionReason = git.isBusy
+    ? "A git action is already running."
+    : (git.quickActionDisabledReason ?? git.quickAction.label);
+
   const selectTurn = (turnId: TurnId) => {
-    if (!routeThreadRef) return;
-    useDiffPanelStore.getState().selectTurn(routeThreadRef, turnId);
+    if (!diffThreadRef) return;
+    useDiffPanelStore.getState().selectTurn(diffThreadRef, turnId);
   };
   const selectGitScope = (scope: "branch" | "unstaged") => {
-    if (!routeThreadRef) return;
-    useDiffPanelStore.getState().selectGitScope(routeThreadRef, scope);
+    if (!diffThreadRef) return;
+    useDiffPanelStore.getState().selectGitScope(diffThreadRef, scope);
   };
   const selectBranchBaseRef = (baseRef: string | null) => {
-    if (!routeThreadRef) return;
-    useDiffPanelStore.getState().selectBranchBaseRef(routeThreadRef, baseRef);
+    if (!diffThreadRef) return;
+    useDiffPanelStore.getState().selectBranchBaseRef(diffThreadRef, baseRef);
   };
   const rangeHeadRef = selectedGitSource?.headRef ?? "HEAD";
   const rangeBaseRef = selectedGitSource?.baseRef ?? "Automatic";
@@ -648,7 +829,7 @@ export default function DiffPanel({
       <div className="surface-subheader flex min-w-0 items-center gap-(--popup-item-gap) border-b border-(--panel-edge-muted) px-(--popup-item-padding-inline)">
         <DropdownMenu>
           <DropdownMenuTrigger
-            className="inline-flex min-w-0 flex-1 items-center gap-(--popup-item-gap) rounded-(--popup-item-radius) px-(--popup-item-padding-inline) text-(length:--text-ui) text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+            className="inline-flex min-w-0 flex-1 items-center gap-(--popup-item-gap) rounded-(--popup-item-radius) px-(--popup-item-padding-inline) text-(length:--text-ui) text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-popup-open:bg-accent data-popup-open:text-accent-foreground"
             aria-label={`Review range: ${rangeControlLabel}`}
             title={rangeControlLabel}
           >
@@ -730,6 +911,7 @@ export default function DiffPanel({
                   ? "bg-(--wash-selected)"
                   : undefined
               }
+              disabled={!canReviewTurns}
               onClick={() => {
                 if (latestTurn) selectTurn(latestTurn.turnId);
               }}
@@ -737,7 +919,7 @@ export default function DiffPanel({
               <span>Latest turn</span>
             </DropdownMenuItem>
             <DropdownMenuSub>
-              <DropdownMenuSubTrigger>Turn</DropdownMenuSubTrigger>
+              <DropdownMenuSubTrigger disabled={!canReviewTurns}>Turn</DropdownMenuSubTrigger>
               <DropdownMenuSubContent className="w-64">
                 {orderedTurnDiffSummaries.map((summary) => {
                   const turnCount =
@@ -761,6 +943,13 @@ export default function DiffPanel({
                 })}
               </DropdownMenuSubContent>
             </DropdownMenuSub>
+            {/* Greyed rows with no reason read as broken; a thread that has not
+                started simply has no turns to diff yet. */}
+            {canReviewTurns ? null : (
+              <p className="px-(--popup-item-padding-inline) pb-(--popup-padding) text-(length:--text-caption) text-muted-foreground">
+                Turn diffs appear once this thread has run a turn.
+              </p>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
         {codeViewFiles.length > 0 ? (
@@ -772,7 +961,10 @@ export default function DiffPanel({
           />
         ) : null}
       </div>
-      <div className="flex h-(--review-toolbar-height) shrink-0 items-center gap-(--popup-item-gap) border-b border-(--panel-edge-muted) px-(--popup-item-padding-inline)">
+      {/* One right-aligned cluster. Controls hugging the left edge read as a
+          second navigation bar; pinned right they read as this panel's tools,
+          which is what they are. */}
+      <div className="flex h-(--review-toolbar-height) shrink-0 items-center justify-end gap-(--popup-item-gap) border-b border-(--panel-edge-muted) px-(--popup-item-padding-inline)">
         <ReviewToolbarTooltip
           label={allDiffFilesCollapsed ? "Expand all diffs" : "Collapse all diffs"}
           trigger={
@@ -804,10 +996,7 @@ export default function DiffPanel({
           <ReviewToolbarTooltip
             label="Jump to file"
             trigger={
-              <ComboboxTrigger
-                className="inline-flex size-(--review-control-size) items-center justify-center rounded-(--popup-item-radius) text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
-                aria-label="Jump to file"
-              >
+              <ComboboxTrigger className={REVIEW_TRIGGER_CLASS} aria-label="Jump to file">
                 <ListTreeIcon className="size-(--review-icon-size)" />
               </ComboboxTrigger>
             }
@@ -878,14 +1067,26 @@ export default function DiffPanel({
             </Toggle>
           }
         />
+        <ReviewToolbarTooltip
+          label={filesPaneOpen ? "Hide files" : "Show files"}
+          trigger={
+            <Toggle
+              aria-label={filesPaneOpen ? "Hide files" : "Show files"}
+              variant="ghost"
+              size="xs"
+              className="size-(--review-control-size)"
+              pressed={filesPaneOpen}
+              onPressedChange={setFilesPaneOpen}
+            >
+              <FolderTreeIcon className="size-(--review-icon-size)" />
+            </Toggle>
+          }
+        />
         <DropdownMenu>
           <ReviewToolbarTooltip
             label="Review options"
             trigger={
-              <DropdownMenuTrigger
-                className="inline-flex size-(--review-control-size) items-center justify-center rounded-(--popup-item-radius) text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
-                aria-label="Review options"
-              >
+              <DropdownMenuTrigger className={REVIEW_TRIGGER_CLASS} aria-label="Review options">
                 <EllipsisIcon className="size-(--review-icon-size)" />
               </DropdownMenuTrigger>
             }
@@ -914,6 +1115,17 @@ export default function DiffPanel({
             >
               Don&apos;t load full files
             </DropdownMenuCheckboxItem>
+            <DropdownMenuCheckboxItem
+              checked={richPreview}
+              onCheckedChange={(checked) => setRichPreview(Boolean(checked))}
+            >
+              Rich preview
+            </DropdownMenuCheckboxItem>
+            {/* The one option whose name says nothing on its own. */}
+            <p className="px-(--popup-item-padding-inline) pb-(--popup-padding) text-(length:--text-caption) text-muted-foreground">
+              Renders Markdown, CSV and JSON instead of showing them as text. Pick such a file in
+              the list to read it.
+            </p>
             {/* Only a branch review can name the two refs the command needs. */}
             {gitApplyCommand === null ? null : (
               <>
@@ -926,27 +1138,94 @@ export default function DiffPanel({
             )}
           </DropdownMenuContent>
         </DropdownMenu>
+        {/*
+         * Shipping the change sits at the far end of the same toolbar you read
+         * it in, because the two belong to one motion: you review, then you
+         * commit. A split button rather than two, since the chevron's contents
+         * are the same action at a different scope, not a different subject.
+         */}
+        <div className="flex h-(--review-control-size) shrink-0 items-center overflow-hidden rounded-(--popup-item-radius) border border-(--edge-strong)">
+          {/*
+           * `aria-disabled`, not `disabled`. A disabled button gets
+           * `pointer-events-none` from the button styles, which takes its
+           * tooltip with it — so the half that cannot act right now became a grey
+           * icon with no way to ask why. This keeps it hoverable and focusable
+           * and lets the tooltip carry the reason.
+           */}
+          <ReviewToolbarTooltip
+            label={quickActionReason}
+            trigger={
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                className="size-(--review-control-size) rounded-none"
+                aria-label={git.quickAction.label}
+                {...(quickActionUnavailable
+                  ? { "aria-disabled": true, onClick: undefined }
+                  : { onClick: git.runQuickAction })}
+              >
+                <GitQuickActionIcon
+                  quickAction={git.quickAction}
+                  SourceControlIcon={SourceControlIcon}
+                />
+              </Button>
+            }
+          />
+          <span aria-hidden className="h-full w-px shrink-0 bg-(--edge-strong)" />
+          <DropdownMenu>
+            <ReviewToolbarTooltip
+              label="More git actions"
+              trigger={
+                <DropdownMenuTrigger
+                  className="inline-flex h-(--review-control-size) w-[calc(var(--review-control-size)-0.25rem)] shrink-0 items-center justify-center text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-popup-open:bg-accent data-popup-open:text-accent-foreground"
+                  aria-label="More git actions"
+                >
+                  <ChevronDownIcon className="size-(--review-icon-size)" />
+                </DropdownMenuTrigger>
+              }
+            />
+            {/* `sideOffset` clears the split button's border so the menu reads as
+                hanging off it rather than growing out of it. */}
+            <DropdownMenuContent align="end" sideOffset={6} className="w-(--review-git-menu-width)">
+              {gitMenuItems.map((item) => (
+                <DropdownMenuItem
+                  key={`${item.id}-${item.label}`}
+                  disabled={item.disabled}
+                  onClick={() => git.runMenuItem(item)}
+                >
+                  <GitActionItemIcon icon={item.icon} SourceControlIcon={SourceControlIcon} />
+                  {item.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
     </>
   );
 
   return (
     <div className="flex h-full min-w-0 flex-col bg-background">
+      {/* Outside every popup: a dialog must outlive the menu that opened it. */}
+      {git.dialogs}
       {headerRow}
-      {!activeThread ? (
+      {/* A cwd, not a thread: the diff is of the checkout, and the checkout is
+          the project's. */}
+      {!activeCwd ? (
         <div className="flex flex-1 items-center justify-center px-(--popup-item-padding-inline) text-center text-(length:--text-caption) text-(--panel-muted-ink)">
-          Select a thread to inspect turn diffs.
+          Open a project to review its changes.
         </div>
       ) : !isGitRepo ? (
         <div className="flex flex-1 items-center justify-center px-(--popup-item-padding-inline) text-center text-(length:--text-caption) text-(--panel-muted-ink)">
-          Turn diffs are unavailable because this project is not a git repository.
+          Review is unavailable because this folder is not a Git repository.
         </div>
       ) : selectedTurnId !== null && orderedTurnDiffSummaries.length === 0 ? (
         <div className="flex flex-1 items-center justify-center px-(--popup-item-padding-inline) text-center text-(length:--text-caption) text-(--panel-muted-ink)">
           No completed turns yet.
         </div>
       ) : (
-        <>
+        <div className="flex min-h-0 min-w-0 flex-1">
           <div className="diff-panel-viewport flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
             {isSelectedPatchTruncated && (
               <p className="shrink-0 border-b border-(--panel-edge-muted) bg-(--panel-notice-surface) px-3 py-1.5 text-(length:--text-caption) text-muted-foreground">
@@ -961,7 +1240,40 @@ export default function DiffPanel({
                 </p>
               </div>
             )}
-            {!renderablePatch ? (
+            {previewedFile ? (
+              <>
+                <div className="flex h-(--review-toolbar-height) shrink-0 items-center gap-(--popup-item-gap) border-b border-(--panel-edge-muted) px-(--popup-item-padding-inline)">
+                  <span
+                    className="min-w-0 flex-1 truncate text-(length:--text-caption) text-muted-foreground"
+                    title={previewedFile.file.filePath}
+                  >
+                    {previewedFile.file.filePath}
+                  </span>
+                  <Button
+                    type="button"
+                    size="xs"
+                    variant="ghost"
+                    className="shrink-0"
+                    onClick={() => {
+                      setDismissedPreviewFileKey(previewedFile.file.fileKey);
+                      jumpToDiffFile(previewedFile.file.fileKey);
+                    }}
+                  >
+                    Show diff
+                  </Button>
+                </div>
+                <ScrollSurface axis="both" className="flex-1">
+                  <ReviewRichPreview
+                    key={previewedFile.file.fileKey}
+                    kind={previewedFile.previewKind}
+                    filePath={previewedFile.file.filePath}
+                    fileDiff={previewedFile.file.fileDiff}
+                    cwd={activeCwd ?? null}
+                    threadRef={diffThreadRef}
+                  />
+                </ScrollSurface>
+              </>
+            ) : !renderablePatch ? (
               isLoadingSelectedPatch ? (
                 <DiffPanelLoadingState
                   label={
@@ -1005,8 +1317,9 @@ export default function DiffPanel({
                 <AnnotatableCodeView
                   viewerRef={codeViewRef}
                   key={collapseScopeKey ?? reviewSectionId}
-                  className="diff-render-surface review-diff-surface h-full min-h-0 overflow-auto [&>div>div:last-child]:top-0! [&>div>div:last-child]:bottom-auto!"
+                  className={REVIEW_DIFF_SURFACE_CLASS}
                   files={codeViewFiles}
+                  collapsedFileKeys={collapsedDiffFileKeys}
                   sectionId={reviewSectionId}
                   sectionTitle={reviewSectionTitle}
                   composerDraftTarget={composerDraftTarget}
@@ -1052,13 +1365,12 @@ export default function DiffPanel({
                     theme: resolveDiffThemeName(resolvedTheme),
                     themeType: resolvedTheme as DiffThemeType,
                     unsafeCSS: DIFF_PANEL_UNSAFE_CSS,
-                    stickyHeaders: true,
-                    layout: { paddingTop: 0, paddingBottom: 0, gap: 0 },
+                    stickyHeader: true,
                   }}
                 />
               </div>
             ) : (
-              <div className="min-h-0 flex-1 overflow-auto p-2">
+              <ScrollSurface axis="both" className="flex-1 p-2">
                 <div className="space-y-2">
                   <p className="text-(length:--text-caption) text-muted-foreground">
                     {renderablePatch.reason}
@@ -1074,10 +1386,31 @@ export default function DiffPanel({
                     {renderablePatch.text}
                   </pre>
                 </div>
-              </div>
+              </ScrollSurface>
             )}
           </div>
-        </>
+          {/*
+           * The wrapper's width animates; the pane inside keeps its own, so the
+           * tree does not re-wrap on every frame of the slide. `inert` while
+           * closed, or Tab walks into a list nobody can see.
+           */}
+          <div
+            className={cn(
+              "shrink-0 overflow-hidden border-s transition-[width] duration-(--duration-base) ease-(--ease-soft) motion-reduce:transition-none",
+              filesPaneOpen
+                ? "w-(--review-tree-width) border-(--panel-edge-muted)"
+                : "w-0 border-transparent",
+            )}
+            {...(filesPaneOpen ? {} : { inert: true })}
+          >
+            <ReviewFileTree
+              files={reviewTreeFiles}
+              activeFileKey={activeTreeFileKey}
+              theme={resolvedTheme as DiffThemeType}
+              onSelectFile={jumpToDiffFile}
+            />
+          </div>
+        </div>
       )}
     </div>
   );

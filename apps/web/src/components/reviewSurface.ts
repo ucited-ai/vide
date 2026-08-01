@@ -3,6 +3,7 @@ import type { StateStorage } from "~/lib/storage";
 export type ReviewViewMode = "split" | "unified";
 
 const REVIEW_VIEW_MODE_STORAGE_KEY = "vide:review-view-mode";
+const REVIEW_FILES_PANE_STORAGE_KEY = "vide:review-files-pane";
 
 export function readReviewViewMode(storage: StateStorage): ReviewViewMode {
   return storage.getItem(REVIEW_VIEW_MODE_STORAGE_KEY) === "unified" ? "unified" : "split";
@@ -10,6 +11,28 @@ export function readReviewViewMode(storage: StateStorage): ReviewViewMode {
 
 export function persistReviewViewMode(storage: StateStorage, mode: ReviewViewMode): void {
   storage.setItem(REVIEW_VIEW_MODE_STORAGE_KEY, mode);
+}
+
+/** Shown unless it was explicitly turned off — the file list is the cheapest
+ *  answer to "what is in this review", so it earns its width by default. */
+export function readReviewFilesPaneOpen(storage: StateStorage): boolean {
+  return storage.getItem(REVIEW_FILES_PANE_STORAGE_KEY) !== "hidden";
+}
+
+export function persistReviewFilesPaneOpen(storage: StateStorage, open: boolean): void {
+  storage.setItem(REVIEW_FILES_PANE_STORAGE_KEY, open ? "shown" : "hidden");
+}
+
+const REVIEW_RICH_PREVIEW_STORAGE_KEY = "vide:review-rich-preview";
+
+/** Off unless asked for. A review surface's default answer to "what happened"
+ *  is the diff; rendering the document instead is a deliberate second look. */
+export function readReviewRichPreview(storage: StateStorage): boolean {
+  return storage.getItem(REVIEW_RICH_PREVIEW_STORAGE_KEY) === "on";
+}
+
+export function persistReviewRichPreview(storage: StateStorage, enabled: boolean): void {
+  storage.setItem(REVIEW_RICH_PREVIEW_STORAGE_KEY, enabled ? "on" : "off");
 }
 
 function shellQuote(value: string): string {

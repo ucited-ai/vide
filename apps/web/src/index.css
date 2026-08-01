@@ -15,8 +15,8 @@ html[data-mobile-composer-route-transition="true"]::view-transition-new(root) {
 }
 
 html[data-mobile-composer-route-transition="true"]::view-transition-group(vide-mobile-composer) {
-  animation-duration: 180ms;
-  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  animation-duration: var(--duration-popup);
+  animation-timing-function: var(--ease-in-out);
 }
 
 html[data-mobile-composer-route-transition="true"]::view-transition-image-pair(vide-mobile-composer) {
@@ -24,12 +24,12 @@ html[data-mobile-composer-route-transition="true"]::view-transition-image-pair(v
 }
 
 html[data-mobile-composer-route-transition="true"]::view-transition-old(vide-mobile-composer) {
-  animation: vide-mobile-composer-old 180ms linear both;
+  animation: vide-mobile-composer-old var(--duration-popup) linear both;
   mix-blend-mode: normal;
 }
 
 html[data-mobile-composer-route-transition="true"]::view-transition-new(vide-mobile-composer) {
-  animation: vide-mobile-composer-new 180ms linear both;
+  animation: vide-mobile-composer-new var(--duration-popup) linear both;
   mix-blend-mode: normal;
 }
 
@@ -59,11 +59,11 @@ html[data-mobile-composer-route-transition="true"]::view-transition-new(vide-mob
 }
 
 html[data-mobile-composer-route-transition="true"]::view-transition-group(vide-mobile-draft-headline) {
-  animation-duration: 130ms;
+  animation-duration: var(--duration-fast);
 }
 
 html[data-mobile-composer-route-transition="true"]::view-transition-old(vide-mobile-draft-headline) {
-  animation: vide-mobile-draft-headline-exit 130ms cubic-bezier(0.4, 0, 1, 1) both;
+  animation: vide-mobile-draft-headline-exit var(--duration-fast) var(--ease-in) both;
   mix-blend-mode: normal;
 }
 
@@ -344,28 +344,6 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(vide-mob
     -webkit-app-region: no-drag;
   }
 
-  /*
-   * These controls are window-owned siblings painted over the chat titlebar,
-   * so the descendant exceptions on `.drag-region` cannot reach them. Electron
-   * needs the exclusion on each hit target, not only on their flex container.
-   */
-  .workspace-titlebar-controls button {
-    -webkit-app-region: no-drag;
-  }
-
-  /*
-   * Overlay mode puts the environment surface across the same titlebar pixels.
-   * Keep every control carved out directly for the same reason as the global
-   * window controls above.
-   */
-  [data-environment-column-surface] button,
-  [data-environment-column-surface] input,
-  [data-environment-column-surface] textarea,
-  [data-environment-column-surface] select,
-  [data-environment-column-surface] a {
-    -webkit-app-region: no-drag;
-  }
-
   .surface-subheader {
     @apply flex shrink-0 items-center bg-background;
     height: var(--panel-subheader-height);
@@ -495,12 +473,12 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(vide-mob
     -webkit-backdrop-filter: blur(var(--glass-blur));
     backdrop-filter: blur(var(--glass-blur));
     border: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent);
-    box-shadow: 0 16px 40px -18px rgb(0 0 0 / 55%);
+    box-shadow: var(--elevation-popup);
   }
 
   .dialog-glass {
     border-color: color-mix(in srgb, var(--foreground) 10%, transparent);
-    box-shadow: 0 24px 64px -24px rgb(0 0 0 / 65%);
+    box-shadow: var(--elevation-dialog);
   }
 
   .dark .dropdown-glass {
@@ -573,8 +551,8 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(vide-mob
     background: var(--background);
     box-shadow: 0 1px 2px color-mix(in srgb, var(--foreground) 12%, transparent);
     transition:
-      transform 120ms ease,
-      box-shadow 120ms ease;
+      transform var(--duration-fast) var(--ease-out),
+      box-shadow var(--duration-fast) var(--ease-out);
   }
 
   .glass-opacity-slider::-moz-range-thumb {
@@ -585,8 +563,8 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(vide-mob
     background: var(--background);
     box-shadow: 0 1px 2px color-mix(in srgb, var(--foreground) 12%, transparent);
     transition:
-      transform 120ms ease,
-      box-shadow 120ms ease;
+      transform var(--duration-fast) var(--ease-out),
+      box-shadow var(--duration-fast) var(--ease-out);
   }
 
   .glass-opacity-slider:hover::-webkit-slider-thumb {
@@ -901,7 +879,18 @@ code {
     "SF Mono", "SFMono-Regular", "JetBrains Mono", Consolas, "Liberation Mono", Menlo, monospace;
 }
 
-/* Window drag region (frameless titlebar) */
+/*
+ * Window drag region (frameless titlebar).
+ *
+ * The exceptions below only cover controls that live INSIDE the drag region.
+ * Chrome painted over a drag region from outside it — the window-owned panel
+ * toggles, the sidebar trigger — cannot be rescued by a rule here, because the
+ * draggable area is not decided by hit-testing or by z-index. Electron walks the
+ * layout tree in order, unioning each `drag` rect and subtracting each `no-drag`
+ * rect, so whichever rect comes LAST wins the overlap. Such chrome has to be
+ * rendered after the drag region it covers; see the note beside the panel
+ * controls in ChatView.
+ */
 .drag-region {
   -webkit-app-region: drag;
 }
@@ -948,6 +937,17 @@ code {
 
 .turn-chip-strip::-webkit-scrollbar {
   display: none;
+}
+
+/*
+ * A hair of breathing room on the left. xterm renders its rows flush against
+ * the container edge, so the first character of every prompt sat on the panel
+ * border. Applied to the screen rather than the container so the fit addon
+ * still measures the full width and the column count stays right.
+ */
+.thread-terminal-drawer .xterm .xterm-screen,
+.thread-terminal-drawer .xterm .xterm-viewport {
+  padding-inline-start: 0.375rem;
 }
 
 /* Terminal drawer scrollbar parity with chat */
@@ -1336,7 +1336,7 @@ label:has(> select#reasoning-effort) select {
 }
 
 .prompt-stash-count-enter {
-  animation: prompt-stash-count-enter 180ms ease-out both;
+  animation: prompt-stash-count-enter var(--duration-popup) var(--ease-out) both;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1361,19 +1361,6 @@ label:has(> select#reasoning-effort) select {
 /* Diffs theme bridge (match diff surfaces to app palette) */
 .diff-panel-viewport {
   background: var(--panel-diff-viewport-surface);
-}
-
-.diff-render-file,
-.diff-render-surface > diffs-container {
-  border: var(--panel-hairline) solid var(--border);
-  border-radius: var(--radius);
-  overflow: clip;
-  background: var(--panel-diff-file-surface);
-}
-
-.review-diff-surface > diffs-container {
-  border: 0;
-  border-radius: 0;
 }
 
 @keyframes ultrathink-rainbow {
