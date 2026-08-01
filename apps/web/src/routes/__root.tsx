@@ -34,7 +34,7 @@ import {
   selectProjectGroupingSettings,
 } from "../logicalProject";
 import { useUiStateStore } from "../uiStateStore";
-import { syncBrowserChromeTheme } from "../hooks/useTheme";
+import { syncBrowserChromeTheme, useTheme } from "../hooks/useTheme";
 import { configureClientTracing } from "../observability/clientTracing";
 import { resolveInitialServerAuthGateState } from "../environments/primary";
 import { hasHostedPairingRequest, isHostedStaticApp } from "../hostedPairing";
@@ -144,10 +144,32 @@ function RootRouteView() {
 
 function GlassAppearanceSync() {
   const glassOpacity = useClientSettings((settings) => settings.glassOpacity);
+  const surfaceTint = useClientSettings((settings) => settings.surfaceTint);
+  const { resolvedTheme } = useTheme();
 
   useEffect(() => {
     document.documentElement.style.setProperty("--glass-opacity", `${glassOpacity}%`);
   }, [glassOpacity]);
+
+  /*
+   * The one surface colour the user owns. Every surface they act through —
+   * sidebar, composer, popups, dialogs, the environment panel — is painted from
+   * `--surface-chrome`, so overriding that single custom property retints all of
+   * them at once and keeps them agreeing with each other by construction.
+   *
+   * Stored per theme rather than as one colour, because a tint that reads as a
+   * lifted surface on a dark floor is a muddy grey on a light one; there is no
+   * single value that can serve both. Cleared rather than set when the user has
+   * not chosen one, so the stylesheet's own value stays in charge.
+   */
+  useEffect(() => {
+    const tint = resolvedTheme === "dark" ? surfaceTint.dark : surfaceTint.light;
+    if (tint === null) {
+      document.documentElement.style.removeProperty("--surface-chrome");
+      return;
+    }
+    document.documentElement.style.setProperty("--surface-chrome", tint);
+  }, [resolvedTheme, surfaceTint]);
 
   return null;
 }

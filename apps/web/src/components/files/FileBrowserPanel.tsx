@@ -5,17 +5,14 @@ import type {
 import type { EnvironmentId, ProjectEntry } from "@vide/contracts";
 import { FileTree, useFileTree } from "@pierre/trees/react";
 import { serializeComposerFileLink } from "@vide/shared/composerTrigger";
-import { RefreshCw, Search } from "lucide-react";
 import { useEffect, useMemo, useRef } from "react";
 
 import { QualifiedLabel } from "~/components/chat/QualifiedLabel";
-import { Button } from "~/components/ui/button";
 import { Separator } from "~/components/ui/separator";
 import { toastManager } from "~/components/ui/toast";
 import { useComposerHandleContext } from "~/composerHandleContext";
 import { writeTextToClipboard } from "~/hooks/useCopyToClipboard";
 import { useTheme } from "~/hooks/useTheme";
-import { cn } from "~/lib/utils";
 import { readLocalApi } from "~/localApi";
 import { Vide_PIERRE_ICONS } from "~/pierre-icons";
 
@@ -309,22 +306,6 @@ export default function FileBrowserPanel({
         <div className="min-w-0 flex-1 truncate text-(length:--text-ui)">
           <QualifiedLabel name={projectName} trail={indexLabel} separator=" · " />
         </div>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          aria-label="Search workspace files"
-          onClick={() => model.openSearch()}
-        >
-          <Search />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          aria-label="Refresh workspace files"
-          onClick={entriesQuery.refresh}
-        >
-          <RefreshCw className={cn(entriesQuery.isPending && "animate-spin")} />
-        </Button>
       </div>
       <Separator />
       {entriesQuery.error && entriesQuery.data === null ? (

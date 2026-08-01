@@ -1,7 +1,7 @@
-const CHAT_MIN_WIDTH = 20 * 16;
+export const CHAT_MIN_WIDTH = 20 * 16;
 export const PREVIEW_PANEL_MIN_WIDTH = 20 * 16;
 export const PREVIEW_PANEL_RESIZE_DEAD_ZONE = 2 * 16;
-const ENVIRONMENT_COLUMN_RESERVED_WIDTH = 18 * 16;
+export const ENVIRONMENT_COLUMN_RESERVED_WIDTH = 18 * 16;
 export const PREVIEW_PANEL_DEFAULT_WIDTH = 33.75 * 16;
 
 interface PreviewPanelLayout {

@@ -550,11 +550,23 @@ export function selectActiveRightPanel(
   return state.surfaces.find((surface) => surface.id === state.activeSurfaceId)?.kind ?? null;
 }
 
+/**
+ * Which surface is selected, whether or not the panel is currently showing.
+ *
+ * Not gated on `isOpen`, unlike `selectActiveRightPanel` above — that one
+ * answers "what is on screen right now" and several behaviours genuinely want
+ * that. This one answers "what is this panel showing", which is a property of
+ * its contents and does not stop being true because the panel is collapsed.
+ *
+ * The distinction is load-bearing. While it was gated, closing the panel made
+ * the selection null in the same frame the collapse started, so the panel spent
+ * its whole exit animating its empty state away instead of what was open, and
+ * reopening had to mount everything again from nothing.
+ */
 export function selectActiveRightPanelSurface(
   byThreadKey: Record<string, ThreadRightPanelState>,
   ref: ScopedThreadRef | null | undefined,
 ): RightPanelSurface | null {
   const state = selectThreadRightPanelState(byThreadKey, ref);
-  if (!state.isOpen) return null;
   return state.surfaces.find((surface) => surface.id === state.activeSurfaceId) ?? null;
 }

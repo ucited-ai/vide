@@ -31,6 +31,7 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 import { Button } from "~/components/ui/button";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "~/components/ui/menu";
 import { ScrollArea } from "~/components/ui/scroll-area";
+import { ScrollSurface } from "~/components/ui/scroll-surface";
 import { faviconUrlForOrigin } from "~/lib/favicon";
 import { useTheme } from "~/hooks/useTheme";
 import { COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS } from "~/workspaceTitlebar";
@@ -71,7 +72,7 @@ interface RightPanelTabsProps {
 const SURFACE_DISABLED_REASONS = {
   browser: "Browser previews are only available in the Vide desktop app.",
   files: "Files are only available when a project is open.",
-  diff: "Review is only available for server threads in Git repositories.",
+  diff: "Review is only available for projects in Git repositories.",
 } as const;
 
 type TabContextMenuAction = "copy-path" | "close" | "close-others" | "close-to-right" | "close-all";
@@ -104,7 +105,7 @@ function SurfaceMenuItem(props: {
   return <DisabledReasonTooltip reason={props.disabledReason} trigger={item} />;
 }
 
-function SurfaceRow(props: {
+function SurfaceCard(props: {
   icon: LucideIcon;
   label: string;
   shortcut: string | null;
@@ -113,30 +114,32 @@ function SurfaceRow(props: {
   onClick: () => void;
 }) {
   const Icon = props.icon;
-  const row = (
+  const card = (
     <button
       type="button"
       {...(props.available ? { onClick: props.onClick } : { "aria-disabled": true })}
       className={cn(
-        "flex min-h-(--popup-item-height) w-full items-center gap-(--popup-item-gap) rounded-(--popup-item-radius) px-(--popup-item-padding-inline) text-left",
-        "transition-colors duration-(--duration-fast) ease-(--ease-out)",
-        props.available ? "hover:bg-accent" : "cursor-not-allowed opacity-40",
+        "flex min-h-11 w-full items-center gap-2.5",
+        "rounded-(--radius) border border-border bg-card",
+        "px-3 text-left",
+        "transition-colors",
+        "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring",
+        props.available ? "hover:bg-(--right-panel-card-hover)" : "cursor-not-allowed opacity-40",
       )}
     >
       <Icon className="size-(--popup-icon-size) shrink-0 text-muted-foreground" />
       <span className="min-w-0 flex-1 truncate text-(length:--text-ui) text-foreground">
         {props.label}
       </span>
-      <kbd
-        className="shrink-0 font-medium font-sans text-(length:--text-caption) text-muted-foreground/72 tracking-widest"
-        title={props.shortcut ?? "No keybinding assigned"}
-      >
-        {props.shortcut ?? "—"}
-      </kbd>
+      {props.shortcut ? (
+        <kbd className="shrink-0 font-medium font-sans text-(length:--text-caption) text-muted-foreground/72 tracking-widest">
+          {props.shortcut}
+        </kbd>
+      ) : null}
     </button>
   );
-  if (props.available || props.disabledReason === null) return row;
-  return <DisabledReasonTooltip reason={props.disabledReason} trigger={row} />;
+  if (props.available || props.disabledReason === null) return card;
+  return <DisabledReasonTooltip reason={props.disabledReason} trigger={card} />;
 }
 
 function RightPanelEmptyState(props: {
@@ -192,33 +195,25 @@ function RightPanelEmptyState(props: {
   ];
 
   return (
-    <div className="vide-fade-in flex min-h-0 flex-1 flex-col overflow-y-auto p-(--popup-padding)">
-      <div className="m-auto flex w-full flex-col gap-(--popup-padding)">
-        <div className="flex flex-col gap-(--popup-padding) px-(--popup-item-padding-inline)">
-          <h3 className="text-(length:--text-title) font-medium text-foreground">Open a surface</h3>
-          <p className="text-(length:--text-ui) text-muted-foreground">
-            Choose what to show in this panel.
-          </p>
-        </div>
-        <div className="flex flex-col">
-          {actions.map((action) => (
-            <SurfaceRow
-              key={action.label}
-              icon={action.icon}
-              label={action.label}
-              shortcut={
-                action.shortcutCommand
-                  ? shortcutLabelForCommand(keybindings, action.shortcutCommand)
-                  : null
-              }
-              available={action.available}
-              disabledReason={action.disabledReason}
-              onClick={action.onClick}
-            />
-          ))}
-        </div>
+    <ScrollSurface className="vide-fade-in flex flex-1 flex-col p-3" aria-label="Open a surface">
+      <div className="m-auto flex w-full max-w-[22rem] flex-col gap-1.5">
+        {actions.map((action) => (
+          <SurfaceCard
+            key={action.label}
+            icon={action.icon}
+            label={action.label}
+            shortcut={
+              action.shortcutCommand
+                ? shortcutLabelForCommand(keybindings, action.shortcutCommand)
+                : null
+            }
+            available={action.available}
+            disabledReason={action.disabledReason}
+            onClick={action.onClick}
+          />
+        ))}
       </div>
-    </div>
+    </ScrollSurface>
   );
 }
 
@@ -395,6 +390,9 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
       <div
         className={cn(
           "workspace-topbar gap-1 pl-2",
+          // The window drags from this bar, but not from the strip inside it —
+          // see the ScrollArea below.
+          ownsDesktopTitleBar && "drag-region",
           props.mode === "inline" ? "pr-28" : "pr-3",
           ownsDesktopTitleBar && "wco:pr-[calc(var(--workspace-native-controls-inset)+6rem)]",
           props.mode === "inline" && props.maximized && COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS,
@@ -405,7 +403,18 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
           ref={tabListRef}
           hideScrollbars
           scrollFade
-          className={cn("min-w-0 flex-1 rounded-none", ownsDesktopTitleBar && "drag-region")}
+          /*
+           * Explicitly not draggable, though it sits inside the drag region.
+           * A scrollable strip that is also a window drag target loses the
+           * gesture to the window manager wherever the pointer is between two
+           * tabs, which is what made scrolling this bar break off every time it
+           * crossed a gap. The bar around it stays draggable, so the window can
+           * still be moved by its empty space.
+           */
+          className={cn(
+            "min-w-0 flex-1 rounded-none",
+            ownsDesktopTitleBar && "[-webkit-app-region:no-drag]",
+          )}
           data-right-panel-tab-list
         >
           <div className="flex h-full w-max min-w-full items-center gap-1">
@@ -524,6 +533,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
         {props.layoutControls}
       </div>
       <div className="flex min-h-0 flex-1 flex-col">
+        {/* The selector preserves the active surface while the panel is closed. */}
         {props.activeSurfaceId === null ? (
           <RightPanelEmptyState
             onAddBrowser={props.onAddBrowser}

@@ -2,14 +2,13 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { resolveResizableWidth } from "../../hooks/resizableWidthLogic";
 import {
+  CHAT_MIN_WIDTH,
+  ENVIRONMENT_COLUMN_RESERVED_WIDTH,
   getPreviewPanelLayout,
   getPreviewPanelMaxWidth,
   PREVIEW_PANEL_MIN_WIDTH,
   PREVIEW_PANEL_RESIZE_DEAD_ZONE,
 } from "./previewPanelLayout";
-
-const CHAT_MIN_WIDTH = 20 * 16;
-const ENVIRONMENT_COLUMN_RESERVED_WIDTH = 18 * 16;
 
 describe("getPreviewPanelMaxWidth", () => {
   it("derives the maximum from the measured workspace and the chat minimum", () => {

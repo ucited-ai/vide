@@ -1,5 +1,11 @@
 import * as Schema from "effect/Schema";
-import { type PointerEvent as ReactPointerEvent, useCallback, useRef, useState } from "react";
+import {
+  type PointerEvent as ReactPointerEvent,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
 import { getLocalStorageItem, setLocalStorageItem } from "./useLocalStorage";
 import { resolveResizableWidth, type ResizableWidthResult } from "./resizableWidthLogic";
@@ -19,6 +25,21 @@ export interface UseResizableWidthOptions {
    * the resizable state.
    */
   readonly dragStartWidth?: number;
+  /**
+   * Called on pointer-down with where the panel already stands, then again each
+   * time the held drag crosses into or out of a snap zone.
+   *
+   * This is how the panel collapses under the cursor when you push past its
+   * minimum and comes back when you pull out again, so sizing it and opening or
+   * closing it are one gesture rather than a drag followed by a click.
+   *
+   * It reports appearance only. Whatever owns the panel must not act on it —
+   * what lives inside holds a pty or a browser session, and tearing those down
+   * because a drag passed over the threshold would make a gesture the user
+   * hasn't finished destructive. `onResizeEnd` is where the state commits.
+   */
+  readonly onSnapChange?: (snap: ResizableWidthResult["snap"]) => void;
+  /** The snap the finished gesture settled on. This one is the commit. */
   readonly onResizeEnd?: (result: ResizableWidthResult) => void;
   /**
    * Which edge of the host element carries the drag handle:
@@ -73,6 +94,14 @@ export function useResizableWidth(options: UseResizableWidthOptions): {
   );
   const constrain = useCallback((value: number): number => resolve(value).width, [resolve]);
 
+  // Read through a ref: the callback closes over panel state that changes as a
+  // direct result of calling it, so a handler capturing one render's version
+  // would keep re-reporting a snap the panel has already moved past.
+  const onSnapChangeRef = useRef(options.onSnapChange);
+  useEffect(() => {
+    onSnapChangeRef.current = options.onSnapChange;
+  });
+
   // No cross-tab subscription: panel width is per-window state.
   const [width, setWidth] = useState<number>(() => {
     if (typeof window === "undefined") return defaultWidth;
@@ -92,11 +121,20 @@ export function useResizableWidth(options: UseResizableWidthOptions): {
     pointerId: number;
     startX: number;
     startWidth: number;
-    startedAboveMaximum: boolean;
+    startSnap: ResizableWidthResult["snap"];
+    snap: ResizableWidthResult["snap"];
     pending: number;
     rafId: number | null;
     target: HTMLElement;
   } | null>(null);
+
+  /** Report a crossing once, on the edge, so the panel is not told to collapse every frame. */
+  const applySnap = useCallback((snap: ResizableWidthResult["snap"]) => {
+    const state = dragStateRef.current;
+    if (!state || state.snap === snap) return;
+    state.snap = snap;
+    onSnapChangeRef.current?.(snap);
+  }, []);
 
   const releasePointer = useCallback((pointerId: number) => {
     const state = dragStateRef.current;
@@ -133,19 +171,27 @@ export function useResizableWidth(options: UseResizableWidthOptions): {
         dragStartWidth !== undefined && Number.isFinite(dragStartWidth)
           ? dragStartWidth
           : constrainedWidth;
+      // Seeded from where the panel already is, so a drag that begins in the
+      // full-area state only reports a change once it leaves that state.
+      const startSnap = resolve(startWidth).snap;
       dragStateRef.current = {
         pointerId: event.pointerId,
         startX: event.clientX,
         startWidth,
-        startedAboveMaximum: startWidth > maxWidth,
+        startSnap,
+        snap: startSnap,
         pending: startWidth,
         rafId: null,
         target,
       };
-      setWidth(startWidth);
+      setWidth(resolve(startWidth).width);
       setResizing(true);
+      // Reported even though nothing has changed yet: the first frame of the
+      // drag has to render the state the panel is already in, or a panel that
+      // was full-area would flash back to its stored width as it is grabbed.
+      onSnapChangeRef.current?.(startSnap);
     },
-    [constrainedWidth, dragStartWidth, maxWidth],
+    [constrainedWidth, dragStartWidth, resolve],
   );
 
   const onPointerMove = useCallback(
@@ -160,28 +206,25 @@ export function useResizableWidth(options: UseResizableWidthOptions): {
         const active = dragStateRef.current;
         if (!active) return;
         active.rafId = null;
-        setWidth(
-          active.startedAboveMaximum
-            ? Math.max(minWidth, active.pending)
-            : resolve(active.pending).width,
-        );
+        const result = resolve(active.pending);
+        setWidth(result.width);
+        applySnap(result.snap);
       });
     },
-    [edge, minWidth, resolve],
+    [applySnap, edge, resolve],
   );
 
   const onPointerUp = useCallback(
     (event: ReactPointerEvent<HTMLElement>) => {
       const state = dragStateRef.current;
       if (!state || state.pointerId !== event.pointerId) return;
-      const result =
-        state.startedAboveMaximum && state.pending > maxWidth
-          ? { width: maxWidth, snap: "full-area" as const }
-          : resolve(state.pending);
+      const result = resolve(state.pending);
       releasePointer(event.pointerId);
       setResizing(false);
       setWidth(result.width);
       onResizeEnd?.(result);
+      // A snapped panel is collapsed or full-area; the width under it is the
+      // one to come back to, not the one to remember.
       if (result.snap !== null) return;
       // Commit once at drag-end to avoid 60Hz localStorage writes.
       try {
@@ -190,19 +233,22 @@ export function useResizableWidth(options: UseResizableWidthOptions): {
         console.error("Could not persist panel width.", error);
       }
     },
-    [maxWidth, onResizeEnd, releasePointer, resolve, storageKey],
+    [onResizeEnd, releasePointer, resolve, storageKey],
   );
 
   const onPointerCancel = useCallback(
     (event: ReactPointerEvent<HTMLElement>) => {
       const state = dragStateRef.current;
       if (!state || state.pointerId !== event.pointerId) return;
-      // Don't persist a cancelled drag; revert to the start width.
+      // Don't persist a cancelled drag; put both the width and whatever the
+      // drag snapped to along the way back where they started.
+      const { startWidth, startSnap } = state;
+      applySnap(startSnap);
       releasePointer(event.pointerId);
-      setWidth(state.startWidth);
+      setWidth(startWidth);
       setResizing(false);
     },
-    [releasePointer],
+    [applySnap, releasePointer],
   );
 
   return {
