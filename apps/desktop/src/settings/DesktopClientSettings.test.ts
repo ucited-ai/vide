@@ -20,6 +20,7 @@ const clientSettings: ClientSettings = {
   diffIgnoreWhitespace: true,
   favorites: [],
   glassOpacity: 80,
+  surfaceTint: { light: null, dark: null },
   providerModelPreferences: {},
   sidebarAutoSettleAfterDays: 3,
   sidebarProjectGroupingMode: "repository_path",

@@ -57,7 +57,27 @@ export const GlassOpacity = Schema.Int.check(
   }),
 );
 export type GlassOpacity = typeof GlassOpacity.Type;
-export const DEFAULT_GLASS_OPACITY: GlassOpacity = 80;
+/*
+ * Solid by default. Every surface the user acts through is painted from one
+ * tone, and translucency breaks that agreement the moment a menu opens over
+ * something darker or lighter than the surface it belongs to — which is what
+ * made the model picker and the access menu read as a different material from
+ * the sidebar they match on paper. Glass is a taste, so it stays available on
+ * the slider; it is just no longer what you get without asking.
+ */
+export const DEFAULT_GLASS_OPACITY: GlassOpacity = 100;
+
+export const SurfaceTintColor = Schema.String.check(Schema.isPattern(/^#[0-9a-f]{6}$/i));
+export type SurfaceTintColor = typeof SurfaceTintColor.Type;
+export const SurfaceTint = Schema.Struct({
+  light: Schema.NullOr(SurfaceTintColor),
+  dark: Schema.NullOr(SurfaceTintColor),
+});
+export type SurfaceTint = typeof SurfaceTint.Type;
+export const DEFAULT_SURFACE_TINT: SurfaceTint = {
+  light: null,
+  dark: null,
+};
 
 export const ClientSettingsSchema = Schema.Struct({
   autoOpenPlanSidebar: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
@@ -70,6 +90,7 @@ export const ClientSettingsSchema = Schema.Struct({
   glassOpacity: GlassOpacity.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_GLASS_OPACITY)),
   ),
+  surfaceTint: SurfaceTint.pipe(Schema.withDecodingDefault(Effect.succeed(DEFAULT_SURFACE_TINT))),
   // Model favorites. Historically keyed by provider kind, now
   // widened to `ProviderInstanceId` so users can favorite a specific model
   // on a custom provider instance (e.g. "Codex Personal · gpt-5") without
@@ -606,6 +627,7 @@ export const ClientSettingsPatch = Schema.Struct({
   confirmThreadDelete: Schema.optionalKey(Schema.Boolean),
   diffIgnoreWhitespace: Schema.optionalKey(Schema.Boolean),
   glassOpacity: Schema.optionalKey(GlassOpacity),
+  surfaceTint: Schema.optionalKey(SurfaceTint),
   favorites: Schema.optionalKey(
     Schema.Array(
       Schema.Struct({

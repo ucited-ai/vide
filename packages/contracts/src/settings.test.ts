@@ -35,7 +35,7 @@ describe("ClientSettings word wrap", () => {
 
 describe("ClientSettings glass opacity", () => {
   it("defaults to a readable translucent surface", () => {
-    expect(decodeClientSettings({}).glassOpacity).toBe(80);
+    expect(decodeClientSettings({}).glassOpacity).toBe(100);
   });
 
   it.each([39, 101, 72.5])("rejects an invalid glass opacity: %s", (value) => {
@@ -46,6 +46,30 @@ describe("ClientSettings glass opacity", () => {
   it.each([40, 75, 100])("accepts a glass opacity within the supported range: %s", (value) => {
     expect(decodeClientSettings({ glassOpacity: value }).glassOpacity).toBe(value);
     expect(decodeClientSettingsPatch({ glassOpacity: value }).glassOpacity).toBe(value);
+  });
+});
+
+describe("ClientSettings surface tint", () => {
+  it("defaults to leaving both theme surfaces unchanged", () => {
+    expect(decodeClientSettings({}).surfaceTint).toEqual({ light: null, dark: null });
+  });
+
+  it.each([
+    { light: "#fff", dark: null },
+    { light: null, dark: "232429" },
+    { light: "#fdfdfd", dark: "not-a-color" },
+  ])("rejects an invalid surface tint: %o", (value) => {
+    expect(() => decodeClientSettings({ surfaceTint: value })).toThrow();
+    expect(() => decodeClientSettingsPatch({ surfaceTint: value })).toThrow();
+  });
+
+  it.each([
+    { light: null, dark: null },
+    { light: "#f4f8ff", dark: null },
+    { light: "#FDFDFD", dark: "#232429" },
+  ])("accepts per-theme surface tints: %o", (value) => {
+    expect(decodeClientSettings({ surfaceTint: value }).surfaceTint).toEqual(value);
+    expect(decodeClientSettingsPatch({ surfaceTint: value }).surfaceTint).toEqual(value);
   });
 });
 

@@ -1,6 +1,5 @@
 import { ArchiveIcon, ArchiveX, LoaderIcon, PlusIcon, RefreshCwIcon } from "lucide-react";
 import { Link } from "@tanstack/react-router";
-import type { CSSProperties } from "react";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useAtomValue } from "@effect/atom-react";
 import {
@@ -20,11 +19,7 @@ import {
   settlePromise,
   squashAtomCommandFailure,
 } from "@vide/client-runtime/state/runtime";
-import {
-  DEFAULT_UNIFIED_SETTINGS,
-  MAX_GLASS_OPACITY,
-  MIN_GLASS_OPACITY,
-} from "@vide/contracts/settings";
+import { DEFAULT_UNIFIED_SETTINGS } from "@vide/contracts/settings";
 import { createModelSelection } from "@vide/shared/model";
 import * as Arr from "effect/Array";
 import * as Duration from "effect/Duration";
@@ -98,21 +93,6 @@ import {
 } from "./settingsLayout";
 import { ProjectFavicon } from "../ProjectFavicon";
 import { useAtomCommand } from "../../state/use-atom-command";
-
-const THEME_OPTIONS = [
-  {
-    value: "system",
-    label: "System",
-  },
-  {
-    value: "light",
-    label: "Light",
-  },
-  {
-    value: "dark",
-    label: "Dark",
-  },
-] as const;
 
 const TIMESTAMP_FORMAT_LABELS = {
   locale: "System default",
@@ -507,7 +487,6 @@ export function useSettingsRestore(onRestored?: () => void) {
 }
 
 export function GeneralSettingsPanel() {
-  const { theme, setTheme } = useTheme();
   const settings = usePrimarySettings();
   const updateSettings = useUpdatePrimarySettings();
   const lastEnabledProjectGroupingMode = useRef<SidebarProjectGroupingMode>(
@@ -515,12 +494,6 @@ export function GeneralSettingsPanel() {
   );
   const observability = useAtomValue(primaryServerObservabilityAtom);
   const serverProviders = useAtomValue(primaryServerProvidersAtom);
-  const glassOpacityRatio =
-    (settings.glassOpacity - MIN_GLASS_OPACITY) / (MAX_GLASS_OPACITY - MIN_GLASS_OPACITY);
-  const glassOpacitySliderStyle = {
-    "--glass-slider-progress": `${glassOpacityRatio * 100}%`,
-    "--glass-slider-fill-offset": `${0.5 - glassOpacityRatio}rem`,
-  } as CSSProperties;
   const diagnosticsDescription = formatDiagnosticsDescription({
     localTracingEnabled: observability?.localTracingEnabled ?? false,
     otlpTracesEnabled: observability?.otlpTracesEnabled ?? false,
@@ -555,85 +528,6 @@ export function GeneralSettingsPanel() {
   return (
     <SettingsPageContainer>
       <SettingsSection title="General">
-        <SettingsRow
-          title="Theme"
-          description="Choose how Vide looks across the app."
-          resetAction={
-            theme !== "system" ? (
-              <SettingResetButton label="theme" onClick={() => setTheme("system")} />
-            ) : null
-          }
-          control={
-            <Select
-              value={theme}
-              onValueChange={(value) => {
-                if (value === "system" || value === "light" || value === "dark") {
-                  setTheme(value);
-                }
-              }}
-            >
-              <SelectTrigger className="w-full sm:w-40" aria-label="Theme preference">
-                <SelectValue>
-                  {THEME_OPTIONS.find((option) => option.value === theme)?.label ?? "System"}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectPopup align="end" alignItemWithTrigger={false}>
-                {THEME_OPTIONS.map((option) => (
-                  <SelectItem hideIndicator key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectPopup>
-            </Select>
-          }
-        />
-
-        <SettingsRow
-          title="Glass opacity"
-          description="Control how transparent glass surfaces are. Higher values make menus, dialogs, and the composer more solid."
-          resetAction={
-            settings.glassOpacity !== DEFAULT_UNIFIED_SETTINGS.glassOpacity ? (
-              <SettingResetButton
-                label="glass opacity"
-                onClick={() =>
-                  updateSettings({ glassOpacity: DEFAULT_UNIFIED_SETTINGS.glassOpacity })
-                }
-              />
-            ) : null
-          }
-          control={
-            <div className="flex w-full items-center gap-3 sm:w-52">
-              <output
-                className="min-w-12 rounded-md bg-muted px-2 py-1 text-center font-mono text-xs font-medium tabular-nums text-foreground"
-                htmlFor="glass-opacity"
-              >
-                {settings.glassOpacity}%
-              </output>
-              <input
-                aria-label="Glass opacity"
-                className="glass-opacity-slider min-w-0 flex-1"
-                id="glass-opacity"
-                max={MAX_GLASS_OPACITY}
-                min={MIN_GLASS_OPACITY}
-                onChange={(event) => {
-                  const glassOpacity = Number(event.currentTarget.value);
-                  if (
-                    Number.isInteger(glassOpacity) &&
-                    glassOpacity >= MIN_GLASS_OPACITY &&
-                    glassOpacity <= MAX_GLASS_OPACITY
-                  ) {
-                    updateSettings({ glassOpacity });
-                  }
-                }}
-                step={5}
-                style={glassOpacitySliderStyle}
-                type="range"
-                value={settings.glassOpacity}
-              />
-            </div>
-          }
-        />
-
         <SettingsRow
           title="Project Grouping"
           description="Combine matching repositories across environments."
