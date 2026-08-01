@@ -721,7 +721,16 @@ export default function FilePreviewPanel({
   });
   const isImage = relativePath !== null && isWorkspaceImagePreviewPath(relativePath);
   const file = useProjectFileQuery(environmentId, cwd, relativePath, !isImage);
-  const [explorerOpen, setExplorerOpen] = useState(initialExplorerOpen);
+  /*
+   * A panel opened with no file is the explorer's moment: "Open a file" next
+   * to a hidden tree is a door with no handle. The remembered preference still
+   * decides every other open, and because this seeds the state (not just the
+   * paint), the toggle stays truthful and the tree does not collapse under
+   * the first file picked.
+   */
+  const [explorerOpen, setExplorerOpen] = useState(
+    () => relativePath === null || initialExplorerOpen(),
+  );
   const [markdownView, setMarkdownView] = useState<{
     path: string | null;
     revealRequestId: number | null;

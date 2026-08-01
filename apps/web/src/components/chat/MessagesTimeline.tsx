@@ -10,6 +10,7 @@ import { Fragment, memo, use, useCallback, useEffect, useMemo, useRef, useState 
 import type { CSSProperties, MouseEvent, ReactNode } from "react";
 import { LegendList, type LegendListRef } from "@legendapp/list/react";
 import { FileDiff } from "@pierre/diffs/react";
+import { useClientSettings } from "../../hooks/useSettings";
 import { deriveTimelineEntries } from "../../session-logic";
 import { type TurnDiffSummary } from "../../types";
 import {
@@ -118,6 +119,13 @@ interface MessagesTimelineProps {
   onAnchorReady: (messageId: MessageId, anchorIndex: number) => void;
   onAnchorSizeChanged: (messageId: MessageId, size: number) => void;
   contentInsetEndAdjustment: number;
+  /**
+   * Whether live-follow is armed. The list's own end-pinning re-fires on every
+   * layout event by a distance threshold of its own — with it always on, a
+   * reader scrolling up during a streaming turn fought the pin. Off, the list
+   * never moves the scroll by itself.
+   */
+  followEnabled: boolean;
   onIsAtEndChange: (end: TimelineEndReport) => void;
   onManualNavigation: () => void;
   hideEmptyPlaceholder?: boolean;
@@ -165,6 +173,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   onAnchorReady,
   onAnchorSizeChanged,
   contentInsetEndAdjustment,
+  followEnabled,
   onIsAtEndChange,
   onManualNavigation,
   hideEmptyPlaceholder = false,
@@ -424,7 +433,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
             {...(anchoredEndSpace ? { anchoredEndSpace } : {})}
             contentInsetEndAdjustment={contentInsetEndAdjustment}
             maintainScrollAtEnd={
-              anchoredEndSpace
+              anchoredEndSpace || !followEnabled
                 ? false
                 : {
                     animated: false,
@@ -1450,6 +1459,7 @@ const UserMessageBody = memo(function UserMessageBody(props: {
 });
 
 function UserMessageReviewCommentCard({ comment }: { comment: ReviewCommentContext }) {
+  const { wordWrap } = useClientSettings();
   const ctx = use(TimelineRowCtx);
   const fenceLanguage = comment.fenceLanguage ?? "diff";
   const renderablePatch = getRenderablePatch(
@@ -1489,6 +1499,7 @@ function UserMessageReviewCommentCard({ comment }: { comment: ReviewCommentConte
             options={{
               collapsed: false,
               diffStyle: "unified",
+              overflow: wordWrap ? "wrap" : "scroll",
               theme: resolveDiffThemeName(ctx.resolvedTheme),
             }}
           />

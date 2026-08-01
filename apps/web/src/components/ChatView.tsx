@@ -3617,6 +3617,15 @@ function ChatViewContent(props: ChatViewProps) {
     new Debouncer(() => setShowScrollToBottom(true), { wait: 150 }),
   );
   const timelineScrollModeRef = useRef<TimelineScrollMode>("following-end");
+  /*
+   * The mode ref, mirrored as state, so the list itself can be told whether it
+   * may hold the end. LegendList's own maintainScrollAtEnd re-pins on every
+   * layout event by its own distance threshold — during a streaming turn the
+   * reveals fire those constantly, and a reader trying to scroll up was
+   * fighting the pin. Follow armed is the only authority; the list gets its
+   * pinning switched off entirely while the reader has opted out.
+   */
+  const [liveFollowArmed, setLiveFollowArmed] = useState(true);
   const pendingTimelineAnchorRef = useRef<MessageId | null>(null);
   const positionedTimelineAnchorRef = useRef<MessageId | null>(null);
   const settledTimelineAnchorRef = useRef<MessageId | null>(null);
@@ -3633,6 +3642,7 @@ function ChatViewContent(props: ChatViewProps) {
     anchorUserScrollGenerationRef.current += 1;
     timelineScrollModeRef.current = "free-scrolling";
     liveFollowUserScrollGenerationRef.current = null;
+    setLiveFollowArmed(false);
     pendingTimelineAnchorRef.current = null;
     positionedTimelineAnchorRef.current = null;
     settledTimelineAnchorRef.current = null;
@@ -3704,6 +3714,7 @@ function ChatViewContent(props: ChatViewProps) {
     isAtEndRef.current = true;
     timelineScrollModeRef.current = "following-end";
     liveFollowUserScrollGenerationRef.current = anchorUserScrollGenerationRef.current;
+    setLiveFollowArmed(true);
     pendingTimelineAnchorRef.current = null;
     activeTimelineAnchorIndexRef.current = null;
     showScrollDebouncer.current.cancel();
@@ -3857,11 +3868,13 @@ function ChatViewContent(props: ChatViewProps) {
     if (isAtEnd) {
       timelineScrollModeRef.current = "following-end";
       liveFollowUserScrollGenerationRef.current = anchorUserScrollGenerationRef.current;
+      setLiveFollowArmed(true);
       showScrollDebouncer.current.cancel();
       setShowScrollToBottom(false);
     } else {
       timelineScrollModeRef.current = "free-scrolling";
       liveFollowUserScrollGenerationRef.current = null;
+      setLiveFollowArmed(false);
       showScrollDebouncer.current.maybeExecute();
     }
   }, []);
@@ -3937,6 +3950,7 @@ function ChatViewContent(props: ChatViewProps) {
     isAtEndRef.current = true;
     timelineScrollModeRef.current = "following-end";
     liveFollowUserScrollGenerationRef.current = anchorUserScrollGenerationRef.current;
+    setLiveFollowArmed(true);
     pendingTimelineAnchorRef.current = null;
     positionedTimelineAnchorRef.current = null;
     settledTimelineAnchorRef.current = null;
@@ -5967,6 +5981,7 @@ function ChatViewContent(props: ChatViewProps) {
                 onAnchorReady={onTimelineAnchorReady}
                 onAnchorSizeChanged={onTimelineAnchorSizeChanged}
                 contentInsetEndAdjustment={composerOverlayHeight}
+                followEnabled={liveFollowArmed}
                 onIsAtEndChange={onIsAtEndChange}
                 onManualNavigation={cancelTimelineLiveFollowForUserNavigation}
                 hideEmptyPlaceholder={isDraftHeroState}
@@ -6221,6 +6236,7 @@ function ChatViewContent(props: ChatViewProps) {
               gitCwd={gitCwd}
               open={environmentColumnOpen}
               fullAreaHidden={rightPanelMaximized}
+              rightPanelOpen={rightPanelOpen}
               onClose={closeEnvironmentColumn}
               onOpenReview={isGitRepo && gitCwd !== null ? addDiffSurface : null}
             />

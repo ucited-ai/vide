@@ -65,16 +65,8 @@ export const WorkGroupRow = memo(function WorkGroupRow({ row }: { row: TimelineW
     <div data-work-group-state={row.live ? "live" : "done"}>
       <button
         aria-expanded={open}
-        className={cn(
-          "chat-turn-row rounded-(--radius) py-0.5 pr-2 text-(length:--text-caption)",
-          // A live group has nothing to open: its calls are what the label is
-          // already reading out, one at a time.
-          row.live
-            ? "cursor-default"
-            : "cursor-pointer transition-colors hover:bg-(--wash-hover) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70",
-        )}
+        className="chat-turn-row cursor-pointer rounded-(--radius) py-0.5 pr-2 text-(length:--text-caption) transition-colors hover:bg-(--wash-hover) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
         data-scroll-anchor-ignore
-        disabled={row.live}
         onClick={() => setOpen((value) => !value)}
         type="button"
       >
@@ -95,23 +87,22 @@ export const WorkGroupRow = memo(function WorkGroupRow({ row }: { row: TimelineW
           <ChatSwapText className="w-full" shimmer={row.live} text={label} />
         </span>
         <span className="flex items-center gap-1 text-(--ink-tertiary)">
-          {row.live ? null : (
-            <ChevronRightIcon
-              aria-hidden="true"
-              className={cn("size-3 shrink-0 transition-transform", open && "rotate-90")}
-            />
-          )}
+          <ChevronRightIcon
+            aria-hidden="true"
+            className={cn("size-3 shrink-0 transition-transform", open && "rotate-90")}
+          />
         </span>
       </button>
-      {row.live ? null : (
-        <ChatGrow open={open}>
-          <div className="chat-turn-body pt-0.5 pb-1">
-            {entries.map((entry) => (
-              <WorkCallRow entry={entry} key={entry.id} workspaceRoot={workspaceRoot} />
-            ))}
-          </div>
-        </ChatGrow>
-      )}
+      {/* Open while live, the group shows the calls made so far — the list
+          grows in place as the agent moves on, so "what is happening" and
+          "what happened" are the same view at different moments. */}
+      <ChatGrow open={open}>
+        <div className="chat-turn-body pt-0.5 pb-1">
+          {entries.map((entry) => (
+            <WorkCallRow entry={entry} key={entry.id} workspaceRoot={workspaceRoot} />
+          ))}
+        </div>
+      </ChatGrow>
     </div>
   );
 });

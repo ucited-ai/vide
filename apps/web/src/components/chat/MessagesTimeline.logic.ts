@@ -372,11 +372,16 @@ function deriveUnsettledTurnId(
 }
 
 /**
- * Settled turns fold their commentary and tool activity behind a
- * "Worked for ..." row anchored at the turn's first foldable entry; the
- * terminal assistant message stays visible below the fold. The running turn
- * reports where its head belongs instead — the same anchor, so the line the user
- * has been watching does not move when the turn ends.
+ * Everything between one user message and the next folds behind a single
+ * "Worked for ..." row, anchored at the exchange's first entry; only the last
+ * terminal assistant message stays visible below it. The running exchange
+ * reports where its head belongs instead — the same anchor, so the line the
+ * user has been watching does not move when the work ends.
+ *
+ * The unit is the user's message, not the server's turn: a background
+ * continuation (a task notification, a wakeup) starts a new turn without a new
+ * user message, and folding per turn stacked a second "Worked for" under the
+ * first for what the reader experiences as one answer.
  */
 function deriveTurnFolds(input: {
   timelineEntries: ReadonlyArray<TimelineEntry>;
@@ -385,24 +390,29 @@ function deriveTurnFolds(input: {
   unsettledTurnId: TurnId | null;
   liveTurnAnchor: { entryId: string | null };
 }): ReadonlyMap<string, TurnFold> {
-  interface TurnGroup {
+  interface ExchangeRegion {
     entries: Array<TimelineEntry>;
-    terminalEntry: Extract<TimelineEntry, { kind: "message" }> | null;
+    turnIds: Set<TurnId>;
+    /** The newest turn of the exchange — the id the fold row is keyed by, so
+     * the live head (keyed by the running turn) settles into the same row. */
+    lastTurnId: TurnId | null;
     hasStreamingMessage: boolean;
     /**
-     * The user message that kicked the turn off. Entry timestamps alone
+     * The user message that kicked the exchange off. Entry timestamps alone
      * undercount the duration (the first entry appears only once the
      * provider starts producing output), and a turn cut short by a steer may
      * hold a single instantaneous commentary message.
      */
     startBoundary: string | null;
   }
-  const groupsByTurnId = new Map<TurnId, TurnGroup>();
 
+  const regions: ExchangeRegion[] = [];
   let pendingUserBoundary: string | null = null;
+  let current: ExchangeRegion | null = null;
   for (const entry of input.timelineEntries) {
     if (entry.kind === "message" && entry.message.role === "user") {
       pendingUserBoundary = entry.message.createdAt;
+      current = null;
       continue;
     }
     const turnId =
@@ -414,43 +424,54 @@ function deriveTurnFolds(input: {
     if (!turnId) {
       continue;
     }
-    let group = groupsByTurnId.get(turnId);
-    if (!group) {
-      group = {
+    if (!current) {
+      current = {
         entries: [],
-        terminalEntry: null,
+        turnIds: new Set(),
+        lastTurnId: null,
         hasStreamingMessage: false,
-        // Each user boundary starts at most one turn; a second turn after the
-        // same user message (e.g. a steer-superseded continuation) falls back
-        // to its own first entry.
         startBoundary: pendingUserBoundary,
       };
       pendingUserBoundary = null;
-      groupsByTurnId.set(turnId, group);
+      regions.push(current);
     }
-    group.entries.push(entry);
-    if (entry.kind === "message") {
-      if (input.terminalAssistantMessageIds.has(entry.message.id)) {
-        group.terminalEntry = entry;
-      }
-      if (entry.message.streaming) {
-        group.hasStreamingMessage = true;
-      }
+    current.entries.push(entry);
+    current.turnIds.add(turnId);
+    current.lastTurnId = turnId;
+    if (entry.kind === "message" && entry.message.streaming) {
+      current.hasStreamingMessage = true;
     }
   }
 
   const foldsByAnchorEntryId = new Map<string, TurnFold>();
-  for (const [turnId, group] of groupsByTurnId) {
-    if (turnId === input.unsettledTurnId) {
-      input.liveTurnAnchor.entryId = group.entries[0]?.id ?? null;
+  for (const region of regions) {
+    const firstEntry = region.entries[0];
+    const lastEntry = region.entries.at(-1);
+    if (!firstEntry || !lastEntry || region.lastTurnId === null) {
       continue;
     }
-    if (group.hasStreamingMessage) {
+    if (input.unsettledTurnId !== null && region.turnIds.has(input.unsettledTurnId)) {
+      // The whole exchange is the live head's, earlier sibling turns included.
+      input.liveTurnAnchor.entryId = firstEntry.id;
       continue;
     }
+    if (region.hasStreamingMessage) {
+      continue;
+    }
+
+    /* The last terminal message of the exchange is the answer that stays. */
+    let terminalEntry: Extract<TimelineEntry, { kind: "message" }> | null = null;
+    for (let index = region.entries.length - 1; index >= 0; index -= 1) {
+      const entry = region.entries[index];
+      if (entry?.kind === "message" && input.terminalAssistantMessageIds.has(entry.message.id)) {
+        terminalEntry = entry;
+        break;
+      }
+    }
+
     const hiddenEntryIds = new Set<string>();
-    for (const entry of group.entries) {
-      if (entry.id !== group.terminalEntry?.id) {
+    for (const entry of region.entries) {
+      if (entry.id !== terminalEntry?.id) {
         hiddenEntryIds.add(entry.id);
       }
     }
@@ -458,35 +479,34 @@ function deriveTurnFolds(input: {
       continue;
     }
 
-    const firstEntry = group.entries[0];
-    const lastEntry = group.entries.at(-1);
-    if (!firstEntry || !lastEntry) {
-      continue;
-    }
-
-    const isLatestInterruptedTurn =
-      input.latestTurn?.turnId === turnId && input.latestTurn.state === "interrupted";
-    // A turn cut short by a steer leaves trailing work entries behind its
-    // terminal message — take whichever ended last.
+    const isLatestInterrupted =
+      input.latestTurn?.state === "interrupted" && region.turnIds.has(input.latestTurn.turnId);
+    /*
+     * The exchange ends with its newest turn, so when that turn is the session's
+     * latest its recorded timings beat the entry timestamps: a turn cut short by
+     * a steer may hold one instantaneous commentary message, and trailing work
+     * entries can land behind the terminal message — take whichever ended last.
+     */
+    const latestTurnInRegion =
+      input.latestTurn !== null && region.turnIds.has(input.latestTurn.turnId)
+        ? input.latestTurn
+        : null;
     const lastEntryEnd =
       lastEntry.kind === "message" ? lastEntry.message.updatedAt : lastEntry.createdAt;
-    const elapsedMs =
-      input.latestTurn?.turnId === turnId &&
-      input.latestTurn.startedAt &&
-      input.latestTurn.completedAt
-        ? computeElapsedMs(input.latestTurn.startedAt, input.latestTurn.completedAt)
-        : computeElapsedMs(
-            group.startBoundary ?? firstEntry.createdAt,
-            maxIsoTimestamp(group.terminalEntry?.message.updatedAt ?? null, lastEntryEnd) ??
-              lastEntryEnd,
-          );
+    const entryEnd =
+      maxIsoTimestamp(terminalEntry?.message.updatedAt ?? null, lastEntryEnd) ?? lastEntryEnd;
+    const start = region.startBoundary ?? latestTurnInRegion?.startedAt ?? firstEntry.createdAt;
+    const end = latestTurnInRegion
+      ? (maxIsoTimestamp(latestTurnInRegion.completedAt, entryEnd) ?? entryEnd)
+      : entryEnd;
+    const elapsedMs = computeElapsedMs(start, end);
     const duration = elapsedMs !== null ? formatDuration(elapsedMs) : null;
     /*
      * The duration travels beside the label rather than inside it, so the head
      * can keep it in the same tabular column its live timer counted in — the
      * timer stopping is then the only thing that changes about that column.
      */
-    const label = isLatestInterruptedTurn
+    const label = isLatestInterrupted
       ? duration
         ? "You stopped after"
         : "You stopped this response"
@@ -495,7 +515,7 @@ function deriveTurnFolds(input: {
         : "Worked";
 
     foldsByAnchorEntryId.set(firstEntry.id, {
-      turnId,
+      turnId: region.lastTurnId,
       anchorEntryId: firstEntry.id,
       createdAt: firstEntry.createdAt,
       hiddenEntryIds,

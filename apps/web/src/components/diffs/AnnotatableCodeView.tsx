@@ -17,7 +17,6 @@ import {
 } from "react";
 
 import { type DraftId, useComposerDraftStore } from "~/composerDraftStore";
-import { exceedsInlineLineBudget } from "~/lib/diffLineBudget";
 import {
   buildDiffReviewComment,
   restoreDiffReviewCommentRange,
@@ -205,21 +204,6 @@ export function AnnotatableCodeView({
     return byFileKey;
   }, [files, reviewComments, sectionId]);
 
-  /*
-   * Which files may not wrap.
-   *
-   * A wrapped line of a hundred kilobytes is a single element thousands of rows
-   * tall; unwrapped it is one row that scrolls sideways. Nothing else about the
-   * file changes, so this is a rendering decision, not a truncation — the file
-   * is still all there.
-   */
-  const noWrapFileKeys = useMemo(() => {
-    if (options.overflow !== "wrap") return new Set<string>();
-    return new Set(
-      files.filter(({ fileDiff }) => exceedsInlineLineBudget(fileDiff)).map((file) => file.fileKey),
-    );
-  }, [files, options.overflow]);
-
   const removeEntry = useCallback(
     (entryId: string) => {
       setSelectedLines(null);
@@ -341,7 +325,6 @@ export function AnnotatableCodeView({
               selectedLines={selectedLines?.fileKey === fileKey ? selectedLines.range : null}
               options={{
                 ...options,
-                ...(noWrapFileKeys.has(fileKey) ? { overflow: "scroll" as const } : {}),
                 collapsed,
                 // `controlledSelection` is not set here: passing the
                 // `selectedLines` prop at all is what puts the instance into

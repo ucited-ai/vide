@@ -1,6 +1,7 @@
 import { FileDiff } from "@pierre/diffs/react";
 
 import { resolveDiffThemeName } from "../../lib/diffRendering";
+import { useClientSettings } from "../../hooks/useSettings";
 import { type TurnFileDiffs } from "../../hooks/useTurnFileDiffs";
 
 /**
@@ -21,6 +22,7 @@ export function ChangedFileDiff({
   readonly diffs: TurnFileDiffs;
   readonly resolvedTheme: "light" | "dark";
 }) {
+  const { wordWrap } = useClientSettings();
   const fileDiff = diffs.byPath.get(path);
 
   if (!fileDiff) {
@@ -41,6 +43,9 @@ export function ChangedFileDiff({
         options={{
           collapsed: false,
           diffStyle: "unified",
+          // The reader's wrap preference, same as the diff panel — a JSONL
+          // line should not turn the transcript into a horizontal scroller.
+          overflow: wordWrap ? "wrap" : "scroll",
           theme: resolveDiffThemeName(resolvedTheme),
         }}
       />
