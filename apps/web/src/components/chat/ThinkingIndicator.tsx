@@ -1,3 +1,4 @@
+import { type ChatThinkingIndicator } from "@vide/contracts/settings";
 import { useEffect, useState } from "react";
 
 import { useMediaQuery } from "../../hooks/useMediaQuery";
@@ -26,7 +27,7 @@ const STILL_FRAME = 0.6;
 
 const FALLBACK_SIZE = 14;
 
-export function ThinkingIndicator({ variant }: { variant: string }) {
+export function ThinkingIndicator({ variant }: { variant: ChatThinkingIndicator }) {
   const [canvas, setCanvas] = useState<HTMLCanvasElement | null>(null);
   const { resolvedTheme } = useTheme();
   const prefersReducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");

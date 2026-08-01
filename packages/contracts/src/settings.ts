@@ -76,8 +76,11 @@ export const DEFAULT_GLASS_OPACITY: GlassOpacity = 100;
  * UI offers them; the labels, descriptions and the actual motion live with the
  * components that render them (`apps/web/src/components/chat/chatAppearance.ts`).
  *
- * Adding a variant is: one id here, one entry in that registry — the registry
- * is keyed by this union, so the compiler names the file that still needs it.
+ * An id added here is not yet a variant: every table that describes one is
+ * keyed by these unions, so the compiler names each file still owing it an
+ * entry. The exception is a streaming animation's motion, which is CSS and
+ * beyond the compiler's reach — `chatAppearance.test.ts` reads the stylesheet
+ * so that gap fails a test rather than shipping an inert picker entry.
  */
 
 export const ChatStreamAnimation = Schema.Literals([

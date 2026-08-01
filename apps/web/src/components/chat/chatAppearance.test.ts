@@ -1,3 +1,12 @@
+/*
+ * The stylesheet is read off disk rather than imported: the test runner hands
+ * back an empty string for a CSS import, and an assertion against "" passes
+ * nothing it claims to.
+ */
+// @effect-diagnostics nodeBuiltinImport:off
+import * as NodeFS from "node:fs";
+import * as NodeURL from "node:url";
+
 import {
   ChatChangedFilesLayout,
   ChatStreamAnimation,
@@ -9,10 +18,8 @@ import {
   CHAT_CHANGED_FILES_LAYOUTS,
   CHAT_STREAM_ANIMATIONS,
   CHAT_THINKING_INDICATORS,
+  chatChangedFilesLayoutStyle,
   chatThinkingIndicatorPainter,
-  resolveChatChangedFilesLayout,
-  resolveChatStreamAnimation,
-  resolveChatThinkingIndicator,
 } from "./chatAppearance";
 
 describe("chat appearance registries", () => {
@@ -36,17 +43,48 @@ describe("chat appearance registries", () => {
   });
 });
 
-describe("resolving a stored variant", () => {
-  it("keeps a variant that is still offered", () => {
-    expect(resolveChatStreamAnimation("wipe")).toBe("wipe");
-    expect(resolveChatThinkingIndicator("helix")).toBe("helix");
-    expect(resolveChatChangedFilesLayout("cards")).toBe("cards");
+/*
+ * The one edge no type can watch.
+ *
+ * A streaming variant's motion is a rule in the stylesheet, so a variant added
+ * to the contract and the registry compiles, appears in the picker, and does
+ * nothing at all. Reading the stylesheet is the only way that failure can be
+ * anything other than a bug report from someone who chose it.
+ */
+describe("streaming variants are backed by the stylesheet", () => {
+  const theme = NodeFS.readFileSync(
+    NodeURL.fileURLToPath(import.meta.resolve("../../vide-theme.css")),
+    "utf8",
+  );
+  const animated = ChatStreamAnimation.literals.filter((variant) => variant !== "instant");
+
+  it("read the stylesheet it is asserting against", () => {
+    expect(theme.length).toBeGreaterThan(0);
   });
 
-  it("falls back to the default for one written by a build that had more", () => {
-    expect(resolveChatStreamAnimation("typewriter")).toBe("assemble");
-    expect(resolveChatThinkingIndicator("spinner")).toBe("orbits");
-    expect(resolveChatChangedFilesLayout("gallery")).toBe("tree");
+  it.each([...animated])("%s has a rule and the keyframes it names", (variant) => {
+    expect(theme).toContain(`[data-chat-stream-animation="${variant}"] .chat-stream-word`);
+    expect(theme).toContain(`animation-name: chat-stream-${variant};`);
+    expect(theme).toContain(`@keyframes chat-stream-${variant} {`);
+  });
+
+  it("gives instant no rule, because instant is the absence of one", () => {
+    expect(theme).not.toContain('[data-chat-stream-animation="instant"]');
+  });
+
+  it("styles the indicator the canvas measures itself from", () => {
+    expect(theme).toContain("--chat-thinking-indicator-size");
+    expect(theme).toContain(".chat-thinking-indicator canvas");
+  });
+});
+
+describe("changed-files layouts", () => {
+  it("gives every flat layout somewhere to put its rows", () => {
+    for (const layout of ChatChangedFilesLayout.literals) {
+      if (layout === "tree") continue;
+      const style = chatChangedFilesLayoutStyle(layout);
+      expect(style.row.length).toBeGreaterThan(0);
+    }
   });
 });
 
@@ -72,9 +110,5 @@ describe("thinking indicator painters", () => {
 
     expect(paint(2.5, 7, 0.5)).toEqual(paint(2.5, 7, 0.5));
     expect(paint(2.5, 7, 0.5)).not.toEqual(paint(3.5, 7, 0.5));
-  });
-
-  it("falls back to the default painter rather than throwing on an unknown variant", () => {
-    expect(chatThinkingIndicatorPainter("spinner")).toBe(chatThinkingIndicatorPainter("orbits"));
   });
 });

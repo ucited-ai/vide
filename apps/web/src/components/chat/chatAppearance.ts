@@ -2,25 +2,26 @@
  * Every choice the chat's motion and layout offer, in one place.
  *
  * The ids live in the settings contract because they are persisted; everything
- * a human sees or a component does with them lives here. A variant is therefore
- * two edits — an id in `@vide/contracts/settings` and a row in the matching
- * table below — and the tables are keyed by the contract union, so leaving the
- * second one out is a type error naming this file rather than a silent gap in
- * the picker.
+ * a human sees or a component does with them lives here, in a table keyed by
+ * that union — so leaving a variant out of a table is a type error naming this
+ * file rather than a silent gap in the picker. The picker itself is filled from
+ * these tables, so a new variant never touches the settings panel.
  *
- * The motion itself is CSS: the label tables carry no timings, because a
- * variant's feel belongs next to the other type in `vide-theme.css`, not in a
- * TypeScript object the stylesheet cannot see.
+ * What a variant costs to add:
+ *
+ * - a changed-files layout — an id and a row here, and nothing else;
+ * - a thinking indicator — an id, a row here, and a painter in
+ *   `thinkingIndicatorPainters.ts` (whose table is keyed by the same union);
+ * - a streaming animation — an id, a row here, and a rule plus keyframes in
+ *   `vide-theme.css`. CSS is the one part no type can reach, which is why
+ *   `chatAppearance.test.ts` reads the stylesheet and fails on a variant that
+ *   would otherwise appear in the picker and do nothing.
  */
 import {
   ChatChangedFilesLayout,
   ChatStreamAnimation,
   ChatThinkingIndicator,
-  DEFAULT_CHAT_CHANGED_FILES_LAYOUT,
-  DEFAULT_CHAT_STREAM_ANIMATION,
-  DEFAULT_CHAT_THINKING_INDICATOR,
 } from "@vide/contracts/settings";
-
 import { useMemo } from "react";
 
 import { useClientSettings } from "../../hooks/useSettings";
@@ -35,89 +36,104 @@ export interface ChatAppearanceOption<Id extends string> {
 }
 
 /** Contract order in, picker order out — the list reads the same in both places. */
-function toOptions<Id extends string>(
+function toOptions<Id extends string, Entry extends { readonly label: string }>(
   ids: ReadonlyArray<Id>,
-  labels: Readonly<Record<Id, string>>,
-): ReadonlyArray<ChatAppearanceOption<Id>> {
-  return ids.map((id) => ({ id, label: labels[id] }));
-}
-
-/**
- * Settings persisted by an older build can name a variant this one no longer
- * has. Nothing about that is worth an error dialog: the axis falls back to its
- * default and the rest of the user's settings stand.
- */
-function resolveOption<Id extends string>(
-  labels: Readonly<Record<Id, string>>,
-  fallback: Id,
-  value: string,
-): Id {
-  return value in labels ? (value as Id) : fallback;
+  entries: Readonly<Record<Id, Entry>>,
+): ReadonlyArray<Entry & ChatAppearanceOption<Id>> {
+  return ids.map((id) => ({ ...entries[id], id }));
 }
 
 // ── streamed prose ──────────────────────────────────────────────────
 
-const STREAM_ANIMATION_LABELS: Readonly<Record<ChatStreamAnimation, string>> = {
-  instant: "Instant",
-  assemble: "Assemble",
-  fade: "Fade",
-  blur: "Blur",
-  wipe: "Wipe",
-  sweep: "Sweep",
-  phrase: "Phrase",
+const STREAM_ANIMATIONS: Readonly<Record<ChatStreamAnimation, { readonly label: string }>> = {
+  instant: { label: "Instant" },
+  assemble: { label: "Assemble" },
+  fade: { label: "Fade" },
+  blur: { label: "Blur" },
+  wipe: { label: "Wipe" },
+  sweep: { label: "Sweep" },
+  phrase: { label: "Phrase" },
 };
 
-export const CHAT_STREAM_ANIMATIONS = toOptions(
-  ChatStreamAnimation.literals,
-  STREAM_ANIMATION_LABELS,
-);
-
-export function resolveChatStreamAnimation(value: string): ChatStreamAnimation {
-  return resolveOption(STREAM_ANIMATION_LABELS, DEFAULT_CHAT_STREAM_ANIMATION, value);
-}
+export const CHAT_STREAM_ANIMATIONS = toOptions(ChatStreamAnimation.literals, STREAM_ANIMATIONS);
 
 // ── the live indicator ──────────────────────────────────────────────
 
-const THINKING_INDICATOR_LABELS: Readonly<Record<ChatThinkingIndicator, string>> = {
-  orbits: "Orbits",
-  scan: "Scan",
-  mark: "Mark",
-  sonar: "Sonar",
-  swarm: "Swarm",
-  helix: "Helix",
+const THINKING_INDICATORS: Readonly<Record<ChatThinkingIndicator, { readonly label: string }>> = {
+  orbits: { label: "Orbits" },
+  scan: { label: "Scan" },
+  mark: { label: "Mark" },
+  sonar: { label: "Sonar" },
+  swarm: { label: "Swarm" },
+  helix: { label: "Helix" },
 };
 
 export const CHAT_THINKING_INDICATORS = toOptions(
   ChatThinkingIndicator.literals,
-  THINKING_INDICATOR_LABELS,
+  THINKING_INDICATORS,
 );
 
-export function resolveChatThinkingIndicator(value: string): ChatThinkingIndicator {
-  return resolveOption(THINKING_INDICATOR_LABELS, DEFAULT_CHAT_THINKING_INDICATOR, value);
-}
-
-export function chatThinkingIndicatorPainter(value: string): ThinkingIndicatorPainter {
-  return THINKING_INDICATOR_PAINTERS[resolveChatThinkingIndicator(value)];
+export function chatThinkingIndicatorPainter(
+  variant: ChatThinkingIndicator,
+): ThinkingIndicatorPainter {
+  return THINKING_INDICATOR_PAINTERS[variant];
 }
 
 // ── the files a turn changed ────────────────────────────────────────
 
-const CHANGED_FILES_LAYOUT_LABELS: Readonly<Record<ChatChangedFilesLayout, string>> = {
-  tree: "Tree",
-  rows: "Rows",
-  stat: "Stat",
-  cards: "Cards",
-  split: "Split",
-  strip: "Strip",
-};
+/**
+ * `tree` is the odd one out — it nests, and has its own component. The rest are
+ * the same row repeated, and differ only in the classes below: how dense the
+ * row is, whether it carries the add/delete weight bar, and how the rows are
+ * arranged. A layout should change how a list reads, not what it says.
+ */
+interface ChatChangedFilesLayoutStyle {
+  readonly label: string;
+  /** The element the rows sit in. Empty when the rows need no arrangement. */
+  readonly container: string;
+  /** Each row, on top of the shared row class. */
+  readonly row: string;
+  /** Whether the row carries the proportional add/delete bar. */
+  readonly showWeight: boolean;
+}
+
+const CHANGED_FILES_LAYOUTS: Readonly<Record<ChatChangedFilesLayout, ChatChangedFilesLayoutStyle>> =
+  {
+    tree: { label: "Tree", container: "", row: "", showWeight: false },
+    rows: { label: "Rows", container: "space-y-px", row: "px-2 py-1", showWeight: false },
+    stat: { label: "Stat", container: "space-y-px", row: "px-2 py-1", showWeight: true },
+    cards: {
+      label: "Cards",
+      container: "space-y-1.5",
+      row: "rounded-(--radius) border border-border/70 px-2 py-1.5",
+      showWeight: false,
+    },
+    // Two columns of the same row. Wide changes stop running off the bottom of
+    // the card; a narrow transcript falls back to one column rather than
+    // squeezing a path into half of nothing.
+    split: {
+      label: "Split",
+      container: "grid grid-cols-1 gap-x-3 gap-y-px sm:grid-cols-2",
+      row: "px-2 py-1",
+      showWeight: false,
+    },
+    strip: {
+      label: "Strip",
+      container: "",
+      row: "px-2 py-0.5 text-(length:--text-caption)",
+      showWeight: false,
+    },
+  };
 
 export const CHAT_CHANGED_FILES_LAYOUTS = toOptions(
   ChatChangedFilesLayout.literals,
-  CHANGED_FILES_LAYOUT_LABELS,
+  CHANGED_FILES_LAYOUTS,
 );
 
-export function resolveChatChangedFilesLayout(value: string): ChatChangedFilesLayout {
-  return resolveOption(CHANGED_FILES_LAYOUT_LABELS, DEFAULT_CHAT_CHANGED_FILES_LAYOUT, value);
+export function chatChangedFilesLayoutStyle(
+  layout: ChatChangedFilesLayout,
+): ChatChangedFilesLayoutStyle {
+  return CHANGED_FILES_LAYOUTS[layout];
 }
 
 // ── what the transcript reads ───────────────────────────────────────
@@ -129,20 +145,25 @@ export interface ChatAppearanceSettings {
 }
 
 /**
- * All three axes, resolved once.
+ * All three axes, read once.
  *
  * The transcript subscribes here rather than in each row, so a settings change
  * is one re-render of the list owner instead of one per message on screen.
+ *
+ * No fallback for an id this build does not know: client settings are decoded
+ * against the contract before they reach any of this, in the browser
+ * (`clientPersistenceStorage.ts`) and on the desktop (`ipc/methods/clientSettings.ts`)
+ * alike, so an unknown variant never gets this far.
  */
 export function useChatAppearance(): ChatAppearanceSettings {
-  const settings = useClientSettings();
-  const { chatChangedFilesLayout, chatStreamAnimation, chatThinkingIndicator } = settings;
+  const { chatChangedFilesLayout, chatStreamAnimation, chatThinkingIndicator } =
+    useClientSettings();
 
   return useMemo(
     () => ({
-      streamAnimation: resolveChatStreamAnimation(chatStreamAnimation),
-      thinkingIndicator: resolveChatThinkingIndicator(chatThinkingIndicator),
-      changedFilesLayout: resolveChatChangedFilesLayout(chatChangedFilesLayout),
+      streamAnimation: chatStreamAnimation,
+      thinkingIndicator: chatThinkingIndicator,
+      changedFilesLayout: chatChangedFilesLayout,
     }),
     [chatChangedFilesLayout, chatStreamAnimation, chatThinkingIndicator],
   );

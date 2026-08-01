@@ -1306,6 +1306,27 @@ function ChatMarkdown({
     const filePaths = [...markdownFileLinkMetaByHref.values()].map((meta) => meta.filePath);
     return buildFileLinkParentSuffixByPath(filePaths);
   }, [markdownFileLinkMetaByHref]);
+  /*
+   * Everything below that a renderer derives from `text`, reached through a ref
+   * rather than through a dependency list.
+   *
+   * react-markdown hands each entry of `components` to the JSX runtime as an
+   * element *type*, so a renderer with a new identity is a different type, and
+   * React answers a different type by throwing the old subtree away. With
+   * `text` in the memo's dependencies every token rebuilt those functions and
+   * so remounted every paragraph in the message — discarding DOM for prose that
+   * had not changed, and with it any reveal still running on a word.
+   *
+   * Assigned during render, because a renderer reads it during the same render:
+   * an effect would leave the first pass after each delta looking at the
+   * previous message's links.
+   */
+  const latestFromText = useRef({
+    text,
+    markdownFileLinkMetaByHref,
+    fileLinkParentSuffixByPath,
+  });
+  latestFromText.current = { text, markdownFileLinkMetaByHref, fileLinkParentSuffixByPath };
   const markdownUrlTransform = useCallback((href: string) => {
     return rewriteMarkdownFileUriHref(href) ?? defaultUrlTransform(href);
   }, []);
@@ -1368,7 +1389,9 @@ function ChatMarkdown({
       li({ node, children, ...props }) {
         const listItemStart = node?.position?.start.offset;
         const markerOffset =
-          typeof listItemStart === "number" ? findTaskListMarkerOffset(text, listItemStart) : null;
+          typeof listItemStart === "number"
+            ? findTaskListMarkerOffset(latestFromText.current.text, listItemStart)
+            : null;
         return (
           <li {...props} data-task-marker-offset={markerOffset ?? undefined}>
             {renderSkillInlineMarkdownChildren(children, skills)}
@@ -1406,7 +1429,9 @@ function ChatMarkdown({
       },
       a({ node, href, children, ...props }) {
         const normalizedHref = href ? normalizeMarkdownLinkHrefKey(href) : "";
-        const fileLinkMeta = normalizedHref ? markdownFileLinkMetaByHref.get(normalizedHref) : null;
+        const fileLinkMeta = normalizedHref
+          ? latestFromText.current.markdownFileLinkMetaByHref.get(normalizedHref)
+          : null;
         if (!fileLinkMeta) {
           const faviconHost = resolveExternalWebLinkHost(href);
           const isSameDocumentLink = href?.startsWith("#") ?? false;
@@ -1478,7 +1503,9 @@ function ChatMarkdown({
 
         // The file name carries the link; where it lives and which line only
         // qualify it, so they render as one muted trail behind the name.
-        const parentSuffix = fileLinkParentSuffixByPath.get(fileLinkMeta.filePath);
+        const parentSuffix = latestFromText.current.fileLinkParentSuffixByPath.get(
+          fileLinkMeta.filePath,
+        );
         const qualifierParts: string[] = [];
         if (typeof parentSuffix === "string" && parentSuffix.length > 0) {
           qualifierParts.push(parentSuffix);
@@ -1549,18 +1576,18 @@ function ChatMarkdown({
         );
       },
     }),
+    // `text` and the two maps derived from it are deliberately absent: they
+    // reach the renderers through `latestFromText`, so the renderers keep their
+    // identities — and their DOM — while a message streams.
     [
       diffThemeName,
-      fileLinkParentSuffixByPath,
       isStreaming,
-      markdownFileLinkMetaByHref,
       onTaskListChange,
       openInPreferredEditor,
       openExternalLinkInPreview,
       openMarkdownFileInPreview,
       resolvedTheme,
       skills,
-      text,
       threadRef,
     ],
   );

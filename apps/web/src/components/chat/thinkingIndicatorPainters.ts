@@ -17,7 +17,7 @@
 
 import type { ChatThinkingIndicator } from "@vide/contracts/settings";
 
-export interface ThinkingIndicatorDot {
+interface ThinkingIndicatorDot {
   /** Offset from the centre, in pixels, y pointing up. */
   readonly x: number;
   readonly y: number;

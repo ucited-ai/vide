@@ -3,6 +3,7 @@ import { ChatChangedFilesLayout } from "@vide/contracts/settings";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vite-plus/test";
 
+import { ChangedFilesList } from "./ChangedFilesList";
 import { ChangedFilesCard } from "./ChangedFilesTree";
 
 const FILES = [
@@ -27,6 +28,18 @@ function renderCard(layout: ChatChangedFilesLayout): string {
   );
 }
 
+function renderList(layout: Exclude<ChatChangedFilesLayout, "tree">): string {
+  return renderToStaticMarkup(
+    <ChangedFilesList
+      turnId={TurnId.make("turn-1")}
+      files={FILES}
+      layout={layout}
+      resolvedTheme="light"
+      onOpenTurnDiff={() => {}}
+    />,
+  );
+}
+
 const FLAT_LAYOUTS = ChatChangedFilesLayout.literals.filter((layout) => layout !== "tree");
 
 describe("ChangedFilesCard layouts", () => {
@@ -46,10 +59,21 @@ describe("ChangedFilesCard layouts", () => {
     }
   });
 
-  it("shows the add/delete weight bar only where the layout asks for it", () => {
-    // The bar is the whole difference between `stat` and `rows`; if it ever
-    // stops being, the two variants have collapsed into one choice.
-    expect(renderCard("stat")).toContain("bg-success/70");
-    expect(renderCard("rows")).not.toContain("bg-success/70");
+  /*
+   * A layout that quietly renders like `rows` is still a passing test if all
+   * the test asks is whether the file names appear. Each of these is the one
+   * mark that makes its layout a different choice from the others.
+   *
+   * Rendered without the card around it, so the card's own chrome cannot
+   * satisfy an assertion the rows were supposed to.
+   */
+  it.each([
+    { layout: "stat", mark: "bg-success/70", name: "the add/delete weight bar" },
+    { layout: "cards", mark: "border-border/70", name: "a border per file" },
+    { layout: "split", mark: "sm:grid-cols-2", name: "a second column" },
+    { layout: "strip", mark: "py-0.5", name: "rows tighter than every other layout's" },
+  ] as const)("gives $layout $name, and rows none of it", ({ layout, mark }) => {
+    expect(renderList(layout)).toContain(mark);
+    expect(renderList("rows")).not.toContain(mark);
   });
 });
