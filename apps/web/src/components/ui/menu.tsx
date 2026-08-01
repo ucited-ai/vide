@@ -89,6 +89,60 @@ function MenuGroup(props: MenuPrimitive.Group.Props) {
   return <MenuPrimitive.Group data-slot="menu-group" {...props} />;
 }
 
+type MenuRowVariant = "button" | "menu" | "static";
+
+const MENU_ROW_CLASSNAME =
+  "flex min-h-(--popup-item-height) w-full items-center gap-(--popup-item-gap) rounded-(--popup-item-radius) px-(--popup-item-padding-inline) py-1 text-(length:--text-ui) text-foreground data-disabled:pointer-events-none disabled:pointer-events-none data-disabled:opacity-64 disabled:opacity-64 [&>svg:not([class*='opacity-'])]:opacity-80 [&>svg:not([class*='size-'])]:size-(--popup-icon-size) [&>svg:not([class*='text-'])]:text-muted-foreground [&>svg]:pointer-events-none [&>svg]:shrink-0 [&>[data-slot=menu-row-caption]]:ms-auto [&>[data-slot=menu-row-caption]]:max-w-40 [&>[data-slot=menu-row-caption]]:shrink-0 [&>[data-slot=menu-row-caption]]:truncate [&>[data-slot=menu-row-caption]]:text-(length:--text-caption) [&>[data-slot=menu-row-caption]]:text-muted-foreground [&>[data-slot=menu-row-label]]:min-w-0 [&>[data-slot=menu-row-label]]:flex-1";
+
+export function menuRowVariants({ variant = "menu" }: { variant?: MenuRowVariant } = {}) {
+  return cn(
+    MENU_ROW_CLASSNAME,
+    variant === "menu"
+      ? "cursor-default select-none outline-none data-highlighted:bg-accent data-highlighted:text-accent-foreground"
+      : variant === "button"
+        ? "cursor-default select-none text-left outline-none transition-colors hover:bg-accent"
+        : undefined,
+  );
+}
+
+interface MenuRowProps {
+  caption?: React.ReactNode;
+  disabled?: boolean;
+  icon?: React.ReactNode;
+  label: React.ReactNode;
+  onClick?: React.MouseEventHandler<HTMLElement>;
+  tone?: "destructive" | "heading" | "muted";
+  variant?: Exclude<MenuRowVariant, "menu">;
+}
+
+export function MenuRow(props: MenuRowProps) {
+  const variant = props.variant ?? "button";
+  const Row = variant === "button" ? "button" : "div";
+  return (
+    <Row
+      {...(variant === "button"
+        ? { disabled: props.disabled, onClick: props.onClick, type: "button" as const }
+        : {})}
+      className={cn(
+        menuRowVariants({ variant }),
+        props.tone === "heading" && "min-h-0 py-1.5 font-medium text-(length:--text-caption)",
+      )}
+    >
+      {props.icon}
+      <span
+        className={cn(
+          props.tone === "destructive" ? "text-pretty text-destructive" : "truncate",
+          (props.tone === "heading" || props.tone === "muted") && "text-muted-foreground",
+        )}
+        data-slot="menu-row-label"
+      >
+        {props.label}
+      </span>
+      {props.caption ? <span data-slot="menu-row-caption">{props.caption}</span> : null}
+    </Row>
+  );
+}
+
 function MenuItem({
   className,
   inset,
@@ -101,7 +155,9 @@ function MenuItem({
   return (
     <MenuPrimitive.Item
       className={cn(
-        "flex min-h-(--popup-item-height) cursor-default select-none items-center gap-(--popup-item-gap) rounded-(--popup-item-radius) px-(--popup-item-padding-inline) py-1 text-(length:--text-ui) text-foreground outline-none data-disabled:pointer-events-none data-highlighted:bg-accent data-inset:ps-(--popup-item-inset-padding-inline) data-[variant=destructive]:text-destructive-foreground data-highlighted:text-accent-foreground data-disabled:opacity-64 [&>svg:not([class*='opacity-'])]:opacity-80 [&>svg:not([class*='size-'])]:size-(--popup-icon-size) [&>svg:not([class*='text-'])]:text-muted-foreground data-[variant=destructive]:[&>svg:not([class*='text-'])]:text-current [&>svg]:pointer-events-none [&>svg]:shrink-0",
+        menuRowVariants({ variant: "menu" }),
+        inset && "ps-(--popup-item-inset-padding-inline)",
+        "data-[variant=destructive]:text-destructive-foreground data-[variant=destructive]:[&>svg:not([class*='text-'])]:text-current",
         className,
       )}
       data-inset={inset}
@@ -138,10 +194,10 @@ function MenuCheckboxItem({
         <>
           <span className="col-start-1">{children}</span>
           <MenuPrimitive.CheckboxItemIndicator
-            className="inset-shadow-[0_1px_--theme(--color-black/4%)] inline-flex h-[calc(var(--thumb-size)+2px)] w-[calc(var(--thumb-size)*2-2px)] shrink-0 items-center rounded-full p-px outline-none transition-[background-color,box-shadow] duration-200 [--thumb-size:--spacing(4)] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background data-checked:bg-primary data-unchecked:bg-input data-disabled:opacity-64 sm:[--thumb-size:--spacing(3)]"
+            className="inset-shadow-[0_1px_--theme(--color-black/4%)] inline-flex h-[calc(var(--thumb-size)+2px)] w-[calc(var(--thumb-size)*2-2px)] shrink-0 items-center rounded-full p-px outline-none transition-[background-color,box-shadow] [--thumb-size:--spacing(4)] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background data-checked:bg-primary data-unchecked:bg-input data-disabled:opacity-64 sm:[--thumb-size:--spacing(3)]"
             keepMounted
           >
-            <span className="pointer-events-none block aspect-square h-full in-[[data-slot=menu-checkbox-item][data-checked]]:origin-[var(--thumb-size)_50%] origin-left in-[[data-slot=menu-checkbox-item][data-checked]]:translate-x-[calc(var(--thumb-size)-4px)] in-[[data-slot=menu-checkbox-item]:active]:not-data-disabled:scale-x-110 in-[[data-slot=menu-checkbox-item]:active]:rounded-[var(--thumb-size)/calc(var(--thumb-size)*1.10)] rounded-(--thumb-size) bg-background shadow-sm/5 will-change-transform [transition:translate_.15s,border-radius_.15s,scale_.1s_.1s,transform-origin_.15s]" />
+            <span className="pointer-events-none block aspect-square h-full in-[[data-slot=menu-checkbox-item][data-checked]]:origin-[var(--thumb-size)_50%] origin-left in-[[data-slot=menu-checkbox-item][data-checked]]:translate-x-[calc(var(--thumb-size)-4px)] in-[[data-slot=menu-checkbox-item]:active]:not-data-disabled:scale-x-110 in-[[data-slot=menu-checkbox-item]:active]:rounded-[var(--thumb-size)/calc(var(--thumb-size)*1.10)] rounded-(--thumb-size) bg-background shadow-sm/5 will-change-transform [transition:translate_var(--duration-fast)_var(--ease-out),border-radius_var(--duration-fast)_var(--ease-out),scale_var(--duration-fast)_var(--ease-out)_var(--duration-fast),transform-origin_var(--duration-fast)_var(--ease-out)]" />
           </MenuPrimitive.CheckboxItemIndicator>
         </>
       ) : (
@@ -161,7 +217,13 @@ function MenuCheckboxItem({
               <path d="M5.252 12.7 10.2 18.63 18.748 5.37" />
             </svg>
           </MenuPrimitive.CheckboxItemIndicator>
-          <span className="col-start-2">{children}</span>
+          {/* A bare span drops a leading icon onto its own line above the
+              label: Tailwind's preflight makes `svg` display:block. Same flex
+              row and icon treatment as MenuItem, so a checkbox row with an icon
+              reads identically to a plain one. */}
+          <span className="col-start-2 flex min-w-0 items-center gap-(--popup-item-gap) [&>svg:not([class*='opacity-'])]:opacity-80 [&>svg:not([class*='text-'])]:text-muted-foreground">
+            {children}
+          </span>
         </>
       )}
     </MenuPrimitive.CheckboxItem>
