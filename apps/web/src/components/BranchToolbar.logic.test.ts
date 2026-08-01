@@ -9,6 +9,7 @@ import {
   resolveDraftEnvModeAfterBranchChange,
   resolveEffectiveEnvMode,
   resolveEnvModeLabel,
+  resolveDisplayedThreadBranch,
   resolveBranchTriggerLabel,
   resolveBranchToolbarPrBranch,
   resolveBranchToolbarValue,
@@ -17,6 +18,7 @@ import {
   resolvePreviousWorktreeLabel,
   resolvePreviousWorktreeSeed,
   shouldIncludeBranchPickerItem,
+  shouldReconcileOptimisticThreadBranch,
   shouldShowEnvironmentIndicator,
 } from "./BranchToolbar.logic";
 
@@ -172,6 +174,77 @@ describe("resolveBranchToolbarValue", () => {
         currentGitBranch: "main",
       }),
     ).toBe("main");
+  });
+});
+
+describe("resolveDisplayedThreadBranch", () => {
+  it("shows a shared optimistic selection before the authoritative branch updates", () => {
+    expect(
+      resolveDisplayedThreadBranch({
+        authoritativeBranch: "main",
+        optimisticSelection: { branch: "feature/next", isPending: true },
+      }),
+    ).toBe("feature/next");
+  });
+
+  it("falls back to the authoritative branch without an optimistic selection", () => {
+    expect(
+      resolveDisplayedThreadBranch({
+        authoritativeBranch: "main",
+        optimisticSelection: undefined,
+      }),
+    ).toBe("main");
+  });
+
+  it("preserves an explicit optimistic no-branch selection", () => {
+    expect(
+      resolveDisplayedThreadBranch({
+        authoritativeBranch: "main",
+        optimisticSelection: { branch: null, isPending: false },
+      }),
+    ).toBeNull();
+  });
+});
+
+describe("shouldReconcileOptimisticThreadBranch", () => {
+  it("keeps the optimistic value while its branch action is pending", () => {
+    expect(
+      shouldReconcileOptimisticThreadBranch({
+        authoritativeBranch: "feature/next",
+        displayedBranch: "feature/next",
+        optimisticSelection: { branch: "feature/next", isPending: true },
+      }),
+    ).toBe(false);
+  });
+
+  it("reconciles once the authoritative branch catches up", () => {
+    expect(
+      shouldReconcileOptimisticThreadBranch({
+        authoritativeBranch: "feature/next",
+        displayedBranch: "feature/next",
+        optimisticSelection: { branch: "feature/next", isPending: false },
+      }),
+    ).toBe(true);
+  });
+
+  it("keeps the optimistic value while authoritative state is stale", () => {
+    expect(
+      shouldReconcileOptimisticThreadBranch({
+        authoritativeBranch: "main",
+        displayedBranch: "main",
+        optimisticSelection: { branch: "feature/next", isPending: false },
+      }),
+    ).toBe(false);
+  });
+
+  it("waits for the displayed git status after thread metadata catches up", () => {
+    expect(
+      shouldReconcileOptimisticThreadBranch({
+        authoritativeBranch: "feature/next",
+        displayedBranch: "main",
+        optimisticSelection: { branch: "feature/next", isPending: false },
+      }),
+    ).toBe(false);
   });
 });
 

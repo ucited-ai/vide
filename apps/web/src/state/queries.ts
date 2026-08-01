@@ -171,11 +171,30 @@ export function usePaginatedBranches(target: VcsRefTarget) {
     });
   }, [data?.nextCursor, targetKey]);
 
+  const waiting = results.some((result) => result.waiting);
+  const loadedCursorCount = values.length;
+
+  /*
+   * Three states, because `waiting` on its own cannot answer the question a
+   * picker actually asks.
+   *
+   * These pages are live streams: each one goes back to waiting every time it
+   * refreshes on its interval, whether or not anyone asked for anything. A
+   * picker that reads `waiting` as "loading" therefore says "loading" forever,
+   * which is what both branch pickers used to do — one of them permanently
+   * showing "Loading more refs" under a list that had finished loading, and
+   * neither ever admitting that a repository simply has one branch.
+   *
+   * So: nothing has arrived yet is the only honest first-load signal, and a page
+   * that has been asked for but not yet arrived is the only honest load-more
+   * one. Everything else has an answer to show, even when that answer is empty.
+   */
   return {
     data,
     refs: data?.refs ?? EMPTY_REFS,
     error,
-    isPending: results.some((result) => result.waiting),
+    isInitialLoad: data === null && waiting,
+    isLoadingMore: data !== null && waiting && loadedCursorCount < cursors.length,
     refresh,
     loadNext,
   };

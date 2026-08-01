@@ -19,10 +19,9 @@ import {
   useId,
   useLayoutEffect,
   useMemo,
-  useOptimistic,
   useRef,
   useState,
-  useTransition,
+  useSyncExternalStore,
   type MouseEvent as ReactMouseEvent,
 } from "react";
 
@@ -41,12 +40,15 @@ import { parsePullRequestReference } from "../pullRequestReference";
 import { getSourceControlPresentation } from "../sourceControlPresentation";
 import {
   deriveLocalBranchNameFromRemoteRef,
+  type OptimisticThreadBranchSelection,
   resolveBranchTriggerLabel,
   resolveBranchToolbarPrBranch,
   resolveBranchSelectionTarget,
   resolveBranchToolbarValue,
+  resolveDisplayedThreadBranch,
   resolveDraftEnvModeAfterBranchChange,
   resolveEffectiveEnvMode,
+  shouldReconcileOptimisticThreadBranch,
   shouldIncludeBranchPickerItem,
 } from "./BranchToolbar.logic";
 import { useGitRepositoryInit } from "./GitActionsControl";
@@ -100,6 +102,78 @@ interface ThreadBranchSelectionInput {
   onBranchApplied?: () => void;
   /** Refreshes ref queries the caller owns once a branch action settles. */
   onBranchActionSettled?: () => void;
+}
+
+interface StoredThreadBranchSelection extends OptimisticThreadBranchSelection {
+  readonly actionId: number;
+}
+
+const threadBranchSelections = new Map<string, StoredThreadBranchSelection>();
+const threadBranchSelectionListeners = new Map<string, Set<() => void>>();
+let nextThreadBranchActionId = 0;
+
+function threadBranchSelectionKey(environmentId: EnvironmentId, threadId: ThreadId): string {
+  return JSON.stringify([environmentId, threadId]);
+}
+
+function emitThreadBranchSelection(key: string): void {
+  for (const listener of threadBranchSelectionListeners.get(key) ?? []) {
+    listener();
+  }
+}
+
+function writeThreadBranchSelection(
+  key: string,
+  branch: string | null,
+  isPending: boolean,
+): number {
+  const actionId = ++nextThreadBranchActionId;
+  threadBranchSelections.set(key, { actionId, branch, isPending });
+  emitThreadBranchSelection(key);
+  return actionId;
+}
+
+function updateThreadBranchSelection(
+  key: string,
+  actionId: number,
+  branch: string | null,
+  isPending: boolean,
+): void {
+  if (threadBranchSelections.get(key)?.actionId !== actionId) return;
+  threadBranchSelections.set(key, { actionId, branch, isPending });
+  emitThreadBranchSelection(key);
+}
+
+function clearThreadBranchSelection(key: string, actionId: number): void {
+  if (threadBranchSelections.get(key)?.actionId !== actionId) return;
+  threadBranchSelections.delete(key);
+  emitThreadBranchSelection(key);
+}
+
+export function useOptimisticThreadBranchSelection(
+  environmentId: EnvironmentId,
+  threadId: ThreadId,
+): OptimisticThreadBranchSelection | undefined {
+  const key = useMemo(
+    () => threadBranchSelectionKey(environmentId, threadId),
+    [environmentId, threadId],
+  );
+  const subscribe = useCallback(
+    (listener: () => void) => {
+      const listeners = threadBranchSelectionListeners.get(key) ?? new Set<() => void>();
+      listeners.add(listener);
+      threadBranchSelectionListeners.set(key, listeners);
+      return () => {
+        listeners.delete(listener);
+        if (listeners.size === 0) {
+          threadBranchSelectionListeners.delete(key);
+        }
+      };
+    },
+    [key],
+  );
+  const getSnapshot = useCallback(() => threadBranchSelections.get(key), [key]);
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }
 
 function toBranchActionErrorMessage(error: unknown): string {
@@ -162,6 +236,11 @@ export function useThreadBranchSelection({
   const activeWorktreePath = serverThread?.worktreePath ?? draftThread?.worktreePath ?? null;
   const activeProjectCwd = activeProject?.workspaceRoot ?? null;
   const branchCwd = activeWorktreePath ?? activeProjectCwd;
+  const selectionKey = useMemo(
+    () => threadBranchSelectionKey(environmentId, threadId),
+    [environmentId, threadId],
+  );
+  const optimisticSelection = useOptimisticThreadBranchSelection(environmentId, threadId);
   const hasServerThread = serverThread !== null;
   const effectiveEnvMode =
     effectiveEnvModeOverride ??
@@ -174,8 +253,8 @@ export function useThreadBranchSelection({
   // ---------------------------------------------------------------------------
   // Thread branch mutation (colocated — only this component calls it)
   // ---------------------------------------------------------------------------
-  const setThreadBranch = useCallback(
-    (branch: string | null, worktreePath: string | null) => {
+  const persistThreadBranch = useCallback(
+    (branch: string | null, worktreePath: string | null, actionId: number) => {
       if (!activeThreadId || !activeProject) return;
       if (serverSession && worktreePath !== activeWorktreePath) {
         void stopThreadSession({
@@ -184,6 +263,7 @@ export function useThreadBranchSelection({
         });
       }
       if (hasServerThread) {
+        onActiveThreadBranchOverrideChange?.(branch);
         void updateThreadMetadata({
           environmentId,
           input: {
@@ -191,10 +271,12 @@ export function useThreadBranchSelection({
             branch,
             worktreePath,
           },
+        }).then((result) => {
+          if (result._tag === "Failure") {
+            clearThreadBranchSelection(selectionKey, actionId);
+            onActiveThreadBranchOverrideChange?.(serverThread?.branch ?? null);
+          }
         });
-      }
-      if (hasServerThread) {
-        onActiveThreadBranchOverrideChange?.(branch);
         return;
       }
       const nextDraftEnvMode = resolveDraftEnvModeAfterBranchChange({
@@ -221,9 +303,19 @@ export function useThreadBranchSelection({
       threadRef,
       environmentId,
       effectiveEnvMode,
+      selectionKey,
+      serverThread?.branch,
       stopThreadSession,
       updateThreadMetadata,
     ],
+  );
+
+  const setThreadBranch = useCallback(
+    (branch: string | null, worktreePath: string | null) => {
+      const actionId = writeThreadBranchSelection(selectionKey, branch, false);
+      persistThreadBranch(branch, worktreePath, actionId);
+    },
+    [persistThreadBranch, selectionKey],
   );
 
   const branchStatusQuery = useEnvironmentQuery(
@@ -240,20 +332,46 @@ export function useThreadBranchSelection({
     activeThreadBranch,
     currentGitBranch: branchStatusQuery.data?.refName ?? null,
   });
-  const [resolvedActiveBranch, setOptimisticBranch] = useOptimistic(
-    canonicalActiveBranch,
-    (_currentBranch: string | null, optimisticBranch: string | null) => optimisticBranch,
-  );
-  const [isBranchActionPending, startBranchActionTransition] = useTransition();
+  const resolvedActiveBranch = resolveDisplayedThreadBranch({
+    authoritativeBranch: canonicalActiveBranch,
+    optimisticSelection,
+  });
+  const isBranchActionPending = optimisticSelection?.isPending === true;
   const isSelectingWorktreeBase =
     effectiveEnvMode === "worktree" && !envLocked && !activeWorktreePath;
 
-  const runBranchAction = (action: () => Promise<void>) => {
-    startBranchActionTransition(async () => {
-      await action();
+  useEffect(() => {
+    if (
+      !optimisticSelection ||
+      !shouldReconcileOptimisticThreadBranch({
+        authoritativeBranch: serverThread?.branch ?? draftThread?.branch ?? null,
+        displayedBranch: canonicalActiveBranch,
+        optimisticSelection,
+      })
+    ) {
+      return;
+    }
+    const storedSelection = threadBranchSelections.get(selectionKey);
+    if (storedSelection) {
+      clearThreadBranchSelection(selectionKey, storedSelection.actionId);
+    }
+  }, [
+    canonicalActiveBranch,
+    draftThread?.branch,
+    optimisticSelection,
+    selectionKey,
+    serverThread?.branch,
+  ]);
+
+  const runBranchAction = (
+    optimisticBranch: string,
+    action: (actionId: number) => Promise<void>,
+  ) => {
+    const actionId = writeThreadBranchSelection(selectionKey, optimisticBranch, true);
+    void (async () => {
+      await action(actionId);
       onBranchActionSettled?.();
-      branchStatusQuery.refresh();
-    });
+    })();
   };
 
   const selectBranch = (refName: VcsRef) => {
@@ -283,9 +401,7 @@ export function useThreadBranchSelection({
 
     onBranchApplied?.();
 
-    runBranchAction(async () => {
-      const previousBranch = resolvedActiveBranch;
-      setOptimisticBranch(selectedBranchName);
+    runBranchAction(selectedBranchName, async (actionId) => {
       const checkoutResult = await switchRef({
         environmentId,
         input: {
@@ -297,11 +413,11 @@ export function useThreadBranchSelection({
         const nextBranchName = refName.isRemote
           ? (checkoutResult.value.refName ?? selectedBranchName)
           : selectedBranchName;
-        setOptimisticBranch(nextBranchName);
-        setThreadBranch(nextBranchName, selectionTarget.nextWorktreePath);
+        updateThreadBranchSelection(selectionKey, actionId, nextBranchName, false);
+        persistThreadBranch(nextBranchName, selectionTarget.nextWorktreePath, actionId);
         return;
       }
-      setOptimisticBranch(previousBranch);
+      clearThreadBranchSelection(selectionKey, actionId);
       if (!isAtomCommandInterrupted(checkoutResult)) {
         toastManager.add(
           stackedThreadToast({
@@ -320,9 +436,7 @@ export function useThreadBranchSelection({
 
     onBranchApplied?.();
 
-    runBranchAction(async () => {
-      const previousBranch = resolvedActiveBranch;
-      setOptimisticBranch(name);
+    runBranchAction(name, async (actionId) => {
       const createBranchResult = await createRefMutation({
         environmentId,
         input: {
@@ -332,11 +446,16 @@ export function useThreadBranchSelection({
         },
       });
       if (createBranchResult._tag === "Success") {
-        setOptimisticBranch(createBranchResult.value.refName);
-        setThreadBranch(createBranchResult.value.refName, activeWorktreePath);
+        updateThreadBranchSelection(
+          selectionKey,
+          actionId,
+          createBranchResult.value.refName,
+          false,
+        );
+        persistThreadBranch(createBranchResult.value.refName, activeWorktreePath, actionId);
         return;
       }
-      setOptimisticBranch(previousBranch);
+      clearThreadBranchSelection(selectionKey, actionId);
       if (!isAtomCommandInterrupted(createBranchResult)) {
         toastManager.add(
           stackedThreadToast({
@@ -444,8 +563,10 @@ export function BranchToolbarBranchSelector({
   const refs = branchRefState.refs;
   const hasNextPage =
     branchRefState.data?.nextCursor !== null && branchRefState.data?.nextCursor !== undefined;
-  const isFetchingNextPage = branchRefState.isPending && branchRefState.data !== null;
-  const isInitialBranchesLoadPending = branchRefState.isPending && branchRefState.data === null;
+  // Both states come from the hook: it is the only place that can tell a page
+  // this picker asked for apart from a live stream refreshing on its own.
+  const isFetchingNextPage = branchRefState.isLoadingMore;
+  const isInitialBranchesLoadPending = branchRefState.isInitialLoad;
   const sourceControlPresentation = useMemo(
     () => getSourceControlPresentation(branchStatus?.sourceControlProvider),
     [branchStatus?.sourceControlProvider],
@@ -498,6 +619,9 @@ export function BranchToolbarBranchSelector({
       normalizedDeferredBranchQuery,
     ],
   );
+  const hasFilteredBranchRows = filteredBranchPickerItems.some((itemValue) =>
+    branchByName.has(itemValue),
+  );
   const listedActiveBranch =
     resolvedActiveBranch === null ? null : (branchByName.get(resolvedActiveBranch) ?? null);
   const activeBranchRefQuery = useEnvironmentQuery(
@@ -523,11 +647,11 @@ export function BranchToolbarBranchSelector({
         : null;
   const totalBranchCount = branchRefState.data?.totalCount ?? 0;
   const branchStatusText = isInitialBranchesLoadPending
-    ? "Loading refs..."
+    ? "Loading branches…"
     : isFetchingNextPage
-      ? "Loading more refs..."
-      : hasNextPage
-        ? `Showing ${refs.length} of ${totalBranchCount} refs`
+      ? "Loading more branches…"
+      : hasNextPage && refs.length > 0
+        ? `Showing ${refs.length} of ${totalBranchCount} branches`
         : null;
 
   // ---------------------------------------------------------------------------
@@ -931,12 +1055,14 @@ export function BranchToolbarBranchSelector({
           </div>
         </div>
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <ComboboxEmpty>No refs found.</ComboboxEmpty>
+          {!isInitialBranchesLoadPending ? <ComboboxEmpty>No branches found.</ComboboxEmpty> : null}
           <ComboboxGroup className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            <ComboboxGroupLabel className="shrink-0 px-(--popup-item-padding-inline) pt-2 pb-1 text-(length:--text-caption)">
-              Branches
-            </ComboboxGroupLabel>
-            <div className="relative min-h-0 w-full max-h-(--chat-ref-list-max-height) flex-1 overflow-hidden">
+            {hasFilteredBranchRows ? (
+              <ComboboxGroupLabel className="shrink-0 px-(--popup-item-padding-inline) pt-2 pb-1 text-(length:--text-caption)">
+                Branches
+              </ComboboxGroupLabel>
+            ) : null}
+            <div className="relative min-h-(--chat-ref-list-min-height) w-full max-h-(--chat-ref-list-max-height) flex-1 overflow-hidden">
               <ComboboxListVirtualized className="size-full min-w-0 p-0">
                 <LegendList<string>
                   ref={branchListRef}

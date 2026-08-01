@@ -156,6 +156,33 @@ export function resolveBranchToolbarValue(input: {
   return currentGitBranch ?? activeThreadBranch;
 }
 
+export interface OptimisticThreadBranchSelection {
+  readonly branch: string | null;
+  readonly isPending: boolean;
+}
+
+export function resolveDisplayedThreadBranch(input: {
+  authoritativeBranch: string | null;
+  optimisticSelection: OptimisticThreadBranchSelection | undefined;
+}): string | null {
+  return input.optimisticSelection === undefined
+    ? input.authoritativeBranch
+    : input.optimisticSelection.branch;
+}
+
+export function shouldReconcileOptimisticThreadBranch(input: {
+  authoritativeBranch: string | null;
+  displayedBranch: string | null;
+  optimisticSelection: OptimisticThreadBranchSelection | undefined;
+}): boolean {
+  return (
+    input.optimisticSelection !== undefined &&
+    !input.optimisticSelection.isPending &&
+    input.optimisticSelection.branch === input.authoritativeBranch &&
+    input.optimisticSelection.branch === input.displayedBranch
+  );
+}
+
 export function resolveBranchTriggerLabel(input: {
   activeWorktreePath: string | null;
   effectiveEnvMode: EnvMode;
