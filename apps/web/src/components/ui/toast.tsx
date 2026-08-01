@@ -102,8 +102,12 @@ function errorDescriptionClampClass(type: unknown, description: unknown): string
 /** Dismiss-only: circular control overlapping the card corner (iOS notification–style). */
 const toastCornerDismissClass = "absolute z-20 -top-1.5 -right-1.5";
 const toastCornerOrbClass = cn(
-  "inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-full border border-border/60 bg-popover/92 text-muted-foreground shadow-sm outline-none backdrop-blur-sm",
-  "transition-[color,background-color,box-shadow] hover:bg-popover hover:text-foreground",
+  // Solid chrome, no glass of its own: the orb overlaps a toast that is
+  // already translucent at reduced chrome alpha, and a second translucent
+  // fill plus a second blur composed into a visibly denser, double-blurred
+  // spot on the card's corner.
+  "inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-full border border-border/60 bg-(--surface-chrome) text-muted-foreground shadow-sm outline-none",
+  "transition-[color,background-color,box-shadow] hover:bg-[color-mix(in_srgb,var(--surface-chrome)_90%,var(--foreground))] hover:text-foreground",
   "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background",
 );
 

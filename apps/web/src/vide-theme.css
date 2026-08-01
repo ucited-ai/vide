@@ -648,25 +648,6 @@
   }
 
   /*
-   * The sidebar panel and the content pane both animate their width on collapse.
-   * Upstream drives that with a linear ease; the shared curve makes the panel
-   * settle instead of stopping dead.
-   *
-   * --ease-soft, not --ease-out: this is a panel, and every other collapsing
-   * surface in the app — right panel, environment column, terminal drawer, file
-   * explorer — moves on the soft curve. The sidebar ran on --ease-out for a
-   * while, which is the curve for small state changes; against a drawer opening
-   * beside it the two arrived differently and the app read as two animations
-   * rather than one layout settling.
-   */
-  [data-slot="sidebar-container"],
-  [data-slot="sidebar-gap"],
-  [data-slot="sidebar-inset"] {
-    transition-duration: var(--duration-base) !important;
-    transition-timing-function: var(--ease-soft) !important;
-  }
-
-  /*
    * The fade hides row reflow during the sidebar width transition. Its asymmetric
    * timing removes content before collapse and restores it after layout settles.
    */
@@ -679,6 +660,29 @@
     opacity: 0;
     transition: opacity 80ms var(--ease-out);
   }
+}
+
+/*
+ * The sidebar panel and the content pane both animate their width on collapse.
+ * Upstream drives that with a linear ease; the shared curve makes the panel
+ * settle instead of stopping dead.
+ *
+ * --ease-soft, not --ease-out: this is a panel, and every other collapsing
+ * surface in the app — right panel, environment column, terminal drawer, file
+ * explorer — moves on the soft curve.
+ *
+ * Unlayered on purpose. For `!important` the layer order inverts, so inside
+ * `@layer base` this outranked the unlayered `.no-transitions` kill-switch the
+ * theme toggle relies on — the sidebar was the one piece of chrome that kept
+ * animating through a theme switch. Unlayered, both rules tie and the
+ * kill-switch wins on source order (this file is @imported first), while the
+ * rule still beats the layered utilities it exists to override.
+ */
+[data-slot="sidebar-container"],
+[data-slot="sidebar-gap"],
+[data-slot="sidebar-inset"] {
+  transition-duration: var(--duration-base) !important;
+  transition-timing-function: var(--ease-soft) !important;
 }
 
 /*
