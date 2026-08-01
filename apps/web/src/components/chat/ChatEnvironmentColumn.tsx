@@ -1,7 +1,6 @@
 import { scopeThreadRef } from "@vide/client-runtime/environment";
 import type { EnvironmentId, ThreadId, VcsRef } from "@vide/contracts";
 import {
-  BoxIcon,
   CheckIcon,
   ChevronDownIcon,
   CloudUploadIcon,
@@ -32,102 +31,75 @@ import { resolveLockedWorkspaceLabel } from "../BranchToolbar.logic";
 import { useThreadBranchSelection } from "../BranchToolbarBranchSelector";
 import { GitActionItemIcon, GitQuickActionIcon, useGitActions } from "../GitActionsControl";
 import { Input } from "../ui/input";
-import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
+import { Menu, MenuItem, MenuPopup, MenuRow, MenuTrigger, menuRowVariants } from "../ui/menu";
+import { Skeleton } from "../ui/skeleton";
 import { Spinner } from "../ui/spinner";
+import { DiffStatLabel } from "./DiffStatLabel";
 
 interface ChatEnvironmentColumnProps {
   environmentId: EnvironmentId;
   threadId: ThreadId;
   draftId?: DraftId;
   gitCwd: string | null;
-  /** Width animates between 0 and its resting size, the way the right panel
-   *  does — the column stays mounted at all times so both directions animate. */
+  /** The panel stays mounted at all times, so both directions animate. */
   open: boolean;
-  rightPanelOpen: boolean;
   fullAreaHidden: boolean;
   onClose: () => void;
+  /** Opens the review surface in the right panel, or `null` where review is not
+   *  available — a draft thread, or a workspace that is not a Git repository. */
+  onOpenReview: (() => void) | null;
 }
 
 /**
- * Row chrome shared by every plain row in the column. A real `MenuItem` isn't
- * usable here: this column stays on screen, and Base UI's menu items dismiss
- * their menu on activation, which would close the whole column every time a
- * row did something. So rows are plain buttons styled to match, and only the
- * branch picker below — which is genuinely transient — gets a real menu.
+ * Stands in for a reading the panel cannot answer yet — a diff stat, a pull
+ * request — while the ref it describes is being switched underneath it.
  */
-const ROW_CLASSNAME =
-  "flex min-h-(--popup-item-height) w-full cursor-default select-none items-center gap-(--popup-item-gap) rounded-sm px-(--popup-item-padding-inline) py-1 text-left text-(length:--text-ui) text-foreground outline-none transition-colors hover:bg-accent disabled:pointer-events-none disabled:opacity-64 [&>svg:not([class*='opacity-'])]:opacity-80 [&>svg:not([class*='size-'])]:size-4 [&>svg:not([class*='text-'])]:text-muted-foreground [&>svg]:pointer-events-none [&>svg]:shrink-0";
-
-/** A section heading. */
-function SectionHeader({ label }: { label: string }) {
-  return (
-    <div className="flex items-center justify-between gap-2 pe-1">
-      <span className="px-(--popup-item-padding-inline) py-1.5 font-medium text-(length:--text-caption) text-muted-foreground">
-        {label}
-      </span>
-    </div>
-  );
+function ReadingSkeleton() {
+  return <Skeleton className="h-3 w-14 rounded-full motion-reduce:animate-none" />;
 }
 
-/**
- * One action row. The caption carries whatever the row wants to say quietly —
- * a file count, a pull request state, or the reason the row is unavailable.
+/*
+ * One bar per row, enough of them to fill the ceiling the loaded list settles
+ * at.
+ *
+ * The loading path used to be a bare "Loading branches…" line, so the popup
+ * opened at the floor its own surface sets and then grew past it the moment the
+ * refs arrived — by the search field's height at the very least, and by the
+ * whole span between floor and ceiling on any repository with more refs than
+ * fit. Reserving the ceiling from the first frame is what makes the two states
+ * the same size — and a search lands here too, since retargeting the query
+ * starts over with no pages. Widths vary so the bars read as ref names, and stay
+ * distinct so each row keys off its own.
  */
-function EnvironmentRow({
-  icon,
-  label,
-  caption,
-  disabled = false,
-  onClick,
-}: {
-  icon: ReactNode;
-  label: string;
-  caption?: string | null;
-  disabled?: boolean;
-  onClick?: () => void;
-}) {
-  return (
-    <button type="button" disabled={disabled} onClick={onClick} className={ROW_CLASSNAME}>
-      {icon}
-      <span className="min-w-0 flex-1 truncate">{label}</span>
-      {caption ? (
-        <span className="ms-auto max-w-40 shrink-0 truncate text-(length:--text-caption) text-muted-foreground">
-          {caption}
-        </span>
-      ) : null}
-    </button>
-  );
-}
+const REF_SKELETON_LABEL_WIDTHS = [
+  "w-8/12",
+  "w-5/12",
+  "w-10/12",
+  "w-6/12",
+  "w-11/12",
+  "w-4/12",
+  "w-9/12",
+  "w-7/12",
+];
 
-/** A row that reports state rather than offering an action. */
-function EnvironmentStatus({
-  icon,
-  label,
-  caption,
-  tone = "muted",
-}: {
-  icon?: ReactNode;
-  label: string;
-  caption?: string | null;
-  tone?: "muted" | "destructive";
-}) {
+function EnvironmentBranchListSkeleton() {
   return (
-    <div className="flex min-h-(--popup-item-height) items-center gap-(--popup-item-gap) px-(--popup-item-padding-inline) py-1 text-(length:--text-ui) [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:opacity-80">
-      {icon}
-      <span
-        className={
-          tone === "destructive"
-            ? "min-w-0 flex-1 text-pretty text-destructive"
-            : "min-w-0 flex-1 truncate text-muted-foreground"
-        }
-      >
-        {label}
+    // A height, not a floor, and clipped rather than scrollable: there is
+    // nothing below these bars to scroll to.
+    <div aria-busy="true" className="h-(--chat-ref-list-max-height) overflow-hidden">
+      <span className="sr-only" role="status">
+        Loading branches…
       </span>
-      {caption ? (
-        <span className="ms-auto max-w-40 shrink-0 truncate text-(length:--text-caption) text-muted-foreground">
-          {caption}
-        </span>
-      ) : null}
+      {REF_SKELETON_LABEL_WIDTHS.map((labelWidth) => (
+        <div
+          aria-hidden
+          key={labelWidth}
+          className="flex min-h-(--popup-item-height) items-center gap-(--popup-item-gap) px-(--popup-item-padding-inline) py-1"
+        >
+          <Skeleton className="size-(--chat-picker-icon-size) shrink-0 motion-reduce:animate-none" />
+          <Skeleton className={cn("h-3 rounded-full motion-reduce:animate-none", labelWidth)} />
+        </div>
+      ))}
     </div>
   );
 }
@@ -159,8 +131,13 @@ function EnvironmentBranchList({
     branchRefState.data?.nextCursor !== null && branchRefState.data?.nextCursor !== undefined;
 
   if (refs.length === 0) {
+    if (branchRefState.isInitialLoad) return <EnvironmentBranchListSkeleton />;
+    // The floor, so a repository with no refs is not a popup the size of the
+    // sentence saying so.
     return (
-      <MenuItem disabled>{branchRefState.isPending ? "Loading refs..." : "No refs found"}</MenuItem>
+      <div className="min-h-(--chat-ref-list-min-height)">
+        <MenuItem disabled>No branches found</MenuItem>
+      </div>
     );
   }
 
@@ -170,7 +147,7 @@ function EnvironmentBranchList({
    * never take. The branch picker above the composer caps the same way.
    */
   return (
-    <div className="max-h-[calc(10*var(--popup-item-height))] overflow-y-auto overscroll-contain">
+    <div className="min-h-(--chat-ref-list-min-height) max-h-(--chat-ref-list-max-height) overflow-y-auto overscroll-contain">
       {refs.map((refName) => (
         <MenuItem key={refName.name} onClick={() => onSelectBranch(refName)}>
           <GitBranchIcon aria-hidden className="size-(--chat-picker-icon-size)" />
@@ -187,15 +164,15 @@ function EnvironmentBranchList({
       {hasNextPage ? (
         <MenuItem
           closeOnClick={false}
-          disabled={branchRefState.isPending}
+          disabled={branchRefState.isLoadingMore}
           className="text-(length:--text-caption) text-muted-foreground"
           onClick={(event) => {
             event.preventDefault();
             branchRefState.loadNext();
           }}
         >
-          {branchRefState.isPending ? <Spinner aria-hidden /> : null}
-          {branchRefState.isPending ? "Loading more refs…" : "Load more refs"}
+          {branchRefState.isLoadingMore ? <Spinner aria-hidden /> : null}
+          {branchRefState.isLoadingMore ? "Loading more branches…" : "Load more branches"}
         </MenuItem>
       ) : null}
     </div>
@@ -212,12 +189,16 @@ function EnvironmentBranchRow({
   branchCwd,
   activeBranch,
   branchLabel,
+  pending,
   onSelectBranch,
 }: {
   environmentId: EnvironmentId;
   branchCwd: string | null;
   activeBranch: string | null;
   branchLabel: string;
+  /** A switch this row started is still running. The label is already the ref
+   *  being moved to, so the row reports progress rather than restating it. */
+  pending: boolean;
   onSelectBranch: (refName: VcsRef) => void;
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -239,13 +220,26 @@ function EnvironmentBranchRow({
       }}
     >
       <MenuTrigger
-        render={<button type="button" className={cn(ROW_CLASSNAME, "data-popup-open:bg-accent")} />}
+        disabled={pending}
+        render={
+          <button
+            type="button"
+            className={cn(menuRowVariants({ variant: "button" }), "data-popup-open:bg-accent")}
+          />
+        }
       >
-        <GitBranchIcon aria-hidden />
+        {pending ? <Spinner aria-hidden /> : <GitBranchIcon aria-hidden />}
         <span className="min-w-0 flex-1 truncate">{branchLabel}</span>
         <ChevronDownIcon aria-hidden className="ms-auto size-3.5 shrink-0 opacity-50" />
       </MenuTrigger>
-      <MenuPopup align="start" className="w-(--chat-picker-width)">
+      {/* Opens toward the chat. Anchored below its row it covered the rest of
+          the panel it belongs to, so choosing a branch hid the environment you
+          were choosing it for. */}
+      <MenuPopup
+        side="left"
+        align="start"
+        className="min-h-(--chat-ref-list-min-height) w-(--chat-picker-width)"
+      >
         <div className="flex items-center gap-(--popup-item-gap) border-b border-border px-(--popup-item-padding-inline)">
           <SearchIcon
             aria-hidden
@@ -255,8 +249,8 @@ function EnvironmentBranchRow({
             ref={searchInputRef}
             unstyled
             size="sm"
-            aria-label="Search refs"
-            placeholder="Search refs…"
+            aria-label="Search branches"
+            placeholder="Search branches…"
             className="min-w-0 flex-1 [&_input]:bg-transparent [&_input]:px-0 [&_input]:text-(length:--text-ui)"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
@@ -279,11 +273,35 @@ function EnvironmentBranchRow({
 }
 
 /**
+ * The rows a ref switch invalidates, held back for as long as it runs.
+ *
+ * A checkout leaves the diff stat, the worktree path, the recommended action and
+ * the pull request all describing the ref the thread has just left, and the git
+ * query only catches up once the switch settles. So the group steps back and
+ * stops taking input, rather than inviting an action against a tree that is
+ * moving underneath it.
+ */
+function EnvironmentPendingGroup({ pending, children }: { pending: boolean; children: ReactNode }) {
+  return (
+    <div
+      className={cn(
+        "transition-opacity duration-(--duration-base) ease-(--ease-soft) motion-reduce:transition-none",
+        pending && "opacity-64",
+      )}
+      // Same reason the collapsed column uses it: rows that read as out of
+      // service must not still answer Tab and clicks.
+      {...(pending ? { inert: true } : {})}
+    >
+      {children}
+    </div>
+  );
+}
+
+/**
  * Everything a thread runs against — its worktree, its ref, and the git actions
- * that move it forward — as its own column beside the chat pane, in place of
- * the dropdown this replaced. Stays mounted so both layout modes animate shut:
- * width reserves room while the right panel is collapsed, and transform carries
- * the same surface over the chat while the right panel is open.
+ * that move it forward — as a panel over the right of the chat pane, in place
+ * of the dropdown this replaced. Stays mounted so it animates in both
+ * directions, and transform carries it over the chat either way.
  */
 export const ChatEnvironmentColumn = memo(function ChatEnvironmentColumn({
   environmentId,
@@ -291,11 +309,27 @@ export const ChatEnvironmentColumn = memo(function ChatEnvironmentColumn({
   draftId,
   gitCwd,
   open,
-  rightPanelOpen,
   fullAreaHidden,
   onClose,
+  onOpenReview,
 }: ChatEnvironmentColumnProps) {
   const visibleOpen = open && !fullAreaHidden;
+
+  /*
+   * The git query outlives the closing animation, and the panel itself reports
+   * when that is over.
+   *
+   * Switching the query off in the same frame the slide starts made the rows
+   * fall back to their empty readings — "No changes", "Git status is
+   * unavailable" — so the panel spent its whole exit animating a version of
+   * itself nobody asked to see. The work still stops when the panel is gone; it
+   * just stops after it is gone. `transitionend` rather than a timer, because a
+   * timer would be a second copy of a duration that lives in CSS.
+   */
+  const [exitSettled, setExitSettled] = useState(!visibleOpen);
+  useEffect(() => {
+    if (visibleOpen) setExitSettled(false);
+  }, [visibleOpen]);
 
   /*
    * Escape closes the panel from anywhere, not only from inside it.
@@ -322,15 +356,24 @@ export const ChatEnvironmentColumn = memo(function ChatEnvironmentColumn({
   const git = useGitActions({
     gitCwd,
     activeThreadRef,
-    enabled: visibleOpen,
+    enabled: visibleOpen || !exitSettled,
     ...(draftId ? { draftId } : {}),
   });
+  /*
+   * No `onBranchActionSettled`. This panel used to refresh the git status itself
+   * once a branch action settled, which duplicated work the server already does:
+   * every VCS mutation the callback could follow — switchRef, createRef,
+   * createWorktree, removeWorktree — ends in a server-side `refreshGitStatus`
+   * that broadcasts the new status to us (apps/server/src/ws.ts). Asking again
+   * from here bought nothing and added a query to the moment the UI was busiest.
+   * The chat bar still passes the callback, because there it reconciles the ref
+   * *list* — a different thing, which no broadcast covers.
+   */
   const branch = useThreadBranchSelection({
     environmentId,
     threadId,
     envLocked: false,
     ...(draftId ? { draftId } : {}),
-    onBranchActionSettled: git.refreshStatus,
   });
 
   // Refreshes the moment the column opens, the way the dropdown menu it
@@ -345,18 +388,47 @@ export const ChatEnvironmentColumn = memo(function ChatEnvironmentColumn({
   }, [visibleOpen, git.refreshStatus]);
 
   const SourceControlIcon = git.sourceControlPresentation.Icon;
-  const commitItem = git.menuItems.find((item) => item.id === "commit") ?? null;
   const pullRequestItem = git.menuItems.find((item) => item.id === "pr") ?? null;
-  // The quick action already spells out the recommended next step, so a row
-  // repeating it under the same label would just be the same button twice.
+  /*
+   * The quick action already spells out the recommended next step, so a row
+   * repeating it under the same label would just be the same button twice.
+   * Commit drops out for the same reason rather than a different one: it is
+   * actionable only while the working tree has changes, and in exactly that
+   * state the quick action is already one of the commit variants.
+   */
   const secondaryItems = git.menuItems.filter(
     (item) => item.id !== "commit" && item.id !== "pr" && item.label !== git.quickAction.label,
   );
   const pullRequest = git.gitStatus?.pr ?? null;
+  /*
+   * A checkout in flight, and nothing else. The branch hook already runs its
+   * mutations inside a transition, so this is the switch's own duration rather
+   * than a guess at how long a git command takes — which is why the panel can
+   * step back for exactly as long as its readings are wrong.
+   */
+  const isSwitchingRef = branch.isBranchActionPending;
   const changedFileCaption =
     git.changedFileCount > 0
       ? `${git.changedFileCount} file${git.changedFileCount === 1 ? "" : "s"}`
       : "No changes";
+  /*
+   * Lines, not files. A file count tells you how far you will scroll; "+412 −8"
+   * tells you how much there is to read, which is what you are actually weighing
+   * before you open a review. Binary-only changes report no lines at all, so
+   * those keep the file count rather than claiming nothing happened.
+   */
+  const workingTree = git.gitStatus?.workingTree ?? null;
+  const changesCaption = isSwitchingRef ? (
+    <ReadingSkeleton />
+  ) : workingTree && workingTree.insertions + workingTree.deletions > 0 ? (
+    <DiffStatLabel
+      additions={workingTree.insertions}
+      deletions={workingTree.deletions}
+      layout="inline"
+    />
+  ) : (
+    changedFileCaption
+  );
   const workspaceLabel = resolveLockedWorkspaceLabel(branch.activeWorktreePath);
   const WorkspaceIcon = branch.activeWorktreePath ? FolderGit2Icon : FolderIcon;
   const branchLabel = branch.resolvedActiveBranch ?? "No ref";
@@ -364,17 +436,18 @@ export const ChatEnvironmentColumn = memo(function ChatEnvironmentColumn({
 
   return (
     <>
+      {/*
+        A layer, never a column: zero-wide, so nothing here takes room from the
+        chat. Reserving `--envcol-width` used to shorten the chat pane while the
+        panel was open, which parked the transcript's scrollbar on the seam
+        between the two instead of on the pane's own outer edge.
+      */}
       <div
-        className={cn(
-          "relative z-40 h-full min-h-0 min-w-0 self-stretch overflow-visible",
-          "transition-[width] duration-(--duration-base) ease-(--ease-soft)",
-        )}
-        style={{ width: visibleOpen && !rightPanelOpen ? "var(--envcol-width)" : 0 }}
+        className="relative z-40 h-full w-0 min-h-0 min-w-0 self-stretch overflow-visible"
         // Collapsed but mounted, it must not be reachable: without this, Tab
-        // walks into a column nobody can see.
+        // walks into a panel nobody can see.
         {...(!visibleOpen ? { inert: true } : {})}
         data-environment-column-open={visibleOpen ? "true" : "false"}
-        data-environment-column-mode={rightPanelOpen ? "overlay" : "push"}
         data-environment-column-full-area-hidden={fullAreaHidden ? "true" : "false"}
         onKeyDown={(event) => {
           if (event.key === "Escape" && !event.defaultPrevented) {
@@ -383,45 +456,47 @@ export const ChatEnvironmentColumn = memo(function ChatEnvironmentColumn({
         }}
       >
         <div
+          onTransitionEnd={(event) => {
+            if (event.target !== event.currentTarget || event.propertyName !== "opacity") return;
+            if (!visibleOpen) setExitSettled(true);
+          }}
           className={cn(
-            "absolute bottom-(--envcol-inset) end-(--envcol-inset) flex w-[calc(var(--envcol-width)-2*var(--envcol-inset))] min-h-0 flex-col overflow-hidden rounded-[var(--envcol-radius)] border border-(--envcol-edge) bg-(--envcol-surface) shadow-[var(--envcol-shadow)]",
+            "absolute top-(--envcol-inset) end-(--envcol-inset-end) flex max-h-[calc(100%-2*var(--envcol-inset))] w-[calc(var(--envcol-width)-var(--envcol-inset-end)-var(--envcol-inset-start))] min-h-0 flex-col overflow-hidden rounded-[var(--envcol-radius)] border border-(--envcol-edge) bg-(--envcol-surface) shadow-[var(--envcol-shadow)]",
             /*
-             * Overlaying, it starts below the chat header rather than at the
-             * top inset. The header's right edge is where the toggle that owns
-             * this panel lives, and the close button was removed because that
-             * toggle is the single control — so a surface painted over it left
-             * the panel with no way to shut, since focus also stays on the
-             * covered trigger and never reaches the Escape handler below.
-             * Pushing (its own column, nothing above it) keeps the top inset.
+             * Grows out of the corner it is pinned to, so the motion reads as
+             * the panel arriving from the right edge rather than as a block
+             * being pushed across whatever is underneath it.
              */
-            rightPanelOpen
-              ? "top-[calc(var(--workspace-topbar-height)+var(--envcol-inset))]"
-              : "top-(--envcol-inset)",
-            "transition-[transform,visibility] duration-(--duration-base) ease-(--ease-soft)",
+            /*
+             * `translate` and `scale`, not `transform`. Tailwind v4 compiles
+             * those utilities to the individual CSS properties of the same
+             * name, so a transition list naming `transform` covers neither —
+             * which is why this panel used to jump to its offset, stand there
+             * for the duration, and only then blink out.
+             */
+            "origin-top-right transition-[opacity,translate,scale,visibility] duration-(--duration-base) ease-(--ease-soft)",
             visibleOpen
-              ? "visible translate-x-0"
-              : "invisible translate-x-(--envcol-hidden-translate)",
+              ? "visible translate-x-0 scale-100 opacity-100"
+              : "invisible translate-x-(--envcol-enter-offset) scale-(--envcol-enter-scale) opacity-0",
           )}
           data-environment-column-surface
           aria-label="Environment overview"
           role="region"
         >
-          <div className="flex h-(--envcol-header-height) shrink-0 items-center gap-2 border-b border-border px-2.5">
-            <span className="flex min-w-0 items-center gap-1.5 text-(length:--text-ui) font-medium text-foreground">
-              <BoxIcon aria-hidden className="size-3.5 shrink-0 opacity-70" />
-              <span className="truncate">Environment</span>
-            </span>
-          </div>
-          <div className="min-h-0 flex-1 overflow-y-auto p-(--popup-padding)">
+          {/* The rows establish the window's natural height, then shrink into
+              an internal scroller when the available workspace is exhausted. */}
+          <div className="min-h-0 flex-auto overflow-y-auto p-(--popup-padding)">
             <div>
-              <SectionHeader label="Environment" />
+              <MenuRow variant="static" label="Environment" tone="heading" />
               {!git.isRepo ? (
                 <>
-                  <EnvironmentStatus
+                  <MenuRow
+                    variant="static"
                     icon={<GitBranchPlusIcon aria-hidden />}
                     label="Not a Git repository"
+                    tone="muted"
                   />
-                  <EnvironmentRow
+                  <MenuRow
                     icon={
                       git.isInitPending ? (
                         <Spinner aria-hidden />
@@ -436,113 +511,145 @@ export const ChatEnvironmentColumn = memo(function ChatEnvironmentColumn({
                 </>
               ) : (
                 <>
-                  <EnvironmentRow
-                    icon={<FileDiffIcon aria-hidden />}
-                    label="Changes"
-                    caption={changedFileCaption}
-                    disabled={commitItem === null || commitItem.disabled}
-                    {...(commitItem
-                      ? {
-                          onClick: () => {
-                            git.runMenuItem(commitItem);
-                          },
-                        }
-                      : {})}
-                  />
-                  <EnvironmentStatus
-                    icon={<WorkspaceIcon aria-hidden />}
-                    label={workspaceLabel}
-                    caption={branch.activeWorktreePath}
-                  />
+                  {/*
+                   * Reading the diff, not committing it. This row used to open
+                   * the commit dialog, which put the one surface built for
+                   * reading a change behind a dialog built for shipping it —
+                   * and committing is already the quick action below, so
+                   * nothing is lost by letting this row mean review.
+                   *
+                   * It is also the only row here that navigates rather than
+                   * acting in place, so it is the only one the column steps
+                   * aside for: opening the right panel auto-collapses this
+                   * column, which is why it needs no explicit close.
+                   */}
+                  <EnvironmentPendingGroup pending={isSwitchingRef}>
+                    <MenuRow
+                      icon={<FileDiffIcon aria-hidden />}
+                      label="Changes"
+                      caption={changesCaption}
+                      disabled={onOpenReview === null}
+                      {...(onOpenReview ? { onClick: onOpenReview } : {})}
+                    />
+                    <MenuRow
+                      variant="static"
+                      icon={<WorkspaceIcon aria-hidden />}
+                      label={workspaceLabel}
+                      caption={branch.activeWorktreePath}
+                      tone="muted"
+                    />
+                  </EnvironmentPendingGroup>
                   <EnvironmentBranchRow
                     environmentId={environmentId}
                     branchCwd={branch.branchCwd}
                     activeBranch={branch.resolvedActiveBranch}
                     branchLabel={branchLabel}
+                    pending={isSwitchingRef}
                     onSelectBranch={branch.selectBranch}
                   />
-                  <EnvironmentRow
-                    icon={
-                      <GitQuickActionIcon
-                        quickAction={git.quickAction}
-                        SourceControlIcon={SourceControlIcon}
-                      />
-                    }
-                    label={git.quickAction.label}
-                    caption={git.quickActionDisabledReason}
-                    disabled={git.isBusy || git.quickAction.disabled}
-                    onClick={git.runQuickAction}
-                  />
-                  {secondaryItems.map((item) => (
-                    <EnvironmentRow
-                      key={`${item.id}-${item.label}`}
+                  {/* The advisory lines stay put rather than disappearing for
+                      the duration: they are conditioned on the same stale
+                      status as everything else here, so hiding them would move
+                      the whole panel twice on the way to the same answer. */}
+                  <EnvironmentPendingGroup pending={isSwitchingRef}>
+                    <MenuRow
                       icon={
-                        <GitActionItemIcon icon={item.icon} SourceControlIcon={SourceControlIcon} />
-                      }
-                      label={item.label}
-                      caption={git.menuItemDisabledReason(item)}
-                      disabled={item.disabled}
-                      onClick={() => {
-                        git.runMenuItem(item);
-                      }}
-                    />
-                  ))}
-                  {pullRequestItem ? (
-                    <EnvironmentRow
-                      icon={
-                        <GitActionItemIcon
-                          icon={pullRequestItem.icon}
+                        <GitQuickActionIcon
+                          quickAction={git.quickAction}
                           SourceControlIcon={SourceControlIcon}
                         />
                       }
-                      label={pullRequestItem.label}
-                      caption={
-                        pullRequest
-                          ? `#${pullRequest.number} ${pullRequest.state}`
-                          : git.menuItemDisabledReason(pullRequestItem)
-                      }
-                      disabled={pullRequestItem.disabled}
-                      onClick={() => {
-                        git.runMenuItem(pullRequestItem);
-                      }}
+                      label={git.quickAction.label}
+                      caption={git.quickActionDisabledReason}
+                      disabled={git.isBusy || git.quickAction.disabled}
+                      onClick={git.runQuickAction}
                     />
-                  ) : null}
-                  {showPublishRow ? (
-                    <EnvironmentRow
-                      icon={<CloudUploadIcon aria-hidden />}
-                      label="Publish repository"
-                      disabled={git.isBusy}
-                      onClick={git.openPublishDialog}
-                    />
-                  ) : null}
-                  {git.gitStatus?.refName === null ? (
-                    <EnvironmentStatus label="Detached HEAD: check out a ref to push or open a pull request." />
-                  ) : null}
-                  {git.gitStatus &&
-                  git.gitStatus.refName !== null &&
-                  !git.gitStatus.hasWorkingTreeChanges &&
-                  git.gitStatus.behindCount > 0 &&
-                  git.gitStatus.aheadCount === 0 ? (
-                    <EnvironmentStatus label="Behind upstream. Pull or rebase first." />
-                  ) : null}
-                  {git.gitStatusError ? (
-                    <EnvironmentStatus label={git.gitStatusError} tone="destructive" />
-                  ) : null}
+                    {secondaryItems.map((item) => (
+                      <MenuRow
+                        key={`${item.id}-${item.label}`}
+                        icon={
+                          <GitActionItemIcon
+                            icon={item.icon}
+                            SourceControlIcon={SourceControlIcon}
+                          />
+                        }
+                        label={item.label}
+                        caption={git.menuItemDisabledReason(item)}
+                        disabled={item.disabled}
+                        onClick={() => {
+                          git.runMenuItem(item);
+                        }}
+                      />
+                    ))}
+                    {pullRequestItem ? (
+                      <MenuRow
+                        icon={
+                          <GitActionItemIcon
+                            icon={pullRequestItem.icon}
+                            SourceControlIcon={SourceControlIcon}
+                          />
+                        }
+                        label={pullRequestItem.label}
+                        caption={
+                          isSwitchingRef ? (
+                            <ReadingSkeleton />
+                          ) : pullRequest ? (
+                            `#${pullRequest.number} ${pullRequest.state}`
+                          ) : (
+                            git.menuItemDisabledReason(pullRequestItem)
+                          )
+                        }
+                        disabled={pullRequestItem.disabled}
+                        onClick={() => {
+                          git.runMenuItem(pullRequestItem);
+                        }}
+                      />
+                    ) : null}
+                    {showPublishRow ? (
+                      <MenuRow
+                        icon={<CloudUploadIcon aria-hidden />}
+                        label="Publish repository"
+                        disabled={git.isBusy}
+                        onClick={git.openPublishDialog}
+                      />
+                    ) : null}
+                    {git.gitStatus?.refName === null ? (
+                      <MenuRow
+                        variant="static"
+                        label="Detached HEAD: check out a ref to push or open a pull request."
+                        tone="muted"
+                      />
+                    ) : null}
+                    {git.gitStatus &&
+                    git.gitStatus.refName !== null &&
+                    !git.gitStatus.hasWorkingTreeChanges &&
+                    git.gitStatus.behindCount > 0 &&
+                    git.gitStatus.aheadCount === 0 ? (
+                      <MenuRow
+                        variant="static"
+                        label="Behind upstream. Pull or rebase first."
+                        tone="muted"
+                      />
+                    ) : null}
+                    {git.gitStatusError ? (
+                      <MenuRow variant="static" label={git.gitStatusError} tone="destructive" />
+                    ) : null}
+                  </EnvironmentPendingGroup>
                 </>
               )}
             </div>
             <div aria-hidden className="mx-(--popup-padding) my-(--popup-padding) h-px bg-border" />
             <div>
-              <SectionHeader label="Sources" />
+              <MenuRow variant="static" label="Sources" tone="heading" />
               {/* No implementation behind either of these yet; they are shown
                 unavailable rather than wired to something that does not exist. */}
-              <EnvironmentRow
+              <MenuRow
                 icon={<GlobeIcon aria-hidden />}
                 label="Internet search"
                 caption="Unavailable"
                 disabled
               />
-              <EnvironmentRow
+              <MenuRow
                 icon={<MoreHorizontalIcon aria-hidden />}
                 label="Show all"
                 caption="Unavailable"

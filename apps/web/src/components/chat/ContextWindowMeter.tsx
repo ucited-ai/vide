@@ -76,7 +76,7 @@ export function ContextWindowMeter(props: {
             >
               <span
                 className={cn(
-                  "block h-full rounded-full transition-[width] duration-500 ease-out motion-reduce:transition-none",
+                  "block h-full rounded-full transition-[width] duration-(--duration-slow) motion-reduce:transition-none",
                   isNearLimit ? "bg-destructive/80" : "bg-foreground/45",
                 )}
                 style={{ width: `${normalizedPercentage}%` }}
@@ -86,9 +86,13 @@ export function ContextWindowMeter(props: {
           </button>
         }
       />
+      {/* Opens rightwards from the trigger's own start edge, the way the model
+          picker and the permissions list beside it do. Aligned to the end it
+          grew back over the controls it sits after, so the one popup in the row
+          that unfolded leftwards was this one. */}
       <PopoverPopup
         side="top"
-        align="end"
+        align="start"
         collisionAvoidance={PINNED_POPUP_COLLISION_AVOIDANCE}
         className="w-64"
       >

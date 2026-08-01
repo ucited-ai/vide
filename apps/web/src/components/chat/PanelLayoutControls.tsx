@@ -22,8 +22,7 @@ function withShortcut(label: string, shortcut: string | null): string {
 }
 
 /** Both expand icons occupy the same cell so the swap can cross-fade. */
-const MAXIMIZE_ICON_CLASS =
-  "absolute size-(--header-control-icon-size) transition-opacity duration-(--duration-fast) ease-(--ease-out)";
+const MAXIMIZE_ICON_CLASS = "absolute size-(--header-control-icon-size) transition-opacity";
 
 /**
  * The one button the right-hand chrome is built from.
@@ -46,7 +45,7 @@ function PanelToggle(props: {
       <TooltipTrigger
         render={
           <Toggle
-            className="size-(--header-control-size)! shrink-0 [-webkit-app-region:no-drag]"
+            className="size-(--header-control-size)! shrink-0"
             pressed={props.pressed}
             onPressedChange={props.onToggle}
             aria-label={props.label}
@@ -75,7 +74,7 @@ export const PanelLayoutControls = memo(function PanelLayoutControls({
 }: PanelLayoutControlsProps) {
   return (
     <div
-      className="flex h-full shrink-0 items-center gap-(--header-control-gap) [-webkit-app-region:no-drag]"
+      className="flex h-full shrink-0 items-center gap-(--header-control-gap)"
       data-panel-layout-controls
     >
       <PanelToggle

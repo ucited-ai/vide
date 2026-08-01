@@ -1,11 +1,10 @@
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useState, type CSSProperties, type ReactNode, type TransitionEvent } from "react";
 import { XIcon } from "lucide-react";
 
 import { cn } from "~/lib/utils";
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "../ui/alert";
 import { Button } from "../ui/button";
 
-const DISMISS_TRANSITION_MS = 220;
 const frontExitStyle = {
   opacity: 0,
   transform: "translate3d(0, 4rem, 0)",
@@ -19,7 +18,8 @@ const restingStyle = {
   transform: "none",
 } satisfies CSSProperties;
 const exitTransitionStyle = {
-  transition: `transform ${DISMISS_TRANSITION_MS}ms ease-in, opacity ${DISMISS_TRANSITION_MS}ms ease-in`,
+  transition:
+    "transform var(--duration-base) var(--ease-in), opacity var(--duration-base) var(--ease-in)",
 } satisfies CSSProperties;
 
 export interface ComposerBannerStackItem {
@@ -42,19 +42,10 @@ interface ComposerBannerStackProps {
 
 export function ComposerBannerStack({ className, items }: ComposerBannerStackProps) {
   const [requestedExitingItemId, setExitingItemId] = useState<string | null>(null);
-  const dismissTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const exitingItemId =
     requestedExitingItemId !== null && items.some((item) => item.id === requestedExitingItemId)
       ? requestedExitingItemId
       : null;
-
-  useEffect(() => {
-    return () => {
-      if (dismissTimeoutRef.current) {
-        clearTimeout(dismissTimeoutRef.current);
-      }
-    };
-  }, []);
 
   if (items.length === 0) {
     return null;
@@ -73,13 +64,16 @@ export function ComposerBannerStack({ className, items }: ComposerBannerStackPro
       return;
     }
     setExitingItemId(item.id);
-    if (dismissTimeoutRef.current) {
-      clearTimeout(dismissTimeoutRef.current);
+  };
+  const commitDismiss = (event: TransitionEvent<HTMLDivElement>, item: ComposerBannerStackItem) => {
+    if (
+      event.target !== event.currentTarget ||
+      event.propertyName !== "transform" ||
+      exitingItemId !== item.id
+    ) {
+      return;
     }
-    dismissTimeoutRef.current = setTimeout(() => {
-      dismissTimeoutRef.current = null;
-      item.onDismiss?.();
-    }, DISMISS_TRANSITION_MS);
+    item.onDismiss?.();
   };
 
   return (
@@ -95,7 +89,7 @@ export function ComposerBannerStack({ className, items }: ComposerBannerStackPro
             className={cn(
               "pointer-events-none absolute inset-x-0 -top-3 z-0 mx-auto h-3 rounded-t-xl",
               "border border-b-0 border-warning/24 bg-background/96 shadow-[0_6px_18px_rgba(0,0,0,0.06)]",
-              "transition-opacity duration-150 ease-out",
+              "transition-opacity duration-(--duration-popup)",
               "group-hover/banner-stack:opacity-0 group-focus-within/banner-stack:opacity-0",
             )}
             style={{ width: "96%" }}
@@ -111,6 +105,7 @@ export function ComposerBannerStack({ className, items }: ComposerBannerStackPro
             ...exitTransitionStyle,
             ...(exitingItemId === frontItem.id ? frontExitStyle : restingStyle),
           }}
+          onTransitionEnd={(event) => commitDismiss(event, frontItem)}
         >
           <ComposerBannerStackAlert
             item={frontItem}
@@ -122,7 +117,7 @@ export function ComposerBannerStack({ className, items }: ComposerBannerStackPro
           <div
             data-composer-banner-stack-expanded-items="true"
             className={cn(
-              "relative z-20 grid grid-rows-[0fr] transition-[grid-template-rows] duration-150 ease-out",
+              "relative z-20 grid grid-rows-[0fr] transition-[grid-template-rows] duration-(--duration-popup)",
               "group-hover/banner-stack:grid-rows-[1fr] group-focus-within/banner-stack:grid-rows-[1fr]",
             )}
           >
@@ -130,7 +125,8 @@ export function ComposerBannerStack({ className, items }: ComposerBannerStackPro
               <div
                 className={cn(
                   "invisible pointer-events-none space-y-2 pb-2 opacity-0",
-                  "translate-y-1 transform-gpu transition-[opacity,transform] duration-150 ease-out will-change-[opacity,transform]",
+                  // `translate`, not `transform` — see DraftHeroSuggestions.
+                  "translate-y-1 transform-gpu transition-[opacity,translate] duration-(--duration-popup) will-change-[opacity,translate]",
                   "group-hover/banner-stack:visible group-hover/banner-stack:pointer-events-auto group-hover/banner-stack:translate-y-0 group-hover/banner-stack:opacity-100",
                   "group-focus-within/banner-stack:visible group-focus-within/banner-stack:pointer-events-auto group-focus-within/banner-stack:translate-y-0 group-focus-within/banner-stack:opacity-100",
                 )}
@@ -143,6 +139,7 @@ export function ComposerBannerStack({ className, items }: ComposerBannerStackPro
                       ...exitTransitionStyle,
                       ...(exitingItemId === item.id ? stackedExitStyle : restingStyle),
                     }}
+                    onTransitionEnd={(event) => commitDismiss(event, item)}
                   >
                     <ComposerBannerStackAlert
                       item={item}

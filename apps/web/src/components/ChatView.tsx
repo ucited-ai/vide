@@ -53,6 +53,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
 } from "react";
 import { flushSync } from "react-dom";
 import { useNavigate } from "@tanstack/react-router";
@@ -141,6 +142,7 @@ import {
 import { RightPanelTabs } from "./RightPanelTabs";
 import { DiffWorkerPoolProvider } from "./DiffWorkerPoolProvider";
 import { BranchToolbar } from "./BranchToolbar";
+import { useOptimisticThreadBranchSelection } from "./BranchToolbarBranchSelector";
 import { resolveShortcutCommand, shortcutLabelForCommand } from "../keybindings";
 import PlanSidebar from "./PlanSidebar";
 import ThreadTerminalDrawer from "./ThreadTerminalDrawer";
@@ -152,6 +154,7 @@ import {
   TriangleAlertIcon,
   WifiOffIcon,
 } from "lucide-react";
+import { readCssTimeMs } from "~/lib/cssTime";
 import { cn, randomHex } from "~/lib/utils";
 import { COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS } from "~/workspaceTitlebar";
 import { stackedThreadToast, toastManager } from "./ui/toast";
@@ -230,9 +233,18 @@ import { ChatEnvironmentColumn } from "./chat/ChatEnvironmentColumn";
 import { ChatHeader } from "./chat/ChatHeader";
 import { PanelLayoutControls, RightPanelMaximizeControl } from "./chat/PanelLayoutControls";
 import { PreviewPanelLayoutContext } from "./preview/PreviewPanelShell";
+import {
+  CHAT_MIN_WIDTH,
+  ENVIRONMENT_COLUMN_RESERVED_WIDTH,
+  PREVIEW_PANEL_MIN_WIDTH,
+} from "./preview/previewPanelLayout";
 import { type ExpandedImagePreview } from "./chat/ExpandedImagePreview";
 import { NoActiveThreadState } from "./NoActiveThreadState";
-import { resolveEffectiveEnvMode, resolveLocalCheckoutBranchMismatch } from "./BranchToolbar.logic";
+import {
+  resolveDisplayedThreadBranch,
+  resolveEffectiveEnvMode,
+  resolveLocalCheckoutBranchMismatch,
+} from "./BranchToolbar.logic";
 import {
   getProviderStatusBannerKey,
   ProviderStatusBanner,
@@ -639,10 +651,10 @@ function readTerminalDrawerCloseGraceMs(): number {
   if (typeof window === "undefined") {
     return TERMINAL_DRAWER_CLOSE_GRACE_FALLBACK_MS;
   }
-  const parsed = Number.parseFloat(
-    window.getComputedStyle(document.documentElement).getPropertyValue("--duration-base"),
+  return (
+    readCssTimeMs(window.getComputedStyle(document.documentElement), "--duration-base") ??
+    TERMINAL_DRAWER_CLOSE_GRACE_FALLBACK_MS
   );
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : TERMINAL_DRAWER_CLOSE_GRACE_FALLBACK_MS;
 }
 
 interface PersistentThreadTerminalDrawerProps {
@@ -977,8 +989,7 @@ const PersistentThreadTerminalDrawer = memo(function PersistentThreadTerminalDra
      * Collapsed it is inert, so Tab cannot walk into a terminal nobody can see.
      */
     <div
-      className="grid transition-[grid-template-rows] duration-(--duration-base) ease-(--ease-soft) motion-reduce:transition-none"
-      style={{ gridTemplateRows: visible ? "1fr" : "0fr" }}
+      className="grid"
       data-terminal-drawer-open={visible ? "true" : "false"}
       {...(visible ? {} : { inert: true })}
     >
@@ -1214,6 +1225,10 @@ function ChatViewContent(props: ChatViewProps) {
     [environmentId, threadId],
   );
   const routeThreadKey = useMemo(() => scopedThreadKey(routeThreadRef), [routeThreadRef]);
+  const optimisticThreadBranchSelection = useOptimisticThreadBranchSelection(
+    environmentId,
+    threadId,
+  );
   const updateProject = useAtomCommand(projectEnvironment.update, { reportFailure: false });
   const upsertKeybinding = useAtomCommand(serverEnvironment.upsertKeybinding, {
     reportFailure: false,
@@ -3147,7 +3162,7 @@ function ChatViewContent(props: ChatViewProps) {
     void addBrowserSurface({ threadRef: activeThreadRef, openPreview });
   }, [activeThreadRef, openPreview]);
   const addDiffSurface = useCallback(() => {
-    if (!activeThreadRef || !isServerThread || !isGitRepo) return;
+    if (!activeThreadRef || !isGitRepo || gitCwd === null) return;
     if (planSidebarOpen) {
       dismissPlanSidebarForCurrentTurn();
     }
@@ -3156,8 +3171,8 @@ function ChatViewContent(props: ChatViewProps) {
   }, [
     activeThreadRef,
     dismissPlanSidebarForCurrentTurn,
+    gitCwd,
     isGitRepo,
-    isServerThread,
     onDiffPanelOpen,
     planSidebarOpen,
   ]);
@@ -3339,6 +3354,11 @@ function ChatViewContent(props: ChatViewProps) {
   const autoCollapseEnvironmentColumn = useCallback(() => {
     setEnvironmentColumnIntent((intent) => (intent === "open" ? "auto-closed" : intent));
   }, []);
+  useEffect(() => {
+    if (rightPanelOpen) {
+      autoCollapseEnvironmentColumn();
+    }
+  }, [autoCollapseEnvironmentColumn, rightPanelOpen]);
   const collapseRightPanelFromResize = useCallback(() => {
     if (!rightPanelOpen) return;
     if (planSidebarOpen) {
@@ -3351,17 +3371,27 @@ function ChatViewContent(props: ChatViewProps) {
     if (!canMaximizeRightPanel) return;
     setMaximizedRightPanelThreadKey(routeThreadKey);
   }, [canMaximizeRightPanel, routeThreadKey]);
-  const leaveRightPanelFullArea = useCallback(() => {
+  /*
+   * The way back from either edge of a drag. Both are "the panel is a plain
+   * resizable panel again", and the handle cannot tell them apart — it only
+   * knows the cursor came back inside the bounds — so one action undoes
+   * whichever of the two the same gesture had just done.
+   */
+  const restoreRightPanelFromResize = useCallback(() => {
+    if (!activeThreadRef) return;
     setMaximizedRightPanelThreadKey((threadKey) =>
       threadKey === routeThreadKey ? null : threadKey,
     );
-  }, [routeThreadKey]);
+    if (!rightPanelOpen) {
+      useRightPanelStore.getState().toggleVisibility(activeThreadRef);
+    }
+  }, [activeThreadRef, rightPanelOpen, routeThreadKey]);
   const previewPanelLayoutActions = useMemo(
     () => ({
       environmentOpen: environmentColumnOpen,
       onCollapsePanel: collapseRightPanelFromResize,
       onEnterFullArea: enterRightPanelFullArea,
-      onLeaveFullArea: leaveRightPanelFullArea,
+      onRestorePanel: restoreRightPanelFromResize,
       onAutoCollapseEnvironment: autoCollapseEnvironmentColumn,
     }),
     [
@@ -3369,7 +3399,7 @@ function ChatViewContent(props: ChatViewProps) {
       collapseRightPanelFromResize,
       enterRightPanelFullArea,
       environmentColumnOpen,
-      leaveRightPanelFullArea,
+      restoreRightPanelFromResize,
     ],
   );
   const cleanupRightPanelSurfaces = useCallback(
@@ -4011,10 +4041,14 @@ function ChatViewContent(props: ChatViewProps) {
   const envMode: DraftThreadEnvMode = canOverrideServerThreadEnvMode
     ? (pendingServerThreadEnvMode ?? draftThread?.envMode ?? derivedEnvMode)
     : derivedEnvMode;
-  const activeThreadBranch =
+  const authoritativeActiveThreadBranch =
     canOverrideServerThreadEnvMode && pendingServerThreadBranch !== undefined
       ? pendingServerThreadBranch
       : (activeThread?.branch ?? null);
+  const activeThreadBranch = resolveDisplayedThreadBranch({
+    authoritativeBranch: authoritativeActiveThreadBranch,
+    optimisticSelection: optimisticThreadBranchSelection,
+  });
   const startFromOrigin = isLocalDraftThread
     ? (draftThread?.startFromOrigin ?? false)
     : canOverrideServerThreadEnvMode
@@ -5727,7 +5761,7 @@ function ChatViewContent(props: ChatViewProps) {
     />
   );
   const panelLayoutControls = (
-    <div className="workspace-titlebar-controls z-50 gap-(--header-control-gap) [-webkit-app-region:no-drag]">
+    <div className="workspace-titlebar-controls z-50 gap-(--header-control-gap)">
       {rightPanelOpen && !shouldUsePlanSidebarSheet ? (
         <RightPanelMaximizeControl
           maximized={rightPanelMaximized}
@@ -5737,13 +5771,7 @@ function ChatViewContent(props: ChatViewProps) {
       {panelToggleControls}
     </div>
   );
-  /*
-   * Gated on the panel being OPEN, not merely on a thread existing. The shell
-   * stays mounted so it can animate shut, but what lives inside it must not:
-   * a preview holds a browser-surface lease and a live session, a terminal holds
-   * a pty. Before the shell became always-mounted, closing the panel tore all of
-   * that down; without this gate it would keep running behind a zero-width box.
-   */
+  /* Native webviews and terminal streams must unmount when the panel closes. */
   const rightPanelContent =
     activeThreadRef && rightPanelOpen ? (
       activeRightPanelSurface?.kind === "preview" ? (
@@ -5820,8 +5848,16 @@ function ChatViewContent(props: ChatViewProps) {
     ) : null;
 
   return (
-    <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden bg-background">
-      {panelLayoutControls}
+    <div
+      className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden bg-background"
+      style={
+        {
+          "--envcol-width": `${ENVIRONMENT_COLUMN_RESERVED_WIDTH}px`,
+          "--layout-chat-min-width": `${CHAT_MIN_WIDTH}px`,
+          "--layout-right-panel-min-width": `${PREVIEW_PANEL_MIN_WIDTH}px`,
+        } as CSSProperties
+      }
+    >
       <div
         className={cn(
           "flex min-h-0 min-w-0 flex-col overflow-x-hidden",
@@ -6161,6 +6197,19 @@ function ChatViewContent(props: ChatViewProps) {
             ) : null}
           </div>
           {/* end chat column */}
+
+          {showEnvironmentColumn ? (
+            <ChatEnvironmentColumn
+              environmentId={activeThread.environmentId}
+              threadId={activeThread.id}
+              {...(routeKind === "draft" && draftId ? { draftId } : {})}
+              gitCwd={gitCwd}
+              open={environmentColumnOpen}
+              fullAreaHidden={rightPanelMaximized}
+              onClose={closeEnvironmentColumn}
+              onOpenReview={isGitRepo && gitCwd !== null ? addDiffSurface : null}
+            />
+          ) : null}
         </div>
         {/* end horizontal flex container */}
 
@@ -6183,25 +6232,6 @@ function ChatViewContent(props: ChatViewProps) {
           />
         ))}
       </div>
-
-      {/*
-        Its own shell beside the chat pane: it reserves width while the right
-        panel is collapsed and lets the inset surface overlay chat while the
-        right panel is open. It stays mounted so both modes animate shut and its git
-        dialogs can render outside the collapsing wrapper.
-      */}
-      {showEnvironmentColumn ? (
-        <ChatEnvironmentColumn
-          environmentId={activeThread.environmentId}
-          threadId={activeThread.id}
-          {...(routeKind === "draft" && draftId ? { draftId } : {})}
-          gitCwd={gitCwd}
-          open={environmentColumnOpen}
-          rightPanelOpen={rightPanelOpen}
-          fullAreaHidden={rightPanelMaximized}
-          onClose={closeEnvironmentColumn}
-        />
-      ) : null}
 
       {/*
         Rendered whenever an inline panel is possible, not only while it is open.
@@ -6231,7 +6261,7 @@ function ChatViewContent(props: ChatViewProps) {
             onAddDiff={addDiffSurface}
             onAddFiles={addFilesSurface}
             browserAvailable={isPreviewSupportedInRuntime()}
-            diffAvailable={isServerThread && isGitRepo}
+            diffAvailable={isGitRepo && gitCwd !== null}
             filesAvailable={activeProject !== null}
           >
             {rightPanelContent}
@@ -6259,13 +6289,31 @@ function ChatViewContent(props: ChatViewProps) {
             onAddDiff={addDiffSurface}
             onAddFiles={addFilesSurface}
             browserAvailable={isPreviewSupportedInRuntime()}
-            diffAvailable={isServerThread && isGitRepo}
+            diffAvailable={isGitRepo && gitCwd !== null}
             filesAvailable={activeProject !== null}
           >
             {rightPanelContent}
           </RightPanelTabs>
         </RightPanelSheet>
       ) : null}
+
+      {/*
+        Last, and that placement is load-bearing rather than cosmetic.
+
+        These controls belong to the window, so they are painted over the chat
+        titlebar from outside it. In Electron the titlebar is a drag region, and
+        the draggable area is not resolved by hit-testing: Blink walks the layout
+        tree in order and Electron unions each `drag` rect and subtracts each
+        `no-drag` rect as it goes. Order therefore decides the outcome — a
+        `no-drag` rect emitted BEFORE the `drag` rect it sits inside is simply
+        unioned back over, and the buttons stop receiving clicks entirely.
+
+        Rendered first, that is exactly what happened to them, and it is why
+        naming the buttons in the CSS did not help and why they worked only while
+        the environment column pushed them clear of the header. Anything else
+        that must stay clickable above the titlebar has to come after it too.
+      */}
+      {panelLayoutControls}
 
       {expandedImage && (
         <ExpandedImageDialog

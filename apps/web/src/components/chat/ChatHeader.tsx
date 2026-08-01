@@ -127,7 +127,20 @@ export const ChatHeader = memo(function ChatHeader({
         data-chat-header-actions
         className={cn(
           "flex shrink-0 items-center justify-end gap-(--header-control-gap)",
-          !rightPanelOpen && !environmentColumnOpen && "pr-(--header-panel-controls-reserve)",
+          /*
+           * Only the right panel decides this. The window controls float at the
+           * top-right of the workspace, so the header has to keep clear of them
+           * for exactly as long as the header still reaches that corner — which
+           * is until the right panel opens and takes the corner over.
+           *
+           * The environment column used to clear the reserve too, on the theory
+           * that its own width already pushed the header out of the corner. It
+           * does, but the reserve is what holds these controls in place: with it
+           * gone they slid across to meet the window controls the moment the
+           * environment opened, so toggling one panel visibly rearranged the
+           * buttons of another.
+           */
+          !rightPanelOpen && "pr-(--header-panel-controls-reserve)",
         )}
       >
         {showOpenInPicker && (
