@@ -294,12 +294,14 @@ export function workEntryHeading(entry: Pick<WorkLogEntry, "label" | "toolTitle"
 }
 
 /**
- * The phrase a running turn is on.
+ * The state a running turn is in — one calm word, read off the newest thing
+ * the turn has produced.
  *
- * Read off the newest thing the turn has produced rather than tracked as state:
- * a tool call names itself ("Searching for API endpoints"), text arriving is the
- * turn writing, and a turn that has produced nothing since is thinking. Which is
- * also the honest reading — there is nothing else it could be doing.
+ * Deliberately generic: naming the tool call here put two lines in a race to
+ * describe the same call (the live work group already names it), and a status
+ * line that flips between "Thinking" and "Ran 2 commands" reads as two
+ * different instruments. Tools running is "Working", text arriving is
+ * "Writing", a plan on the table is "Planning", anything else is "Thinking".
  */
 function deriveLiveTurnLabel(
   timelineEntries: ReadonlyArray<TimelineEntry>,
@@ -313,7 +315,7 @@ function deriveLiveTurnLabel(
     if (!entry) continue;
     if (entry.kind === "work") {
       if (entry.entry.turnId !== turnId) continue;
-      return workEntryHeading(entry.entry);
+      return "Working";
     }
     if (entry.kind === "message") {
       if (entry.message.role !== "assistant" || entry.message.turnId !== turnId) continue;

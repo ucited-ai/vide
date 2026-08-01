@@ -1063,8 +1063,9 @@ describe("deriveMessagesTimelineRows", () => {
     ]);
     const head = rows.find((row) => row.kind === "turn-head");
     expect(head?.kind === "turn-head" && head.state).toBe("live");
-    // The newest thing the turn produced is the tool call, so that is the phrase.
-    expect(head?.kind === "turn-head" && head.label).toBe("Read");
+    // Tools are running, so the head says so — generically. Naming the call is
+    // the live work group's job; the status line stays one calm word.
+    expect(head?.kind === "turn-head" && head.label).toBe("Working");
     expect(head?.kind === "turn-head" && head.startedAt).toBe("2026-01-01T00:00:00Z");
 
     const thought = rows.find((row) => row.id === "assistant-thought-entry");

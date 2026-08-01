@@ -3,62 +3,99 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { describe, expect, it } from "vite-plus/test";
 
-import { rehypeChatStreamWords } from "./markdown-stream-words";
+import { rehypeChatStreamWords, type ChatStreamWordTiming } from "./markdown-stream-words";
 
-function renderMarkdown(markdown: string): string {
+function timing(): ChatStreamWordTiming & { readonly counts: number[] } {
+  const counts: number[] = [];
+  return {
+    styleOf: (index) => `--chat-stream-delay:${String(index * 10)}ms`,
+    reportWordCount: (count) => counts.push(count),
+    counts,
+  };
+}
+
+function renderMarkdown(markdown: string, wordTiming: ChatStreamWordTiming): string {
   return renderToStaticMarkup(
-    <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeChatStreamWords]}>
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      rehypePlugins={[[rehypeChatStreamWords, wordTiming]]}
+    >
       {markdown}
     </ReactMarkdown>,
   );
 }
 
 describe("rehypeChatStreamWords", () => {
-  it("gives every word its own element", () => {
-    const html = renderMarkdown("one two three");
+  it("gives every word its own element, styled by its index in the tree", () => {
+    const html = renderMarkdown("one two three", timing());
 
-    expect(html).toContain('<span class="chat-stream-word" data-word-slot="0">one</span>');
-    expect(html).toContain('<span class="chat-stream-word" data-word-slot="1">two</span>');
-    expect(html).toContain('<span class="chat-stream-word" data-word-slot="2">three</span>');
+    expect(html).toContain(
+      '<span class="chat-stream-word" style="--chat-stream-delay:0ms">one</span>',
+    );
+    expect(html).toContain(
+      '<span class="chat-stream-word" style="--chat-stream-delay:10ms">two</span>',
+    );
+    expect(html).toContain(
+      '<span class="chat-stream-word" style="--chat-stream-delay:20ms">three</span>',
+    );
   });
 
   it("keeps the spacing between words, so the text still wraps where it did", () => {
-    const html = renderMarkdown("one two");
+    const html = renderMarkdown("one two", timing());
 
     expect(html).toContain("</span> <span");
   });
 
-  it("numbers words around a short cycle rather than counting up forever", () => {
-    const html = renderMarkdown("a b c d");
+  it("wraps a word at rest without a style, so its markup can stay byte-identical", () => {
+    const html = renderMarkdown("one two", {
+      styleOf: () => null,
+      reportWordCount: () => {},
+    });
 
-    expect(html).toContain('data-word-slot="0">a<');
-    expect(html).toContain('data-word-slot="0">d<');
+    expect(html).toContain('<span class="chat-stream-word">one</span>');
+    expect(html).not.toContain("--chat-stream-delay");
   });
 
   it("wraps words inside emphasis without disturbing the emphasis itself", () => {
-    const html = renderMarkdown("plain **bold words** after");
+    const html = renderMarkdown("plain **bold words** after", timing());
 
     expect(html).toContain("<strong>");
-    expect(html).toContain('<span class="chat-stream-word" data-word-slot="1">bold</span>');
+    expect(html).toContain(
+      '<span class="chat-stream-word" style="--chat-stream-delay:10ms">bold</span>',
+    );
   });
 
-  it("leaves code alone, because its text is read back out whole", () => {
-    const html = renderMarkdown("call `doTheThing(now)` twice");
+  it("treats inline code as one word, so a chip arrives with its sentence", () => {
+    const html = renderMarkdown("call `doTheThing(now)` twice", timing());
 
+    // The chip is wrapped from the outside; its text stays whole for the
+    // readers that pull it back out of the tree as a flat string.
     expect(html).toContain("<code>doTheThing(now)</code>");
+    expect(html).toContain('style="--chat-stream-delay:10ms"><code>');
+  });
+
+  it("treats a link as one word, and leaves its label alone", () => {
+    const html = renderMarkdown("see [the docs](https://example.com) now", timing());
+
+    expect(html).toContain('<a href="https://example.com">the docs</a>');
+    expect(html).toContain('style="--chat-stream-delay:10ms"><a');
+    expect(html).toContain(
+      '<span class="chat-stream-word" style="--chat-stream-delay:0ms">see</span>',
+    );
   });
 
   it("leaves a fenced block alone", () => {
-    const html = renderMarkdown("```ts\nconst value = 1;\n```");
+    const html = renderMarkdown("```ts\nconst value = 1;\n```", timing());
 
     expect(html).toContain("<code");
     expect(html).not.toContain('class="chat-stream-word"');
   });
 
-  it("leaves a link's label alone, because the link reads its own text", () => {
-    const html = renderMarkdown("see [the docs](https://example.com) now");
+  it("reports how many words the tree holds, counting a whole element as one", () => {
+    const wordTiming = timing();
+    renderMarkdown("call `code` and [docs](https://example.com) now", wordTiming);
 
-    expect(html).toContain('<a href="https://example.com">the docs</a>');
-    expect(html).toContain('<span class="chat-stream-word" data-word-slot="0">see</span>');
+    // call, `code`, and, [docs], now
+    expect(wordTiming.counts.at(-1)).toBe(5);
   });
 });

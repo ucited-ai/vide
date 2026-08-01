@@ -1164,6 +1164,10 @@
  * the light and nothing is added to the row.
  */
 .chat-shimmer {
+  /* The colour under the gradient, not just inside it: with `no-repeat` any
+     glyph the image does not cover would otherwise render `transparent` —
+     which is text visibly missing, not text subtly lit. */
+  background-color: var(--chat-shimmer-base, var(--ink-tertiary));
   background-image: linear-gradient(
     100deg,
     var(--chat-shimmer-base, var(--ink-tertiary)) 0 42%,
@@ -1184,13 +1188,20 @@
   --chat-shimmer-base: var(--ink);
 }
 
+/*
+ * 100% → 0%, nothing past either: with a 300%-wide image those are the two
+ * positions where the element is still fully covered, and the highlight band
+ * (the middle of the gradient) travels the whole label between them. Positions
+ * outside that range slide the image off the element, and `background-clip:
+ * text` turns every uncovered glyph invisible.
+ */
 @keyframes chat-sheen {
   from {
-    background-position: 118% 0;
+    background-position: 100% 0;
   }
 
   to {
-    background-position: -30% 0;
+    background-position: 0% 0;
   }
 }
 

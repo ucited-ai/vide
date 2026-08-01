@@ -68,12 +68,11 @@ describe("the clock the reveal runs on", () => {
 });
 
 describe("wrapping words for the reveal", () => {
-  it("gives every word of a fresh message its own delay", () => {
+  it("gives every word of a fresh message its own delay, by tree index", () => {
     const tree = paragraph("one two three");
     rehypeChatStreamWords({
-      revealedWordCount: 0,
-      delayMsOf: (index) => index * 40,
-      offsetOf: () => ({ dx: "0px", dy: "0px" }),
+      styleOf: (index) => `--chat-stream-delay:${String(index * 40)}ms`,
+      reportWordCount: () => {},
     })(tree);
 
     expect(words(tree).map(delayOf)).toEqual(["0", "40", "80"]);
@@ -83,14 +82,13 @@ describe("wrapping words for the reveal", () => {
     /*
      * The important one. A word at rest that is handed a *larger* delay drops back
      * inside it, and `animation-fill-mode: backwards` hides it there — so a word
-     * would blink out because a later word arrived. Words before the baseline
-     * therefore carry no delay at all, and stay wrapped so React keeps their DOM.
+     * would blink out because a later word arrived. Words the clock answers with
+     * null carry no style at all, and stay wrapped so React keeps their DOM.
      */
     const tree = paragraph("one two three four");
     rehypeChatStreamWords({
-      revealedWordCount: 2,
-      delayMsOf: (index) => index * 40,
-      offsetOf: () => ({ dx: "0px", dy: "0px" }),
+      styleOf: (index) => (index < 2 ? null : `--chat-stream-delay:${String((index - 2) * 40)}ms`),
+      reportWordCount: () => {},
     })(tree);
 
     const wrapped = words(tree);
@@ -101,7 +99,7 @@ describe("wrapping words for the reveal", () => {
     );
   });
 
-  it("keeps the gaps between words, and code and links whole", () => {
+  it("keeps the gaps between words, and reports the tree's own word count", () => {
     const tree: TestNode = {
       type: "root",
       children: [
@@ -120,15 +118,20 @@ describe("wrapping words for the reveal", () => {
         },
       ],
     };
+    const counts: number[] = [];
     rehypeChatStreamWords({
-      revealedWordCount: 0,
-      delayMsOf: () => 0,
-      offsetOf: () => ({ dx: "0px", dy: "0px" }),
+      styleOf: () => null,
+      reportWordCount: (count) => counts.push(count),
     })(tree);
 
     const children = tree.children?.[0]?.children ?? [];
-    const code = children.find((child) => child.tagName === "code");
-    expect(code?.children).toEqual([{ type: "text", value: "vp test run" }]);
+    /* The chip is one word on the same clock — wrapped from the outside, its
+       text left whole for the readers that pull it back out as a flat string. */
+    const chip = children.find(
+      (child) => child.type === "element" && child.children?.[0]?.tagName === "code",
+    );
+    expect(chip?.children?.[0]?.children).toEqual([{ type: "text", value: "vp test run" }]);
     expect(children.some((child) => child.type === "text" && child.value === " ")).toBe(true);
+    expect(counts).toEqual([3]);
   });
 });

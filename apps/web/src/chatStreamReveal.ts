@@ -9,7 +9,7 @@
  * word n of a delta waits n steps — so it reads the same either way, and real
  * streaming just makes the deltas smaller.
  *
- * Two rules keep it honest:
+ * Three rules keep it honest:
  *
  * - only a turn that is still running reveals anything. An old message that
  *   remounts because the list recycled its row must not replay a turn from last
@@ -17,11 +17,15 @@
  * - a delta's reveal finishes even if the turn settles under it. The buffered
  *   case ends with the text landing and the turn completing a moment later, so a
  *   reveal tied strictly to "is the turn running" would be cut off at the second
- *   word every single time.
+ *   word every single time;
+ * - a word keeps the style it was born with. The baseline between "already on
+ *   screen" and "new this delta" is the rendered tree's own word count, and a
+ *   word once styled always re-renders byte-identical — so React keeps its DOM
+ *   node, and the animation that already ran is never retimed or replayed.
  */
 
 import { type ChatStreamAnimation } from "@vide/contracts/settings";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { countStreamWords, type ChatStreamWordTiming } from "./markdown-stream-words";
 
@@ -97,11 +101,36 @@ export interface ChatStreamRevealState {
 const NO_REVEAL: ChatStreamRevealState = {
   active: false,
   timing: {
-    revealedWordCount: 0,
-    delayMsOf: () => 0,
-    offsetOf: () => ({ dx: "0px", dy: "0px" }),
+    styleOf: () => null,
+    reportWordCount: () => {},
   },
 };
+
+/**
+ * Everything the reveal remembers between renders. A ref rather than state:
+ * the baseline has to advance during the render that brings the new text, and
+ * none of this should re-render anything by itself.
+ */
+interface ChatStreamRevealMemory {
+  text: string;
+  /** Source-token count of `text` — pacing only, never a baseline. */
+  sourceWordCount: number;
+  /** Source-token size of the newest delta, for how long its reveal runs. */
+  lastDeltaWordCount: number;
+  /** What the rendered tree held after the last walk: the next delta's baseline. */
+  treeWordCount: number;
+  /** Tree index the current delta starts at. */
+  baseline: number;
+  /** The current delta's step, frozen when the delta arrives. */
+  step: number;
+  /**
+   * The style each word was created with, by absolute tree index. Handing a
+   * word the same style forever keeps its markup byte-identical across
+   * re-renders — React then keeps its DOM node, and the animation that already
+   * ran is neither restarted nor retimed. Empty string = at rest (no style).
+   */
+  styleByIndex: Map<number, string>;
+}
 
 export function useChatStreamReveal(input: {
   readonly text: string;
@@ -112,26 +141,38 @@ export function useChatStreamReveal(input: {
   const animation = input.animation;
   const reveals = input.live && animation !== undefined && animation !== "instant";
 
-  /*
-   * The word count the previous text had, so only what this render adds animates.
-   *
-   * Held as state and corrected during render rather than in an effect: the words
-   * animate on the render that creates them, and a baseline arriving one commit
-   * later would be a baseline for the delta before. Starting at zero is what
-   * makes the buffered case work — a message that mounts with its text already
-   * whole reveals all of it.
-   */
-  const [seen, setSeen] = useState({ text: input.text, revealed: 0 });
-  if (seen.text !== input.text) {
-    setSeen({ text: input.text, revealed: countStreamWords(seen.text) });
-  }
-  const revealedWordCount = seen.text === input.text ? seen.revealed : countStreamWords(seen.text);
+  const memoryRef = useRef<ChatStreamRevealMemory | null>(null);
+  memoryRef.current ??= {
+    text: "",
+    sourceWordCount: 0,
+    lastDeltaWordCount: 0,
+    treeWordCount: 0,
+    baseline: 0,
+    step: WORD_STEP_MS,
+    styleByIndex: new Map(),
+  };
+  const memory = memoryRef.current;
 
-  const deltaWordCount = Math.max(0, countStreamWords(input.text) - revealedWordCount);
+  /*
+   * Advance the delta during render — the words animate on the render that
+   * creates them, and a baseline arriving one commit later would be a baseline
+   * for the delta before. Starting from an empty `text` is what makes the
+   * buffered case work: a message that mounts with its text already whole
+   * reveals all of it.
+   */
+  if (memory.text !== input.text && reveals) {
+    const sourceWordCount = countStreamWords(input.text);
+    memory.lastDeltaWordCount = Math.max(1, sourceWordCount - memory.sourceWordCount);
+    memory.step = chatStreamStepMs(memory.lastDeltaWordCount, animation);
+    memory.baseline = memory.treeWordCount;
+    memory.text = input.text;
+    memory.sourceWordCount = sourceWordCount;
+  }
+
   const deltaRevealMs =
     animation === undefined || animation === "instant"
       ? 0
-      : chatStreamRevealMs(deltaWordCount, animation);
+      : chatStreamRevealMs(memory.lastDeltaWordCount, animation);
 
   /*
    * Wrapping outlives `reveals` by one delta's worth of time, so the last thing
@@ -150,22 +191,46 @@ export function useChatStreamReveal(input: {
 
   const active = (reveals || settling) && animation !== undefined && animation !== "instant";
 
+  /* A finished message keeps no per-word bookkeeping around. */
+  useEffect(() => {
+    if (active) return;
+    memory.styleByIndex.clear();
+    memory.treeWordCount = 0;
+    memory.baseline = 0;
+  }, [active, memory]);
+
   return useMemo(() => {
     if (!active || animation === undefined) return NO_REVEAL;
-    const step = chatStreamStepMs(deltaWordCount, animation);
     return {
       active: true,
       timing: {
-        revealedWordCount,
-        delayMsOf: (indexInDelta) => chatStreamDelayMs(indexInDelta, step, animation),
-        offsetOf: (indexInDelta) => {
-          const angle = noise(revealedWordCount + indexInDelta) * Math.PI * 2;
-          return {
-            dx: `${(Math.cos(angle) * 8).toFixed(1)}px`,
-            dy: `${(Math.sin(angle) * 5).toFixed(1)}px`,
-          };
+        styleOf: (index: number): string | null => {
+          const known = memory.styleByIndex.get(index);
+          if (known !== undefined) return known === "" ? null : known;
+          if (index < memory.baseline) {
+            /*
+             * On screen before this delta and never styled while we watched —
+             * at rest. A delay grown onto it now would put it back inside its
+             * own delay phase, where `animation-fill-mode: backwards` hides
+             * it: the word would blink out because a later word arrived.
+             */
+            memory.styleByIndex.set(index, "");
+            return null;
+          }
+          const indexInDelta = index - memory.baseline;
+          const angle = noise(index) * Math.PI * 2;
+          const style = [
+            `--chat-stream-delay:${String(Math.round(chatStreamDelayMs(indexInDelta, memory.step, animation)))}ms`,
+            `--chat-stream-dx:${(Math.cos(angle) * 8).toFixed(1)}px`,
+            `--chat-stream-dy:${(Math.sin(angle) * 5).toFixed(1)}px`,
+          ].join(";");
+          memory.styleByIndex.set(index, style);
+          return style;
+        },
+        reportWordCount: (count: number) => {
+          memory.treeWordCount = count;
         },
       },
     };
-  }, [active, animation, deltaWordCount, revealedWordCount]);
+  }, [active, animation, memory]);
 }

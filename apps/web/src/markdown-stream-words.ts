@@ -9,18 +9,17 @@
  * changed, and nothing replays when the message re-renders for an unrelated
  * reason.
  *
- * What staggers them is a delay written onto each new word. The delay is why the
- * turn does not depend on how the provider delivers text: assistant streaming is
- * off by default, so a whole paragraph normally lands in one delta, and without a
- * clock of its own the reveal would be a single flash on every word at once.
+ * The walk itself is the only counter. Each word asks `styleOf` for the style
+ * it was born with, keyed by its index in this tree — not in the markdown
+ * source, which also counts list markers, emphasis asterisks and link urls
+ * that never render as words. A baseline measured against the source drifts,
+ * and a drifted baseline hands fresh delays to words already on screen, which
+ * `animation-fill-mode: backwards` answers by blinking them out.
  *
  * Runs after sanitisation — a plugin ordered before it would have its spans
- * stripped. Applied only while a message is still being written: once its reveal
- * has run out the wrappers are gone and the transcript is plain markup again.
- *
- * Code, and the text inside a link, are left whole. `ChatMarkdown` reads both
- * back out of the tree as flat strings (a fence's source, a link's label), and
- * splitting them would leave those readers holding elements instead of text.
+ * stripped. Applied only while a message is still being written: once its
+ * reveal has run out the wrappers are gone and the transcript is plain markup
+ * again.
  */
 
 interface HastNode {
@@ -34,26 +33,32 @@ interface HastNode {
 /** The class the stylesheet animates. One word, one element. */
 const STREAM_WORD_CLASS_NAME = "chat-stream-word";
 
-const OPAQUE_TAGS = new Set(["code", "pre", "a"]);
+/** A fence arrives as a block, not as words — revealing source word by word
+ * would tear its lines apart, and its header is chrome rather than prose. */
+const SKIPPED_TAGS = new Set(["pre"]);
+
+/**
+ * Elements the reveal treats as one word. Their insides stay untouched —
+ * `ChatMarkdown` reads a fence's source and a link's label back out of the
+ * tree as flat strings — but the element itself arrives on the same clock as
+ * the prose around it, instead of standing there before its sentence does.
+ */
+const WHOLE_TAGS = new Set(["code", "a"]);
 
 export interface ChatStreamWordTiming {
   /**
-   * Words already on screen before this render.
-   *
-   * They arrived, and animated, earlier — so they are wrapped exactly as before
-   * (React keeps their DOM only if the markup matches) but carry no delay. A
-   * delay that grew on a word already at rest would put it back inside its own
-   * delay phase, where `animation-fill-mode: backwards` hides it: the word would
-   * blink out because a later word arrived.
+   * Inline style for the word at this absolute tree index — the delay that
+   * staggers it and the offset it travels in from — or null for a word that is
+   * already at rest. Must answer the same index with the same style for as
+   * long as the reveal is active: a word whose markup re-renders byte-identical
+   * keeps its DOM node, and with it the animation that already ran.
    */
-  readonly revealedWordCount: number;
-  /** Reveal delay of the nth word of this delta, in milliseconds. */
-  readonly delayMsOf: (indexInDelta: number) => number;
-  /** Where the nth word of this delta comes in from, for the variants that travel. */
-  readonly offsetOf: (indexInDelta: number) => { readonly dx: string; readonly dy: string };
+  readonly styleOf: (index: number) => string | null;
+  /** Handed the tree's word count after the walk: the next delta's baseline. */
+  readonly reportWordCount: (count: number) => void;
 }
 
-/** Words as the reveal counts them, so a delay can be handed out per word. */
+/** Words as the source approximates them — pacing only, never a baseline. */
 export function countStreamWords(text: string): number {
   return text.match(/\S+/g)?.length ?? 0;
 }
@@ -62,31 +67,17 @@ export function rehypeChatStreamWords(timing: ChatStreamWordTiming) {
   return (tree: HastNode) => {
     let wordCount = 0;
 
-    const wordElement = (value: string): HastNode => {
-      const indexInDelta = wordCount - timing.revealedWordCount;
+    const wrapAsWord = (children: HastNode[]): HastNode => {
+      const style = timing.styleOf(wordCount);
       wordCount += 1;
-      if (indexInDelta < 0) {
-        return {
-          type: "element",
-          tagName: "span",
-          properties: { className: [STREAM_WORD_CLASS_NAME] },
-          children: [{ type: "text", value }],
-        };
-      }
-
-      const offset = timing.offsetOf(indexInDelta);
       return {
         type: "element",
         tagName: "span",
-        properties: {
-          className: [STREAM_WORD_CLASS_NAME],
-          style: [
-            `--chat-stream-delay:${String(Math.round(timing.delayMsOf(indexInDelta)))}ms`,
-            `--chat-stream-dx:${offset.dx}`,
-            `--chat-stream-dy:${offset.dy}`,
-          ].join(";"),
-        },
-        children: [{ type: "text", value }],
+        properties:
+          style === null
+            ? { className: [STREAM_WORD_CLASS_NAME] }
+            : { className: [STREAM_WORD_CLASS_NAME], style },
+        children,
       };
     };
 
@@ -99,7 +90,7 @@ export function rehypeChatStreamWords(timing: ChatStreamWordTiming) {
           nodes.push({ type: "text", value: part });
           continue;
         }
-        nodes.push(wordElement(part));
+        nodes.push(wrapAsWord([{ type: "text", value: part }]));
       }
       return nodes;
     };
@@ -111,8 +102,13 @@ export function rehypeChatStreamWords(timing: ChatStreamWordTiming) {
         if (child.type === "text" && typeof child.value === "string") {
           return splitIntoWords(child.value);
         }
-        if (child.type === "element" && child.tagName && OPAQUE_TAGS.has(child.tagName)) {
-          return [child];
+        if (child.type === "element" && child.tagName) {
+          if (SKIPPED_TAGS.has(child.tagName)) {
+            return [child];
+          }
+          if (WHOLE_TAGS.has(child.tagName)) {
+            return [wrapAsWord([child])];
+          }
         }
         wrapWords(child);
         return [child];
@@ -120,5 +116,6 @@ export function rehypeChatStreamWords(timing: ChatStreamWordTiming) {
     };
 
     wrapWords(tree);
+    timing.reportWordCount(wordCount);
   };
 }
