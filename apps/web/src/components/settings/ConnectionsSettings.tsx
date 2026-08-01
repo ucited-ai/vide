@@ -663,7 +663,7 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
         <span className="min-w-0 flex-1">
           <span className="block truncate">{option.label}</span>
           {renderDetail ? (
-            <span className="block truncate text-[11px] text-muted-foreground">
+            <span className="block truncate text-(length:--text-caption) text-muted-foreground">
               {option.detail}
             </span>
           ) : null}
@@ -675,7 +675,9 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
       <span className="min-w-0 flex-1">
         <span className="block truncate">Copy code</span>
         {renderDetail ? (
-          <span className="block truncate text-[11px] text-muted-foreground">Token only</span>
+          <span className="block truncate text-(length:--text-caption) text-muted-foreground">
+            Token only
+          </span>
         ) : null}
       </span>
     </MenuItem>
@@ -736,7 +738,7 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
               tooltipText={`Link created at ${formatAccessTimestamp(pairingLink.createdAt)}`}
               dotClassName="bg-amber-400"
             />
-            <h3 className="text-sm font-medium text-foreground">{primaryLabel}</h3>
+            <h3 className="text-(length:--text-ui) font-medium text-foreground">{primaryLabel}</h3>
             <Popover>
               {shareablePairingUrl ? (
                 <>
@@ -767,13 +769,13 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
               ) : null}
             </Popover>
           </div>
-          <p className="text-xs text-muted-foreground" title={expiresAbsolute}>
+          <p className="text-(length:--text-caption) text-muted-foreground" title={expiresAbsolute}>
             {formatExpiresInLabel(pairingLink.expiresAt, nowMs)}
             <span aria-hidden> · </span>
             <AccessScopeSummary scopes={pairingLink.scopes} label="Pairing link scopes" />
           </p>
           {shareablePairingUrl === null ? (
-            <p className="text-[11px] text-muted-foreground/70">
+            <p className="text-(length:--text-caption) text-muted-foreground/70">
               Copy the token and pair from another client using this backend&apos;s reachable host.
             </p>
           ) : null}
@@ -846,7 +848,7 @@ const PairingLinkListRow = memo(function PairingLinkListRow({
                   readOnly
                   value={revealValue}
                   rows={shareablePairingUrl ? 4 : 3}
-                  className="text-xs leading-relaxed"
+                  className="text-(length:--text-ui) leading-relaxed"
                   onFocus={(event) => event.currentTarget.select()}
                   onClick={(event) => event.currentTarget.select()}
                 />
@@ -934,14 +936,14 @@ const ConnectedClientListRow = memo(function ConnectedClientListRow({
               dotClassName={isLive ? "bg-success" : "bg-muted-foreground/30"}
               pingClassName={isLive ? "bg-success/60 duration-2000" : null}
             />
-            <h3 className="text-sm font-medium text-foreground">{primaryLabel}</h3>
+            <h3 className="text-(length:--text-ui) font-medium text-foreground">{primaryLabel}</h3>
             {clientSession.current ? (
-              <span className="text-[10px] text-muted-foreground/80 rounded-md border border-border/50 bg-muted/50 px-1 py-0.5">
+              <span className="text-(length:--text-micro) text-muted-foreground/80 rounded-md border border-border/50 bg-muted/50 px-1 py-0.5">
                 This device
               </span>
             ) : null}
           </div>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-(length:--text-caption) text-muted-foreground">
             {deviceInfoBits.length > 0 ? (
               <>
                 {deviceInfoBits.join(" · ")}
@@ -1053,7 +1055,7 @@ const AuthorizedClientsHeaderAction = memo(function AuthorizedClientsHeaderActio
           </DialogHeader>
           <DialogPanel className="space-y-5">
             <label className="block">
-              <span className="mb-1.5 block text-xs font-medium text-foreground">
+              <span className="mb-1.5 block text-(length:--text-ui) font-medium text-foreground">
                 Client label (optional)
               </span>
               <Input
@@ -1067,8 +1069,10 @@ const AuthorizedClientsHeaderAction = memo(function AuthorizedClientsHeaderActio
             <section className="space-y-3">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <h3 className="text-xs font-medium text-foreground">Permissions</h3>
-                  <p className="text-xs text-muted-foreground">
+                  <h3 className="text-(length:--text-ui) font-medium text-foreground">
+                    Permissions
+                  </h3>
+                  <p className="text-(length:--text-caption) text-muted-foreground">
                     Limit what the paired client can do.
                   </p>
                 </div>
@@ -1104,8 +1108,10 @@ const AuthorizedClientsHeaderAction = memo(function AuthorizedClientsHeaderActio
                       onCheckedChange={(checked) => togglePairingScope(scope, checked === true)}
                     />
                     <span className="min-w-0">
-                      <span className="block text-xs font-medium text-foreground">{title}</span>
-                      <span className="block text-xs leading-snug text-muted-foreground">
+                      <span className="block text-(length:--text-ui) font-medium text-foreground">
+                        {title}
+                      </span>
+                      <span className="block text-(length:--text-caption) leading-snug text-muted-foreground">
                         {description}
                       </span>
                     </span>
@@ -1113,9 +1119,11 @@ const AuthorizedClientsHeaderAction = memo(function AuthorizedClientsHeaderActio
                 ))}
               </div>
               {pairingScopes.length === 0 ? (
-                <p className="text-xs text-destructive">Select at least one permission.</p>
+                <p className="text-(length:--text-caption) text-destructive">
+                  Select at least one permission.
+                </p>
               ) : pairingScopes.includes(AuthAccessWriteScope) ? (
-                <p className="text-xs text-warning">
+                <p className="text-(length:--text-caption) text-warning">
                   This client can create or revoke access for other devices.
                 </p>
               ) : null}
@@ -1196,7 +1204,9 @@ const PairingClientsList = memo(function PairingClientsList({
 
       {pairingLinks.length === 0 && clientSessions.length === 0 && !isLoading ? (
         <div className={accessRowClassName(presentation)}>
-          <p className="text-xs text-muted-foreground/60">No pairing links or client sessions.</p>
+          <p className="text-(length:--text-ui) text-muted-foreground/60">
+            No pairing links or client sessions.
+          </p>
         </div>
       ) : null}
     </>
@@ -1235,26 +1245,26 @@ const AdvertisedEndpointListRow = memo(function AdvertisedEndpointListRow({
       ) : null}
       <div className="flex min-h-6 min-w-0 flex-col gap-2 sm:-my-0.5 sm:flex-row sm:items-center">
         <div className="flex min-w-0 items-baseline gap-3">
-          <h3 className="shrink-0 text-sm leading-5 font-medium text-foreground">
+          <h3 className="shrink-0 text-(length:--text-ui) leading-5 font-medium text-foreground">
             {endpoint.label}
           </h3>
           {shouldShowEndpointUrl ? (
             <p
-              className="min-w-0 truncate text-xs leading-5 text-muted-foreground"
+              className="min-w-0 truncate text-(length:--text-caption) leading-5 text-muted-foreground"
               title={endpoint.httpBaseUrl}
             >
               {endpoint.httpBaseUrl}
             </p>
           ) : null}
           {!isAvailable ? (
-            <span className="shrink-0 rounded-md border border-border/70 px-1 py-0.5 text-[10px] text-muted-foreground">
+            <span className="shrink-0 rounded-md border border-border/70 px-1 py-0.5 text-(length:--text-micro) text-muted-foreground">
               Setup required
             </span>
           ) : null}
         </div>
         <div className="ml-auto flex min-h-6 shrink-0 items-center justify-end gap-2">
           {isDefault ? (
-            <span className="rounded-md border border-primary/30 bg-primary/10 px-1 py-0.5 text-[10px] text-primary">
+            <span className="rounded-md border border-primary/30 bg-primary/10 px-1 py-0.5 text-(length:--text-micro) text-primary">
               Default
             </span>
           ) : null}
@@ -1310,7 +1320,7 @@ function NetworkAccessDescription({
     <>
       <span className="min-w-0 truncate">{endpoint.httpBaseUrl}</span>
       {hiddenEndpointCount > 0 ? (
-        <span className="shrink-0 text-xs font-medium">
+        <span className="shrink-0 text-(length:--text-caption) font-medium">
           {expanded ? "Hide" : `+${hiddenEndpointCount}`}
         </span>
       ) : null}
@@ -1420,14 +1430,18 @@ function SavedBackendListRow({
                   : null
               }
             />
-            <h3 className="text-sm font-medium text-foreground">{environment.label}</h3>
+            <h3 className="text-(length:--text-ui) font-medium text-foreground">
+              {environment.label}
+            </h3>
           </div>
           {metadataBits.length > 0 ? (
-            <p className="text-xs text-muted-foreground">{metadataBits.join(" · ")}</p>
+            <p className="text-(length:--text-caption) text-muted-foreground">
+              {metadataBits.join(" · ")}
+            </p>
           ) : null}
           {versionMismatch ? (
             <div className="flex flex-wrap items-center gap-2">
-              <p className="flex items-center gap-1 text-warning text-xs">
+              <p className="flex items-center gap-1 text-warning text-(length:--text-caption)">
                 <TriangleAlertIcon className="size-3.5 shrink-0" />
                 Version drift: client {versionMismatch.clientVersion}, server{" "}
                 {versionMismatch.serverVersion}.
@@ -1441,7 +1455,7 @@ function SavedBackendListRow({
             </div>
           ) : null}
           {environment.connection.error ? (
-            <p className="flex min-w-0 items-center gap-2 text-destructive text-xs">
+            <p className="flex min-w-0 items-center gap-2 text-destructive text-(length:--text-caption)">
               <span className="truncate">{connectionStatusText(environment.connection)}</span>
               {errorTraceId ? (
                 <button
@@ -1524,8 +1538,12 @@ const DesktopSshHostRow = memo(function DesktopSshHostRow({
     <div className="rounded-xl px-3 py-3 sm:px-4">
       <div className={ITEM_ROW_INNER_CLASSNAME}>
         <div className="min-w-0 flex-1">
-          <h3 className="truncate text-sm font-medium text-foreground">{target.alias}</h3>
-          {showAddress ? <p className="truncate text-xs text-muted-foreground">{address}</p> : null}
+          <h3 className="truncate text-(length:--text-ui) font-medium text-foreground">
+            {target.alias}
+          </h3>
+          {showAddress ? (
+            <p className="truncate text-(length:--text-caption) text-muted-foreground">{address}</p>
+          ) : null}
         </div>
         <div className="flex w-full shrink-0 items-center gap-2 sm:w-auto sm:justify-end">
           <Button
@@ -2377,8 +2395,10 @@ export function ConnectionsSettings() {
           </span>
         ) : null}
         <span className="min-w-0">
-          <span className="block text-sm font-medium text-foreground">{input.title}</span>
-          <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">
+          <span className="block text-(length:--text-ui) font-medium text-foreground">
+            {input.title}
+          </span>
+          <span className="mt-1 block text-(length:--text-caption) leading-relaxed text-muted-foreground">
             {input.description}
           </span>
         </span>
@@ -2390,7 +2410,9 @@ export function ConnectionsSettings() {
     <div className="space-y-3">
       <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_10rem]">
         <label className="block">
-          <span className="mb-1.5 block text-xs font-medium text-foreground">Host</span>
+          <span className="mb-1.5 block text-(length:--text-ui) font-medium text-foreground">
+            Host
+          </span>
           <Input
             value={savedBackendHost}
             onChange={(event) => handleSavedBackendHostChange(event.target.value)}
@@ -2400,7 +2422,9 @@ export function ConnectionsSettings() {
           />
         </label>
         <label className="block">
-          <span className="mb-1.5 block text-xs font-medium text-foreground">Pairing code</span>
+          <span className="mb-1.5 block text-(length:--text-ui) font-medium text-foreground">
+            Pairing code
+          </span>
           <Input
             value={savedBackendPairingCode}
             onChange={(event) => setSavedBackendPairingCode(event.target.value)}
@@ -2411,7 +2435,7 @@ export function ConnectionsSettings() {
         </label>
       </div>
       <div>
-        <span className="mt-1 block text-[11px] text-muted-foreground">
+        <span className="mt-1 block text-(length:--text-caption) text-muted-foreground">
           Paste a full pairing URL here to fill both fields automatically.
         </span>
       </div>
@@ -2420,7 +2444,9 @@ export function ConnectionsSettings() {
   const renderRemoteModeBody = () => (
     <div className="space-y-4">
       {renderRemoteFields()}
-      {savedBackendError ? <p className="text-xs text-destructive">{savedBackendError}</p> : null}
+      {savedBackendError ? (
+        <p className="text-(length:--text-caption) text-destructive">{savedBackendError}</p>
+      ) : null}
       <Button
         variant="outline"
         className="w-full"
@@ -2436,7 +2462,7 @@ export function ConnectionsSettings() {
     <div className="space-y-4">
       <div className="space-y-3">
         <label className="block">
-          <span className="mb-1.5 block text-xs font-medium text-foreground">
+          <span className="mb-1.5 block text-(length:--text-ui) font-medium text-foreground">
             SSH host or alias
           </span>
           <Input
@@ -2449,7 +2475,9 @@ export function ConnectionsSettings() {
         </label>
         <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_7rem]">
           <label className="block">
-            <span className="mb-1.5 block text-xs font-medium text-foreground">Username</span>
+            <span className="mb-1.5 block text-(length:--text-ui) font-medium text-foreground">
+              Username
+            </span>
             <Input
               value={savedBackendSshUsername}
               onChange={(event) => setSavedBackendSshUsername(event.target.value)}
@@ -2459,7 +2487,9 @@ export function ConnectionsSettings() {
             />
           </label>
           <label className="block">
-            <span className="mb-1.5 block text-xs font-medium text-foreground">Port</span>
+            <span className="mb-1.5 block text-(length:--text-ui) font-medium text-foreground">
+              Port
+            </span>
             <Input
               value={savedBackendSshPort}
               onChange={(event) => setSavedBackendSshPort(event.target.value)}
@@ -2471,7 +2501,7 @@ export function ConnectionsSettings() {
           </label>
         </div>
         {savedBackendError || discoveredSshHostsError ? (
-          <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+          <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-(length:--text-caption) text-destructive">
             {savedBackendError ?? discoveredSshHostsError}
           </div>
         ) : null}
@@ -2488,8 +2518,12 @@ export function ConnectionsSettings() {
       <div className="overflow-hidden rounded-lg border border-border/60">
         <div className="flex items-center justify-between gap-3 border-b border-border/60 bg-muted/30 px-3 py-2">
           <div className="min-w-0">
-            <p className="text-xs font-medium text-foreground">Suggested hosts</p>
-            <p className="text-[11px] text-muted-foreground">From SSH config and known hosts</p>
+            <p className="text-(length:--text-caption) font-medium text-foreground">
+              Suggested hosts
+            </p>
+            <p className="text-(length:--text-caption) text-muted-foreground">
+              From SSH config and known hosts
+            </p>
           </div>
           <Button
             size="xs"
@@ -2519,7 +2553,9 @@ export function ConnectionsSettings() {
             !isLoadingDiscoveredSshHosts &&
             unsavedDiscoveredSshHosts.length === 0 ? (
               <div className={ITEM_ROW_CLASSNAME}>
-                <p className="text-xs text-muted-foreground">No new SSH hosts were discovered.</p>
+                <p className="text-(length:--text-ui) text-muted-foreground">
+                  No new SSH hosts were discovered.
+                </p>
               </div>
             ) : null}
           </div>
@@ -2895,7 +2931,9 @@ export function ConnectionsSettings() {
     <>
       {desktopAccessManagementError ? (
         <div className={accessRowClassName(presentation)}>
-          <p className="text-xs text-destructive">{desktopAccessManagementError}</p>
+          <p className="text-(length:--text-caption) text-destructive">
+            {desktopAccessManagementError}
+          </p>
         </div>
       ) : null}
       <PairingClientsList
@@ -3255,7 +3293,9 @@ export function ConnectionsSettings() {
               </DialogHeader>
               <DialogPanel className="space-y-4">
                 <label className="block">
-                  <span className="text-sm font-medium text-foreground">HTTPS port</span>
+                  <span className="text-(length:--text-ui) font-medium text-foreground">
+                    HTTPS port
+                  </span>
                   <Input
                     className="mt-2"
                     type="number"
@@ -3269,12 +3309,16 @@ export function ConnectionsSettings() {
                   />
                 </label>
                 {!isTailscaleServePortValid ? (
-                  <p className="mt-2 text-xs text-destructive">Enter a port from 1 to 65535.</p>
+                  <p className="mt-2 text-(length:--text-caption) text-destructive">
+                    Enter a port from 1 to 65535.
+                  </p>
                 ) : null}
                 <div className="rounded-md border border-border/70 bg-muted/20 px-3 py-2">
-                  <p className="text-xs font-medium text-muted-foreground">HTTPS endpoint</p>
+                  <p className="text-(length:--text-ui) font-medium text-muted-foreground">
+                    HTTPS endpoint
+                  </p>
                   <p
-                    className="mt-1 truncate text-sm text-foreground"
+                    className="mt-1 truncate text-(length:--text-ui) text-foreground"
                     title={pendingTailscaleServeBaseUrl ?? undefined}
                   >
                     {pendingTailscaleServeBaseUrl ?? "Pending MagicDNS endpoint"}
@@ -3335,7 +3379,7 @@ export function ConnectionsSettings() {
                       <Button
                         size="xs"
                         variant="ghost"
-                        className="h-5 gap-1 rounded-sm px-1 text-[11px] font-normal text-muted-foreground/60 hover:text-muted-foreground"
+                        className="h-5 gap-1 rounded-sm px-1 text-(length:--text-caption) font-normal text-muted-foreground/60 hover:text-muted-foreground"
                         aria-label="Add environment"
                       >
                         <PlusIcon className="size-3" />

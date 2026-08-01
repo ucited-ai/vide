@@ -97,12 +97,12 @@ export const ComposerStashMenu = memo(function ComposerStashMenu(props: {
       <div className="dropdown-glass relative w-full overflow-hidden rounded-[20px]">
         <CommandList className="max-h-72">
           <CommandGroup>
-            <CommandGroupLabel className="flex items-center gap-1.5 px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/55">
+            <CommandGroupLabel className="flex items-center gap-1.5 px-3 pt-2 pb-1 text-(length:--text-micro) font-semibold uppercase tracking-[0.08em] text-muted-foreground/55">
               <BookmarkIcon className="size-3" aria-hidden="true" />
               Stashed prompts — {props.providerLabel}
             </CommandGroupLabel>
             {entries.length === 0 ? (
-              <p className="px-3 pb-3 pt-1 text-muted-foreground/70 text-xs">
+              <p className="px-3 pb-3 pt-1 text-muted-foreground/70 text-(length:--text-ui)">
                 Nothing stashed for this method yet. Press ⌘S with a prompt in the composer to stash
                 it.
               </p>
@@ -140,21 +140,21 @@ export const ComposerStashMenu = memo(function ComposerStashMenu(props: {
                   ) : (
                     <BookmarkIcon className="size-4 shrink-0 text-muted-foreground/60" />
                   )}
-                  <span className="min-w-0 flex-1 truncate text-sm">
+                  <span className="min-w-0 flex-1 truncate text-(length:--text-ui)">
                     {stashEntrySnippet(entry)}
                   </span>
                   {entry.pendingImageCount ? (
-                    <span className="shrink-0 text-[10px] text-muted-foreground/60">
+                    <span className="shrink-0 text-(length:--text-micro) text-muted-foreground/60">
                       saving {entry.pendingImageCount} image
                       {entry.pendingImageCount === 1 ? "" : "s"}…
                     </span>
                   ) : missingImageCount(entry) > 0 ? (
-                    <span className="shrink-0 text-[10px] text-amber-600">
+                    <span className="shrink-0 text-(length:--text-micro) text-amber-600">
                       {missingImageCount(entry)} image
                       {missingImageCount(entry) === 1 ? "" : "s"} dropped
                     </span>
                   ) : null}
-                  <span className="shrink-0 text-muted-foreground/60 text-xs">
+                  <span className="shrink-0 text-muted-foreground/60 text-(length:--text-caption)">
                     {formatRelativeTimeLabel(entry.createdAt)}
                   </span>
                   <Button
@@ -174,7 +174,7 @@ export const ComposerStashMenu = memo(function ComposerStashMenu(props: {
             )}
           </CommandGroup>
           {props.otherScopesCount > 0 ? (
-            <p className="border-t border-border/50 px-3 py-2 text-[11px] text-muted-foreground/60">
+            <p className="border-t border-border/50 px-3 py-2 text-(length:--text-caption) text-muted-foreground/60">
               {props.otherScopesCount} more stashed under other connection methods — switch provider
               to see them.
             </p>

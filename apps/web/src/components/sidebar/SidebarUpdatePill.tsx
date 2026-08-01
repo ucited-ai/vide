@@ -32,17 +32,17 @@ function SidebarUpdateReleaseNotesTooltip({
   return (
     <div className="w-120 max-w-[calc(100vw-2rem)] text-left">
       <div className="px-1">
-        <div className="text-sm leading-5 font-medium">{tooltip}</div>
+        <div className="text-(length:--text-ui) leading-5 font-medium">{tooltip}</div>
       </div>
       <div className="pointer-events-auto max-h-[min(28rem,calc(100vh-6rem))] overflow-y-auto px-1 pt-4 pb-1">
         {state.releaseNotes.map((releaseNote, index) => (
           <div key={releaseNote.version}>
             {index > 0 && <Separator className="my-3 bg-border/60" />}
             <section>
-              <h3 className="text-muted-foreground text-xs leading-4 font-semibold">
+              <h3 className="text-(length:--text-caption) leading-4 font-semibold text-muted-foreground">
                 {index === 0 ? "What's changed" : `Changes in ${releaseNote.version}`}
               </h3>
-              <ul className="mt-2 space-y-1.5 pl-4 text-xs leading-5 text-popover-foreground/90">
+              <ul className="mt-2 space-y-1.5 pl-4 text-(length:--text-chat) leading-5 text-popover-foreground/90">
                 {releaseNote.items.map((item, itemIndex) => (
                   <li className="list-disc break-words" key={`${releaseNote.version}-${itemIndex}`}>
                     {item}
@@ -145,7 +145,10 @@ export function SidebarUpdatePill() {
   return (
     <div className="flex flex-col gap-1">
       {showArm64Warning && arm64Description && (
-        <Alert variant="warning" className="rounded-2xl border-warning/40 bg-warning/8 text-xs">
+        <Alert
+          variant="warning"
+          className="rounded-2xl border-warning/40 bg-warning/8 text-(length:--text-caption)"
+        >
           <TriangleAlertIcon />
           <AlertTitle>Intel build on Apple Silicon</AlertTitle>
           <AlertDescription>{arm64Description}</AlertDescription>
@@ -153,7 +156,7 @@ export function SidebarUpdatePill() {
       )}
       {visible && (
         <div
-          className={`group/update relative flex h-7 w-full items-center rounded-lg bg-primary/15 text-xs font-medium text-primary ${
+          className={`group/update relative flex h-7 w-full items-center rounded-lg bg-primary/15 text-(length:--text-caption) font-medium text-primary ${
             disabled ? " cursor-not-allowed opacity-60" : ""
           }`}
         >

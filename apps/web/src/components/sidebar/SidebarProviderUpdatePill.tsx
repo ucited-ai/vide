@@ -124,7 +124,7 @@ export function SidebarProviderUpdatePill() {
 
   return (
     <div
-      className={`group/provider-update relative flex h-7 w-full items-center overflow-hidden rounded-lg text-xs font-medium transform-gpu transition-[background-color,border-color,color,opacity,translate] duration-(--duration-popup) will-change-transform ${
+      className={`group/provider-update relative flex h-7 w-full items-center overflow-hidden rounded-lg text-(length:--text-caption) font-medium transform-gpu transition-[background-color,border-color,color,opacity,translate] duration-(--duration-popup) will-change-transform ${
         PROVIDER_UPDATE_PILL_STYLES[displayedView.tone]
       } ${
         exitingKey === displayedView.key

@@ -193,7 +193,7 @@ export function BrowserDeviceToolbar({
       }}
     >
       {width >= 560 ? (
-        <span className="mr-0.5 shrink-0 text-[11px] font-medium text-muted-foreground">
+        <span className="mr-0.5 shrink-0 text-(length:--text-caption) font-medium text-muted-foreground">
           Dimensions
         </span>
       ) : null}
@@ -223,7 +223,7 @@ export function BrowserDeviceToolbar({
               <SelectItem key={preset.id} value={preset.id}>
                 <span className="flex w-full items-center justify-between gap-5">
                   <span>{preset.label}</span>
-                  <span className="text-xs tabular-nums text-muted-foreground">
+                  <span className="text-(length:--text-caption) tabular-nums text-muted-foreground">
                     {preset.detail}
                   </span>
                 </span>
@@ -263,11 +263,11 @@ export function BrowserDeviceToolbar({
           aria-label="Viewport width"
           aria-invalid={!customValid}
           className={cn(
-            "h-6 rounded-md text-center tabular-nums [&_[data-slot=input]]:h-full [&_[data-slot=input]]:px-1 [&_[data-slot=input]]:text-xs [&_[data-slot=input]]:leading-none [&_[data-slot=input]::-webkit-inner-spin-button]:appearance-none [&_[data-slot=input]]:[appearance:textfield]",
+            "h-6 rounded-md text-center tabular-nums [&_[data-slot=input]]:h-full [&_[data-slot=input]]:px-1 [&_[data-slot=input]]:text-(length:--text-caption) [&_[data-slot=input]]:leading-none [&_[data-slot=input]::-webkit-inner-spin-button]:appearance-none [&_[data-slot=input]]:[appearance:textfield]",
             width >= 360 ? "w-14" : "w-11",
           )}
         />
-        <span className="text-xs text-muted-foreground">×</span>
+        <span className="text-(length:--text-ui) text-muted-foreground">×</span>
         <Input
           nativeInput
           type="number"
@@ -290,7 +290,7 @@ export function BrowserDeviceToolbar({
           aria-label="Viewport height"
           aria-invalid={!customValid}
           className={cn(
-            "h-6 rounded-md text-center tabular-nums [&_[data-slot=input]]:h-full [&_[data-slot=input]]:px-1 [&_[data-slot=input]]:text-xs [&_[data-slot=input]]:leading-none [&_[data-slot=input]::-webkit-inner-spin-button]:appearance-none [&_[data-slot=input]]:[appearance:textfield]",
+            "h-6 rounded-md text-center tabular-nums [&_[data-slot=input]]:h-full [&_[data-slot=input]]:px-1 [&_[data-slot=input]]:text-(length:--text-caption) [&_[data-slot=input]]:leading-none [&_[data-slot=input]::-webkit-inner-spin-button]:appearance-none [&_[data-slot=input]]:[appearance:textfield]",
             width >= 360 ? "w-14" : "w-11",
           )}
         />

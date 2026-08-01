@@ -439,7 +439,7 @@ const ComposerPermissionsPicker = memo(function ComposerPermissionsPicker(props:
                       <OptionIcon className="size-3.5 shrink-0 text-muted-foreground" />
                       {option.label}
                     </span>
-                    <span className="text-muted-foreground text-xs leading-4">
+                    <span className="text-muted-foreground text-(length:--text-ui) leading-4">
                       {option.description}
                     </span>
                   </div>
@@ -513,7 +513,9 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
   return (
     <>
       {props.isPreparingWorktree ? (
-        <span className="text-muted-foreground/70 text-xs">Preparing worktree...</span>
+        <span className="text-muted-foreground/70 text-(length:--text-caption)">
+          Preparing worktree...
+        </span>
       ) : null}
       <ComposerPrimaryActions
         compact={props.compact}
@@ -2752,7 +2754,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                   <button
                     type="button"
                     className={cn(
-                      "min-w-0 flex-1 truncate bg-transparent py-1.5 text-left text-sm",
+                      "min-w-0 flex-1 truncate bg-transparent py-1.5 text-left text-(length:--text-ui)",
                       activePendingProgress?.customAnswer
                         ? "text-foreground"
                         : "text-muted-foreground/60",
@@ -2977,7 +2979,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                             />
                           </button>
                         ) : (
-                          <div className="flex h-full w-full items-center justify-center px-1 text-center text-[10px] text-muted-foreground/70">
+                          <div className="flex h-full w-full items-center justify-center px-1 text-center text-(length:--text-micro) text-muted-foreground/70">
                             {image.name}
                           </div>
                         )}

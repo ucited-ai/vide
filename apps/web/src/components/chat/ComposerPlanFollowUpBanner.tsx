@@ -17,10 +17,12 @@ export const ComposerPlanFollowUpBanner = memo(function ComposerPlanFollowUpBann
           Plan Ready
         </Badge>
         {planTitle ? (
-          <span className="min-w-0 flex-1 truncate text-sm font-medium">{planTitle}</span>
+          <span className="min-w-0 flex-1 truncate text-(length:--text-ui) font-medium">
+            {planTitle}
+          </span>
         ) : null}
       </div>
-      {/* <div className="mt-2 text-xs text-muted-foreground">
+      {/* <div className="mt-2 text-(length:--text-caption) text-muted-foreground">
         Review the plan
       </div> */}
     </div>

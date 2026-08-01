@@ -14,6 +14,9 @@ import * as DesktopClientSettings from "./DesktopClientSettings.ts";
 
 const clientSettings: ClientSettings = {
   autoOpenPlanSidebar: false,
+  chatChangedFilesLayout: "tree",
+  chatStreamAnimation: "assemble",
+  chatThinkingIndicator: "orbits",
   confirmThreadArchive: true,
   confirmThreadDelete: false,
   dismissedProviderUpdateNotificationKeys: [],

@@ -153,10 +153,12 @@ export function CloudEnvironmentConnectRows({
     if (discoveryProblem !== null && !environmentsState.refreshing) {
       return (
         <div className={ITEM_ROW_CLASSNAME}>
-          <p className="text-sm font-medium text-destructive">
+          <p className="text-(length:--text-ui) font-medium text-destructive">
             Could not load Vide Connect environments
           </p>
-          <p className="mt-1 text-xs text-muted-foreground">{discoveryProblem}</p>
+          <p className="mt-1 text-(length:--text-caption) text-muted-foreground">
+            {discoveryProblem}
+          </p>
           <Button
             size="sm"
             variant="outline"
@@ -225,11 +227,11 @@ export function CloudEnvironmentConnectRows({
                           : (Option.getOrNull(error)?.message ?? "Relay status unavailable")
                 }
               />
-              <p className="truncate text-sm font-medium">{environment.label}</p>
+              <p className="truncate text-(length:--text-ui) font-medium">{environment.label}</p>
             </div>
             <p
               className={cn(
-                "mt-1 truncate text-xs",
+                "mt-1 truncate text-(length:--text-caption)",
                 savedConnection?.tone === "error" ||
                   (savedConnection?.tone === "connecting" && savedEnvironment?.connection.error) ||
                   (savedConnection === null && availability === "error")

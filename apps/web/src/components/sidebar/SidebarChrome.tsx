@@ -61,7 +61,7 @@ function SidebarBrand({ onBackdrop }: { onBackdrop: boolean }) {
       <VideWordmark />
       <span
         className={cn(
-          "truncate text-[13px] font-medium tracking-[-0.012em]",
+          "truncate text-(length:--text-ui) font-medium tracking-[-0.012em]",
           onBackdrop ? "text-white/80" : "text-foreground/85",
         )}
       >
@@ -124,7 +124,7 @@ export const SidebarChromeFooter = memo(function SidebarChromeFooter() {
         <SidebarMenuItem>
           <SidebarMenuButton
             size="sm"
-            className="h-8 items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium text-sidebar-muted-foreground/80 hover:bg-sidebar-row-hover hover:text-sidebar-foreground"
+            className="h-8 items-center gap-2 rounded-md px-2 py-1.5 text-(length:--text-ui) font-medium text-sidebar-muted-foreground/80 hover:bg-sidebar-row-hover hover:text-sidebar-foreground"
             onClick={handleSettingsClick}
           >
             <SettingsIcon className="size-4.5 shrink-0" />

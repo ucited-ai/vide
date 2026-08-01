@@ -144,7 +144,9 @@ function EnvironmentUpdateRow({
     <div className="flex items-center justify-between gap-3 py-0.5">
       <div className="flex min-w-0 flex-col">
         <span className="truncate font-medium text-foreground">{group.label}</span>
-        <span className={cn("truncate text-xs", rowToneClass(status.kind))}>{status.text}</span>
+        <span className={cn("truncate text-(length:--text-caption)", rowToneClass(status.kind))}>
+          {status.text}
+        </span>
       </div>
       <div className="shrink-0">{trailing}</div>
     </div>

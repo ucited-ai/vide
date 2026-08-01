@@ -195,7 +195,10 @@ function itemSummary({
       return (
         <span>
           {item.label} is not authenticated on this server. Sign in or configure credentials using
-          the <code className="rounded bg-muted px-1 py-px text-[11px]">{item.executable}</code>{" "}
+          the{" "}
+          <code className="rounded bg-muted px-1 py-px text-(length:--text-caption)">
+            {item.executable}
+          </code>{" "}
           tool on the server host to enable change request features.
         </span>
       );
@@ -239,10 +242,14 @@ function DiscoveryItemRow({
           <div className="min-w-0 flex-1 space-y-1">
             <div className="flex min-w-0 flex-wrap items-center gap-2">
               <SourceControlItemMark item={item} />
-              <span className="truncate text-sm font-medium tracking-[-0.005em] text-foreground">
+              <span className="truncate text-(length:--text-ui) font-medium tracking-[-0.005em] text-foreground">
                 {item.label}
               </span>
-              {version ? <code className="text-xs text-muted-foreground">{version}</code> : null}
+              {version ? (
+                <code className="text-(length:--text-caption) text-muted-foreground">
+                  {version}
+                </code>
+              ) : null}
               {isVcsNotReady(item) ? (
                 <Badge variant="warning" size="sm">
                   Coming Soon
@@ -254,7 +261,7 @@ function DiscoveryItemRow({
                 </Badge>
               ) : null}
             </div>
-            <p className="flex min-w-0 flex-wrap items-center gap-x-1 text-[13px] leading-[1.45] text-muted-foreground/80">
+            <p className="flex min-w-0 flex-wrap items-center gap-x-1 text-(length:--text-ui) leading-[1.45] text-muted-foreground/80">
               {itemSummary({ item, auth, authAccount })}
             </p>
           </div>
@@ -263,7 +270,7 @@ function DiscoveryItemRow({
               <Button
                 size="sm"
                 variant="ghost"
-                className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                className="h-7 px-2 text-(length:--text-ui) text-muted-foreground hover:text-foreground"
                 onClick={() => setIsExpanded((open) => !open)}
                 aria-expanded={isExpanded}
                 aria-label={`Toggle ${item.label} details`}
@@ -308,7 +315,9 @@ function GitFetchIntervalSettings() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 space-y-1">
           <div className="flex min-w-0 items-center gap-1">
-            <span className="text-xs font-medium text-foreground">Fetch interval</span>
+            <span className="text-(length:--text-ui) font-medium text-foreground">
+              Fetch interval
+            </span>
             <span
               className={cn(
                 "inline-flex size-5 shrink-0 items-center justify-center transition-opacity",
@@ -328,7 +337,7 @@ function GitFetchIntervalSettings() {
               ) : null}
             </span>
           </div>
-          <p className="max-w-2xl text-xs leading-relaxed text-muted-foreground">
+          <p className="max-w-2xl text-(length:--text-caption) leading-relaxed text-muted-foreground">
             Refresh remote branch status in the background. Set this to 0 seconds if Git credentials
             or security keys should only be prompted by explicit Git actions.
           </p>
@@ -352,7 +361,7 @@ function GitFetchIntervalSettings() {
               <NumberFieldIncrement aria-label="Increase fetch interval" />
             </NumberFieldGroup>
           </NumberField>
-          <span className="text-xs text-muted-foreground">seconds</span>
+          <span className="text-(length:--text-ui) text-muted-foreground">seconds</span>
         </div>
       </div>
     </div>
@@ -427,7 +436,7 @@ function EmptySourceControlDiscovery({
           <Button
             size="sm"
             variant="outline"
-            className="h-8 gap-1.5 px-3 text-xs"
+            className="h-8 gap-1.5 px-3 text-(length:--text-ui)"
             onClick={onScan}
             disabled={isPending}
           >

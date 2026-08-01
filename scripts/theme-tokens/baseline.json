@@ -1,0 +1,502 @@
+{
+  "version": 1,
+  "generatedAt": "2026-08-01",
+  "findings": {
+    "hardcoded-text-size:apps/web/src/components/chat/ModelPickerSidebar.tsx:text-[7px]": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "hardcoded-text-size:apps/web/src/components/chat/ProviderInstanceIcon.tsx:text-[8px]": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "hardcoded-text-size:apps/web/src/components/chat/ProviderModelPicker.tsx:text-[7px]": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "hardcoded-text-size:apps/web/src/components/settings/ProviderInstanceCard.tsx:text-[7px]": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "hardcoded-text-size:apps/web/src/components/ui/button.tsx:text-base": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "hardcoded-text-size:apps/web/src/components/ui/button.tsx:text-sm": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "hardcoded-text-size:apps/web/src/components/ui/select.tsx:text-base": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "hardcoded-text-size:apps/web/src/components/ui/select.tsx:text-sm": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/desktop/src/window/DesktopWindow.ts:#00000000": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/desktop/src/window/DesktopWindow.ts:#01000000": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/desktop/src/window/DesktopWindow.ts:#0e0e10": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/desktop/src/window/DesktopWindow.ts:#1f2937": {
+      "since": "2026-08-01",
+      "count": 2
+    },
+    "raw-color:apps/desktop/src/window/DesktopWindow.ts:#6b7280": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/desktop/src/window/DesktopWindow.ts:#9ca3af": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/desktop/src/window/DesktopWindow.ts:#f6f6f7": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/desktop/src/window/DesktopWindow.ts:#f8fafc": {
+      "since": "2026-08-01",
+      "count": 2
+    },
+    "raw-color:apps/desktop/src/window/DesktopWindow.ts:rgba(248,250,252,0.18)": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/desktop/src/window/DesktopWindow.ts:rgba(31,41,55,0.18)": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/browser/annotationTheme.ts:oklch(0.269 0 0)": {
+      "since": "2026-08-01",
+      "count": 3
+    },
+    "raw-color:apps/web/src/browser/annotationTheme.ts:oklch(0.488 0.217 264)": {
+      "since": "2026-08-01",
+      "count": 2
+    },
+    "raw-color:apps/web/src/browser/annotationTheme.ts:oklch(0.556 0 0)": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/browser/annotationTheme.ts:rgb(0 0 0 / 10%)": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/browser/annotationTheme.ts:rgb(0 0 0 / 4%)": {
+      "since": "2026-08-01",
+      "count": 2
+    },
+    "raw-color:apps/web/src/browser/annotationTheme.ts:rgb(0 0 0 / 8%)": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/browser/browserRecording.ts:#000000": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/auth/AuthSurfaceShell.tsx:#172f82": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/auth/AuthSurfaceShell.tsx:#17348e": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/auth/AuthSurfaceShell.tsx:#1e61de": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/auth/AuthSurfaceShell.tsx:#2468df": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/auth/AuthSurfaceShell.tsx:rgba(136,204,255,0.5)": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/auth/AuthSurfaceShell.tsx:rgba(7,18,55,0.46)": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/ChatMarkdown.tsx:#685": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/files/FilePreviewPanel.tsx:#0a0a0a": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/files/FilePreviewPanel.tsx:#ffffff": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/PullRequestThreadDialog.tsx:#123": {
+      "since": "2026-08-01",
+      "count": 2
+    },
+    "raw-color:apps/web/src/components/settings/ThemeAppearanceControls.tsx:#1b1c20": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/settings/ThemeAppearanceControls.tsx:#20242b": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/settings/ThemeAppearanceControls.tsx:#232429": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/settings/ThemeAppearanceControls.tsx:#262429": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/settings/ThemeAppearanceControls.tsx:#2b2c32": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/settings/ThemeAppearanceControls.tsx:#33343a": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/settings/ThemeAppearanceControls.tsx:#f7f7f8": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/settings/ThemeAppearanceControls.tsx:#fafbfd": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/settings/ThemeAppearanceControls.tsx:#fdfcfa": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/settings/ThemeAppearanceControls.tsx:#ffffff": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/ThreadTerminalDrawer.tsx:rgb(110, 120, 136)": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/ThreadTerminalDrawer.tsx:rgb(112, 123, 140)": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/ThreadTerminalDrawer.tsx:rgb(124, 232, 237)": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/ThreadTerminalDrawer.tsx:rgb(132, 86, 149)": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/ThreadTerminalDrawer.tsx:rgb(134, 231, 149)": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/ThreadTerminalDrawer.tsx:rgb(137, 190, 255)": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/ThreadTerminalDrawer.tsx:rgb(14, 18, 24)": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/ThreadTerminalDrawer.tsx:rgb(146, 112, 35)": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/ThreadTerminalDrawer.tsx:rgb(153, 107, 172)": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/ThreadTerminalDrawer.tsx:rgb(167, 244, 247)": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/ThreadTerminalDrawer.tsx:rgb(173, 133, 45)": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/ThreadTerminalDrawer.tsx:rgb(174, 210, 255)": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/ThreadTerminalDrawer.tsx:rgb(176, 245, 186)": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/ThreadTerminalDrawer.tsx:rgb(180, 203, 255)": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/ThreadTerminalDrawer.tsx:rgb(191, 70, 87)": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/ThreadTerminalDrawer.tsx:rgb(208, 176, 255)": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/ThreadTerminalDrawer.tsx:rgb(210, 215, 223)": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/ThreadTerminalDrawer.tsx:rgb(210, 218, 230)": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/ThreadTerminalDrawer.tsx:rgb(212, 95, 112)": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/ThreadTerminalDrawer.tsx:rgb(229, 203, 255)": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/ThreadTerminalDrawer.tsx:rgb(236, 240, 246)": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/ThreadTerminalDrawer.tsx:rgb(237, 241, 247)": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/ThreadTerminalDrawer.tsx:rgb(24, 30, 38)": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/ThreadTerminalDrawer.tsx:rgb(244, 205, 114)": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/ThreadTerminalDrawer.tsx:rgb(244, 247, 252)": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/ThreadTerminalDrawer.tsx:rgb(255, 122, 142)": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/ThreadTerminalDrawer.tsx:rgb(255, 168, 180)": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/ThreadTerminalDrawer.tsx:rgb(255, 224, 149)": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/ThreadTerminalDrawer.tsx:rgb(255, 255, 255)": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/ThreadTerminalDrawer.tsx:rgb(28, 33, 41)": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/ThreadTerminalDrawer.tsx:rgb(38, 56, 78)": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/ThreadTerminalDrawer.tsx:rgb(44, 53, 66)": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/ThreadTerminalDrawer.tsx:rgb(53, 127, 141)": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/ThreadTerminalDrawer.tsx:rgb(60, 126, 86)": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/ThreadTerminalDrawer.tsx:rgb(70, 149, 164)": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/ThreadTerminalDrawer.tsx:rgb(72, 102, 163)": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/ThreadTerminalDrawer.tsx:rgb(85, 148, 111)": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/ThreadTerminalDrawer.tsx:rgb(91, 124, 194)": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/ThreadTerminalDrawer.tsx:rgba(0 0 0 / 0)": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/ThreadTerminalDrawer.tsx:rgba(0, 0, 0, 0.15)": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/ThreadTerminalDrawer.tsx:rgba(0, 0, 0, 0.25)": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/ThreadTerminalDrawer.tsx:rgba(0, 0, 0, 0.3)": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/ThreadTerminalDrawer.tsx:rgba(0, 0, 0, 0)": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/ThreadTerminalDrawer.tsx:rgba(180, 203, 255, 0.25)": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/ThreadTerminalDrawer.tsx:rgba(255, 255, 255, 0.1)": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/ThreadTerminalDrawer.tsx:rgba(255, 255, 255, 0.18)": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/ThreadTerminalDrawer.tsx:rgba(255, 255, 255, 0.22)": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/ThreadTerminalDrawer.tsx:rgba(37, 63, 99, 0.2)": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/ui/color-picker.logic.ts:#abc": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/ui/color-picker.logic.ts:#abcd": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/ui/color-picker.logic.ts:#ffffffff": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/ui/color-picker.logic.ts:rgb(300 -4 0)": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/ui/color-picker.tsx:#000": {
+      "since": "2026-08-01",
+      "count": 2
+    },
+    "raw-color:apps/web/src/components/ui/color-picker.tsx:#00f": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/ui/color-picker.tsx:#0f0": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/ui/color-picker.tsx:#0ff": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/ui/color-picker.tsx:#f00": {
+      "since": "2026-08-01",
+      "count": 2
+    },
+    "raw-color:apps/web/src/components/ui/color-picker.tsx:#f0f": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/ui/color-picker.tsx:#ff0": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/ui/color-picker.tsx:#fff": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/ui/qr-code.tsx:#000": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/components/ui/qr-code.tsx:#fff": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/contextMenuFallback.ts:rgb(0 0 0 / 0.05)": {
+      "since": "2026-08-01",
+      "count": 2
+    },
+    "raw-color:apps/web/src/hooks/useTheme.ts:rgba(0 0 0 / 0)": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/hooks/useTheme.ts:rgba(0, 0, 0, 0)": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/lib/stashImageCompression.ts:#ffffff": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/pierre-icons.ts:#007acc": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/pierre-icons.ts:#99b8c4": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/pierre-icons.ts:#b48a5a": {
+      "since": "2026-08-01",
+      "count": 2
+    },
+    "raw-color:apps/web/src/pierre-icons.ts:#c12127": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/pierre-icons.ts:#d97757": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/pierre-icons.ts:#f9ad00": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/pierre-icons.ts:#fff": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/providerInstances.ts:#0891b2": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/providerInstances.ts:#16a34a": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/providerInstances.ts:#2563eb": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/providerInstances.ts:#7c3aed": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/providerInstances.ts:#dc2626": {
+      "since": "2026-08-01",
+      "count": 1
+    },
+    "raw-color:apps/web/src/providerInstances.ts:#ea580c": {
+      "since": "2026-08-01",
+      "count": 1
+    }
+  }
+}

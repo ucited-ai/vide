@@ -11,6 +11,7 @@ import {
 
 const config: ScanConfig = {
   roots: ["apps/web/src/"],
+  exemptRoots: ["apps/web/src/injected/"],
   exemptPaths: new Set(["apps/web/src/vide-theme.css"]),
   exemptSuffixes: [".test.tsx"],
 };
@@ -99,6 +100,10 @@ describe("raw colours", () => {
 describe("scope", () => {
   it("ignores files outside the scanned roots", () => {
     expect(values("apps/server/src/a.ts", `"#ffffff"`)).toEqual([]);
+  });
+
+  it("ignores a root that cannot reach the stylesheet at all", () => {
+    expect(values("apps/web/src/injected/overlay.ts", `"#ffffff"`)).toEqual([]);
   });
 
   it("ignores the theme itself — that is where these values belong", () => {

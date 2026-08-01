@@ -76,7 +76,7 @@ export function RelayClientInstallDialog() {
         <DialogPanel scrollFade={false}>
           {isInstalling ? (
             <div className="space-y-2.5">
-              <div className="flex items-center justify-between gap-3 text-sm">
+              <div className="flex items-center justify-between gap-3 text-(length:--text-ui)">
                 <p aria-live="polite" className="font-medium text-foreground">
                   {activeStep?.label}
                 </p>
@@ -90,14 +90,16 @@ export function RelayClientInstallDialog() {
                 max={installSteps.length}
                 value={activeStepIndex + 1}
               />
-              <p className="text-xs leading-relaxed text-muted-foreground">
+              <p className="text-(length:--text-caption) leading-relaxed text-muted-foreground">
                 Keep Vide open while the relay client is installed.
               </p>
             </div>
           ) : (
             <div className="rounded-xl border border-border/70 bg-muted/35 p-3">
-              <p className="text-sm font-medium text-foreground">Managed relay client</p>
-              <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+              <p className="text-(length:--text-ui) font-medium text-foreground">
+                Managed relay client
+              </p>
+              <p className="mt-1 text-(length:--text-ui) leading-relaxed text-muted-foreground">
                 Vide will download and install version{" "}
                 {view.status === "confirming" ? view.version : ""} locally.
               </p>

@@ -27,12 +27,12 @@ export function PreviewUnreachable({ url, code, description, onReload }: Props) 
         <h1 className="mb-3 text-2xl font-semibold leading-tight text-foreground">
           This site can&rsquo;t be reached
         </h1>
-        <p className="text-sm leading-relaxed text-muted-foreground">
+        <p className="text-(length:--text-ui) leading-relaxed text-muted-foreground">
           <span className="font-semibold text-foreground">{host}</span>: {friendly}.
         </p>
 
         {showDetails ? (
-          <div className="mt-6 rounded-lg border border-border bg-muted/40 p-4 text-sm">
+          <div className="mt-6 rounded-lg border border-border bg-muted/40 p-4 text-(length:--text-ui)">
             <p className="mb-2 font-medium text-foreground">Try:</p>
             <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
               <li>Checking your connection</li>
@@ -42,7 +42,7 @@ export function PreviewUnreachable({ url, code, description, onReload }: Props) 
           </div>
         ) : null}
 
-        <div className="mt-8 text-xs uppercase tracking-wide text-muted-foreground/70">
+        <div className="mt-8 text-(length:--text-caption) uppercase tracking-wide text-muted-foreground/70">
           {errorLabel}
         </div>
 

@@ -821,7 +821,7 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
                 data-thread-selection-safe
                 data-testid={`thread-archive-confirm-${thread.id}`}
                 aria-label={`Confirm archive ${thread.title}`}
-                className="absolute top-1/2 right-1 inline-flex h-5 -translate-y-1/2 cursor-pointer items-center rounded-md bg-destructive/12 px-2 text-[10px] font-medium text-destructive transition-colors hover:bg-destructive/18 focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-destructive/40"
+                className="absolute top-1/2 right-1 inline-flex h-5 -translate-y-1/2 cursor-pointer items-center rounded-md bg-destructive/12 px-2 text-(length:--text-micro) font-medium text-destructive transition-colors hover:bg-destructive/18 focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-destructive/40"
                 onPointerDown={stopPropagationOnPointerDown}
                 onClick={handleConfirmArchiveClick}
               >
@@ -888,7 +888,7 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
                       render={
                         <span
                           aria-label={jumpLabel}
-                          className="inline-flex h-5 items-center rounded-full border border-border/80 bg-background/90 px-1.5 font-mono text-[10px] font-medium tracking-tight text-foreground shadow-sm"
+                          className="inline-flex h-5 items-center rounded-full border border-border/80 bg-background/90 px-1.5 font-mono text-(length:--text-micro) font-medium tracking-tight text-foreground shadow-sm"
                         />
                       }
                     >
@@ -2454,7 +2454,9 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
           </DialogHeader>
           <DialogPanel className="space-y-4">
             <div className="grid gap-1.5">
-              <span className="text-xs font-medium text-foreground">Project title</span>
+              <span className="text-(length:--text-ui) font-medium text-foreground">
+                Project title
+              </span>
               <Input
                 aria-label="Project title"
                 value={projectRenameTitle}
@@ -2468,7 +2470,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
               />
             </div>
             {projectRenameTarget?.environmentLabel ? (
-              <p className="text-xs text-muted-foreground">
+              <p className="text-(length:--text-caption) text-muted-foreground">
                 Environment: {projectRenameTarget.environmentLabel}
               </p>
             ) : null}
@@ -2501,7 +2503,9 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
           </DialogHeader>
           <DialogPanel className="space-y-4">
             <div className="grid gap-1.5">
-              <span className="text-xs font-medium text-foreground">Grouping rule</span>
+              <span className="text-(length:--text-ui) font-medium text-foreground">
+                Grouping rule
+              </span>
               <Select
                 value={projectGroupingSelection}
                 onValueChange={(value) => {
@@ -2538,7 +2542,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
                 </SelectPopup>
               </Select>
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-(length:--text-caption) text-muted-foreground">
               {projectGroupingSelection === "inherit"
                 ? projectGroupingModeDescription(projectGroupingSettings.sidebarProjectGroupingMode)
                 : projectGroupingModeDescription(projectGroupingSelection)}
@@ -2618,7 +2622,7 @@ function LocalSecondaryStatus() {
           className="rounded-2xl border-border/40 bg-accent/40 text-muted-foreground"
         >
           <LoaderIcon className="animate-spin" />
-          <AlertTitle className="text-xs font-medium text-foreground">
+          <AlertTitle className="text-(length:--text-caption) font-medium text-foreground">
             Connecting {connecting.join(", ")}
           </AlertTitle>
         </Alert>
@@ -2690,7 +2694,7 @@ function ProjectSortMenu({
       </Tooltip>
       <MenuPopup align="end" side="bottom" className="min-w-52">
         <MenuGroup>
-          <div className="px-2 py-1 sm:text-xs font-medium text-muted-foreground">
+          <div className="px-2 py-1 text-(length:--text-caption) font-medium text-muted-foreground">
             Sort projects
           </div>
           <MenuRadioGroup
@@ -2701,7 +2705,11 @@ function ProjectSortMenu({
           >
             {(Object.entries(SIDEBAR_SORT_LABELS) as Array<[SidebarProjectSortOrder, string]>).map(
               ([value, label]) => (
-                <MenuRadioItem key={value} value={value} className="min-h-7 py-1 sm:text-xs">
+                <MenuRadioItem
+                  key={value}
+                  value={value}
+                  className="min-h-7 py-1 text-(length:--text-ui)"
+                >
                   {label}
                 </MenuRadioItem>
               ),
@@ -2709,7 +2717,7 @@ function ProjectSortMenu({
           </MenuRadioGroup>
         </MenuGroup>
         <MenuGroup>
-          <div className="px-2 pt-2 pb-1 sm:text-xs font-medium text-muted-foreground">
+          <div className="px-2 pt-2 pb-1 text-(length:--text-caption) font-medium text-muted-foreground">
             Sort threads
           </div>
           <MenuRadioGroup
@@ -2721,14 +2729,18 @@ function ProjectSortMenu({
             {(
               Object.entries(SIDEBAR_THREAD_SORT_LABELS) as Array<[SidebarThreadSortOrder, string]>
             ).map(([value, label]) => (
-              <MenuRadioItem key={value} value={value} className="min-h-7 py-1 sm:text-xs">
+              <MenuRadioItem
+                key={value}
+                value={value}
+                className="min-h-7 py-1 text-(length:--text-ui)"
+              >
                 {label}
               </MenuRadioItem>
             ))}
           </MenuRadioGroup>
         </MenuGroup>
         <MenuGroup>
-          <div className="px-2 pt-2 pb-1 text-muted-foreground sm:text-xs font-medium">
+          <div className="px-2 pt-2 pb-1 text-(length:--text-caption) font-medium text-muted-foreground">
             Visible threads
           </div>
           <div className="px-2 py-1">
@@ -2749,7 +2761,7 @@ function ProjectSortMenu({
                 />
                 <NumberFieldInput
                   aria-label="Visible thread count"
-                  className="h-7 w-9 grow-0 px-0 text-xs leading-7 sm:h-6.5 sm:leading-6.5"
+                  className="h-7 w-9 grow-0 px-0 text-(length:--text-ui) leading-7 sm:h-6.5 sm:leading-6.5"
                   inputMode="numeric"
                   onKeyDownCapture={(event) => {
                     event.stopPropagation();
@@ -2920,9 +2932,11 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
               }
             >
               <SearchIcon className="size-4 shrink-0 text-sidebar-muted-foreground/80" />
-              <span className="flex-1 truncate text-left text-sm font-medium">Search</span>
+              <span className="flex-1 truncate text-left text-(length:--text-ui) font-medium">
+                Search
+              </span>
               {commandPaletteShortcutLabel ? (
-                <Kbd className="h-4 min-w-0 rounded-sm px-1.5 text-[10px]">
+                <Kbd className="h-4 min-w-0 rounded-sm px-1.5 text-(length:--text-micro)">
                   {commandPaletteShortcutLabel}
                 </Kbd>
               ) : null}
@@ -3067,7 +3081,7 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
         )}
 
         {projectsLength === 0 && (
-          <div className="px-2 pt-4 text-center text-xs text-muted-foreground/60">
+          <div className="px-2 pt-4 text-center text-(length:--text-ui) text-muted-foreground/60">
             No projects yet
           </div>
         )}

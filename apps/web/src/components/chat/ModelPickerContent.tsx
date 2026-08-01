@@ -556,7 +556,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
                   <ComboboxInput
                     ref={searchInputRef}
                     className="[&_input]:h-6.5 [&_input]:font-sans [&_input]:leading-6.5"
-                    inputClassName="rounded-none bg-transparent text-sm"
+                    inputClassName="rounded-none bg-transparent text-(length:--text-ui)"
                     placeholder="Search models..."
                     showTrigger={false}
                     startAddon={
@@ -642,7 +642,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
                   />
                 </ComboboxListVirtualized>
               </div>
-              <ComboboxEmpty className="not-empty:py-6 empty:h-0 text-xs font-normal leading-snug">
+              <ComboboxEmpty className="not-empty:py-6 empty:h-0 text-(length:--text-ui) font-normal leading-snug">
                 No models found
               </ComboboxEmpty>
             </div>

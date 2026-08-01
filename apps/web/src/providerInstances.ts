@@ -109,6 +109,24 @@ function driverKindLabel(driverKind: ProviderDriverKind): string {
   return PROVIDER_DISPLAY_NAMES[driverKind] ?? formatProviderDriverKindLabel(driverKind);
 }
 
+/**
+ * The accent colours offered when naming a provider instance.
+ *
+ * The one place in the app that is deliberately not monochrome: an accent here
+ * is how you tell two Codex instances apart at a glance, so it has to be hue.
+ * It lives next to the normaliser rather than in either picker because both the
+ * add-instance dialog and the accent picker offer it, and the two lists had
+ * already been copied apart once.
+ */
+export const PROVIDER_ACCENT_SWATCHES = [
+  "#2563eb",
+  "#16a34a",
+  "#ea580c",
+  "#dc2626",
+  "#7c3aed",
+  "#0891b2",
+] as const;
+
 export function normalizeProviderAccentColor(value: string | undefined): string | undefined {
   const trimmed = value?.trim();
   if (!trimmed) return undefined;

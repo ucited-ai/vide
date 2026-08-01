@@ -1299,11 +1299,11 @@ export default function ThreadTerminalDrawer({
             onPointerCancel={handleResizePointerEnd}
           />
         ) : null}
-        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-4 py-6 text-center text-sm text-muted-foreground">
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-4 py-6 text-center text-(length:--text-ui) text-muted-foreground">
           <p>No terminal sessions for this thread yet.</p>
           <button
             type="button"
-            className="rounded-md border border-border/80 bg-background px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent"
+            className="rounded-md border border-border/80 bg-background px-3 py-1.5 text-(length:--text-ui) font-medium text-foreground transition-colors hover:bg-accent"
             onClick={onNewTerminalAction}
           >
             {newTerminalActionLabel}
@@ -1454,7 +1454,7 @@ export default function ThreadTerminalDrawer({
                       {showGroupHeaders && (
                         <button
                           type="button"
-                          className={`flex w-full items-center rounded px-1 py-0.5 text-[10px] uppercase tracking-[0.08em] ${
+                          className={`flex w-full items-center rounded px-1 py-0.5 text-(length:--text-micro) uppercase tracking-[0.08em] ${
                             isGroupActive
                               ? "bg-accent/70 text-foreground"
                               : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
@@ -1476,14 +1476,16 @@ export default function ThreadTerminalDrawer({
                           return (
                             <div
                               key={terminalId}
-                              className={`group flex items-center gap-1 rounded px-1 py-0.5 text-[11px] ${
+                              className={`group flex items-center gap-1 rounded px-1 py-0.5 text-(length:--text-caption) ${
                                 isActive
                                   ? "bg-accent text-foreground"
                                   : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
                               }`}
                             >
                               {showGroupHeaders && (
-                                <span className="text-[10px] text-muted-foreground/80">└</span>
+                                <span className="text-(length:--text-micro) text-muted-foreground/80">
+                                  └
+                                </span>
                               )}
                               <button
                                 type="button"
@@ -1497,7 +1499,7 @@ export default function ThreadTerminalDrawer({
                               </button>
                               {normalizedTerminalIds.length > 1 && (
                                 <TerminalActionButton
-                                  className="inline-flex size-3.5 items-center justify-center rounded text-xs font-medium leading-none text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground group-hover:opacity-100"
+                                  className="inline-flex size-3.5 items-center justify-center rounded text-(length:--text-ui) font-medium leading-none text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground group-hover:opacity-100"
                                   onClick={() => onCloseTerminal(terminalId)}
                                   label={closeTerminalLabel}
                                 >

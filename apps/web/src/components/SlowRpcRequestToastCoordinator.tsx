@@ -12,14 +12,14 @@ function describeSlowRequests(requests: ReadonlyArray<SlowRpcAckRequest>): strin
 
 function SlowRequestDetails({ requests }: { requests: ReadonlyArray<SlowRpcAckRequest> }) {
   return (
-    <ul className="space-y-2.5 text-xs text-muted-foreground">
+    <ul className="space-y-2.5 text-(length:--text-caption) text-muted-foreground">
       {requests.map((request) => (
         <li
           className="min-w-0 border-border/50 border-b pb-2 last:border-b-0 last:pb-0"
           key={request.requestId}
         >
           <div className="wrap-break-word font-medium text-foreground">{request.tag}</div>
-          <div className="mt-0.5 text-[10px] opacity-75">
+          <div className="mt-0.5 text-(length:--text-micro) opacity-75">
             Started {new Date(request.startedAt).toLocaleTimeString()}
           </div>
         </li>

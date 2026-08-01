@@ -150,7 +150,7 @@ export const ProposedPlanCard = memo(function ProposedPlanCard({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
           <Badge variant="secondary">Plan</Badge>
-          <p className="truncate text-sm font-medium text-foreground">{title}</p>
+          <p className="truncate text-(length:--text-ui) font-medium text-foreground">{title}</p>
         </div>
         <Menu>
           <MenuTrigger
@@ -221,7 +221,9 @@ export const ProposedPlanCard = memo(function ProposedPlanCard({
           </DialogHeader>
           <DialogPanel className="space-y-3">
             <label htmlFor={savePathInputId} className="grid gap-1.5">
-              <span className="text-xs font-medium text-foreground">Workspace path</span>
+              <span className="text-(length:--text-ui) font-medium text-foreground">
+                Workspace path
+              </span>
               <Input
                 id={savePathInputId}
                 value={savePath}

@@ -17,7 +17,7 @@ interface ComposerPreviewAnnotationCardsProps {
 function TargetStat(props: { icon: ReactNode; count: number; label: string }) {
   return (
     <span
-      className="inline-flex items-center gap-1 text-[10px] font-medium text-muted-foreground"
+      className="inline-flex items-center gap-1 text-(length:--text-micro) font-medium text-muted-foreground"
       title={`${props.count} ${props.label}${props.count === 1 ? "" : "s"}`}
     >
       {props.icon}
@@ -69,7 +69,7 @@ export function ComposerPreviewAnnotationCards({
             )}
             <div className="min-w-0 px-2.5 py-2 pr-8">
               {annotation.comment.trim() ? (
-                <p className="max-w-80 truncate text-xs font-medium text-foreground/90">
+                <p className="max-w-80 truncate text-(length:--text-ui) font-medium text-foreground/90">
                   {annotation.comment.trim()}
                 </p>
               ) : null}
@@ -84,13 +84,13 @@ export function ComposerPreviewAnnotationCards({
                     {elementLabels.slice(0, 2).map(({ id, label }) => (
                       <span
                         key={id}
-                        className="max-w-40 truncate font-mono text-[10px] text-foreground/65"
+                        className="max-w-40 truncate font-mono text-(length:--text-micro) text-foreground/65"
                       >
                         {label}
                       </span>
                     ))}
                     {elementLabels.length > 2 ? (
-                      <span className="text-[10px] text-muted-foreground">
+                      <span className="text-(length:--text-micro) text-muted-foreground">
                         +{elementLabels.length - 2}
                       </span>
                     ) : null}

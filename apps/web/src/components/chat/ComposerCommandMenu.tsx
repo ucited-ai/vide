@@ -147,7 +147,7 @@ export const ComposerCommandMenu = memo(function ComposerCommandMenu(props: {
                 {groupIndex > 0 ? <CommandSeparator className="my-0.5" /> : null}
                 <CommandGroup>
                   {group.label ? (
-                    <CommandGroupLabel className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/55">
+                    <CommandGroupLabel className="px-3 pt-2 pb-1 text-(length:--text-micro) font-semibold uppercase tracking-[0.08em] text-muted-foreground/55">
                       {group.label}
                     </CommandGroupLabel>
                   ) : null}
@@ -169,10 +169,10 @@ export const ComposerCommandMenu = memo(function ComposerCommandMenu(props: {
           <div className="px-5 py-3.5">
             {props.triggerKind === "skill" ? (
               <CommandGroup>
-                <CommandGroupLabel className="px-0 pt-0 pb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/55">
+                <CommandGroupLabel className="px-0 pt-0 pb-1 text-(length:--text-micro) font-semibold uppercase tracking-[0.08em] text-muted-foreground/55">
                   Skills
                 </CommandGroupLabel>
-                <p className="text-muted-foreground/70 text-xs">
+                <p className="text-muted-foreground/70 text-(length:--text-ui)">
                   {props.isLoading
                     ? "Searching workspace skills..."
                     : (props.emptyStateText ??
@@ -180,7 +180,7 @@ export const ComposerCommandMenu = memo(function ComposerCommandMenu(props: {
                 </p>
               </CommandGroup>
             ) : (
-              <p className="text-muted-foreground/70 text-xs">
+              <p className="text-muted-foreground/70 text-(length:--text-ui)">
                 {props.isLoading
                   ? "Searching workspace files..."
                   : (props.emptyStateText ??
@@ -246,12 +246,14 @@ const ComposerCommandMenuItem = memo(function ComposerCommandMenuItem(props: {
       ) : null}
       <span className="flex min-w-0 flex-1 items-center gap-2">
         <span className="shrink-0">{props.item.label}</span>
-        <span className="min-w-0 flex-1 truncate text-muted-foreground/70 text-xs">
+        <span className="min-w-0 flex-1 truncate text-muted-foreground/70 text-(length:--text-ui)">
           {props.item.description}
         </span>
       </span>
       {skillSourceLabel ? (
-        <span className="shrink-0 pl-2 text-muted-foreground/70 text-xs">{skillSourceLabel}</span>
+        <span className="shrink-0 pl-2 text-muted-foreground/70 text-(length:--text-caption)">
+          {skillSourceLabel}
+        </span>
       ) : null}
     </CommandItem>
   );

@@ -205,12 +205,14 @@ function ProviderEnvironmentSection(props: {
   return (
     <div className="grid gap-2">
       <div className="flex items-center justify-between gap-3">
-        <span className="text-xs font-medium text-foreground">Environment variables</span>
+        <span className="text-(length:--text-ui) font-medium text-foreground">
+          Environment variables
+        </span>
         <Button
           type="button"
           size="sm"
           variant="outline"
-          className="h-7 gap-1.5 px-2 text-xs"
+          className="h-7 gap-1.5 px-2 text-(length:--text-ui)"
           onClick={() =>
             setRows([
               ...rows,
@@ -228,13 +230,13 @@ function ProviderEnvironmentSection(props: {
         </Button>
       </div>
       {rows.length === 0 ? (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-(length:--text-caption) text-muted-foreground">
           Add variables to pass API keys, base URLs, or other per-instance CLI settings.
         </p>
       ) : (
         <div className="overflow-hidden rounded-md border border-border/70">
           <Table>
-            <TableHeader className="bg-muted/25 text-[11px] text-muted-foreground">
+            <TableHeader className="bg-muted/25 text-(length:--text-caption) text-muted-foreground">
               <TableRow className="hover:bg-transparent">
                 <TableHead>Variable</TableHead>
                 <TableHead>Value</TableHead>
@@ -311,7 +313,7 @@ function ProviderEnvironmentSection(props: {
           </Table>
         </div>
       )}
-      <span className="text-xs text-muted-foreground">
+      <span className="text-(length:--text-caption) text-muted-foreground">
         Sensitive values are stored separately and are not returned to the app after saving.
       </span>
     </div>
@@ -531,11 +533,11 @@ export function ProviderInstanceCard({
   const titleHeadNode = (
     <>
       {titleIconNode}
-      <h3 className="truncate text-sm font-medium tracking-[-0.005em] text-foreground">
+      <h3 className="truncate text-(length:--text-ui) font-medium tracking-[-0.005em] text-foreground">
         {displayName}
       </h3>
       {String(instanceId) !== String(instance.driver) ? (
-        <code className="truncate rounded bg-muted/60 px-1 py-0.5 text-[10px] text-muted-foreground">
+        <code className="truncate rounded bg-muted/60 px-1 py-0.5 text-(length:--text-micro) text-muted-foreground">
           {instanceId}
         </code>
       ) : null}
@@ -578,7 +580,7 @@ export function ProviderInstanceCard({
   );
 
   const authRowNode = (
-    <p className="flex min-w-0 flex-wrap items-center gap-x-1 text-[13px] leading-[1.45] text-muted-foreground/80">
+    <p className="flex min-w-0 flex-wrap items-center gap-x-1 text-(length:--text-ui) leading-[1.45] text-muted-foreground/80">
       {hasAuthenticatedEmail ? (
         <>
           <span>Authenticated as</span>
@@ -596,7 +598,7 @@ export function ProviderInstanceCard({
   );
 
   const versionCodeNode = versionLabel ? (
-    <code className="text-xs text-muted-foreground">{versionLabel}</code>
+    <code className="text-(length:--text-caption) text-muted-foreground">{versionLabel}</code>
   ) : null;
 
   return (
@@ -634,12 +636,12 @@ export function ProviderInstanceCard({
                   >
                     <div className="grid min-w-0 gap-3">
                       <div className="grid gap-0.5">
-                        <p className="text-[13px] font-semibold leading-tight text-foreground">
+                        <p className="text-(length:--text-ui) font-semibold leading-tight text-foreground">
                           Update available
                         </p>
                         <p
                           className={cn(
-                            "text-xs leading-snug",
+                            "text-(length:--text-caption) leading-snug",
                             versionAdvisory.emphasis === "strong"
                               ? "text-warning"
                               : "text-muted-foreground",
@@ -662,7 +664,7 @@ export function ProviderInstanceCard({
                         </Button>
                       ) : null}
                       {onRunUpdate && updateCommand ? (
-                        <div className="flex items-center gap-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                        <div className="flex items-center gap-2 text-(length:--text-micro) font-medium uppercase tracking-wider text-muted-foreground">
                           <span aria-hidden className="h-px flex-1 bg-border" />
                           or, update manually using
                           <span aria-hidden className="h-px flex-1 bg-border" />
@@ -671,7 +673,7 @@ export function ProviderInstanceCard({
                       {updateCommand ? (
                         <div className="flex min-w-0 items-center gap-1 rounded-md border border-border/70 bg-muted/40 py-0.5 pr-0.5 pl-2">
                           <ScrollArea scrollFade className="h-8 min-w-0 flex-1 rounded-none">
-                            <code className="flex h-full w-max items-center whitespace-nowrap pr-3 font-mono text-[11px] text-foreground">
+                            <code className="flex h-full w-max items-center whitespace-nowrap pr-3 font-mono text-(length:--text-caption) text-foreground">
                               {updateCommand}
                             </code>
                           </ScrollArea>
@@ -710,7 +712,7 @@ export function ProviderInstanceCard({
             <Button
               size="sm"
               variant="ghost"
-              className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+              className="h-7 px-2 text-(length:--text-ui) text-muted-foreground hover:text-foreground"
               onClick={() => onExpandedChange(!isExpanded)}
               aria-label={`Toggle ${displayName} details`}
             >
@@ -732,7 +734,9 @@ export function ProviderInstanceCard({
           <div className="space-y-5 px-3 pb-4 pt-2 sm:px-4">
             <div>
               <label htmlFor={`provider-instance-${instanceId}-display-name`} className="block">
-                <span className="text-xs font-medium text-foreground">Display name</span>
+                <span className="text-(length:--text-ui) font-medium text-foreground">
+                  Display name
+                </span>
                 <DraftInput
                   id={`provider-instance-${instanceId}-display-name`}
                   className="mt-1.5"
@@ -741,7 +745,7 @@ export function ProviderInstanceCard({
                   placeholder={driverOption?.label ?? "Instance label"}
                   spellCheck={false}
                 />
-                <span className="mt-1 block text-xs text-muted-foreground">
+                <span className="mt-1 block text-(length:--text-caption) text-muted-foreground">
                   Optional label shown in the provider list.
                 </span>
               </label>
@@ -790,7 +794,7 @@ export function ProviderInstanceCard({
               />
             ) : (
               <div>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-(length:--text-chat) text-muted-foreground">
                   This instance uses a driver (
                   <code className="text-foreground">{String(instance.driver)}</code>) that is not
                   shipped with the current build. Configuration values are preserved but cannot be

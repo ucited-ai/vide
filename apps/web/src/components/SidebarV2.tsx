@@ -218,7 +218,7 @@ function JumpHintBadge(props: { label: string }) {
   return (
     <span
       aria-hidden
-      className="pointer-events-none absolute right-1.5 top-1/2 z-10 inline-flex h-5 -translate-y-1/2 items-center rounded-full border border-border/80 bg-background/95 px-1.5 font-mono text-[10px] font-medium tracking-tight text-foreground shadow-sm"
+      className="pointer-events-none absolute right-1.5 top-1/2 z-10 inline-flex h-5 -translate-y-1/2 items-center rounded-full border border-border/80 bg-background/95 px-1.5 font-mono text-(length:--text-micro) font-medium tracking-tight text-foreground shadow-sm"
     >
       {props.label}
     </span>
@@ -269,8 +269,10 @@ function SidebarV2ThreadTooltip({
       className="max-w-80 text-left whitespace-normal"
     >
       <div className="flex max-w-80 flex-col gap-2 p-2">
-        <div className="whitespace-nowrap text-sm font-medium text-foreground">{thread.title}</div>
-        <div className="grid gap-1.5 text-xs text-muted-foreground">
+        <div className="whitespace-nowrap text-(length:--text-ui) font-medium text-foreground">
+          {thread.title}
+        </div>
+        <div className="grid gap-1.5 text-(length:--text-caption) text-muted-foreground">
           {projectTitle ? (
             <div className="flex min-w-0 items-center gap-2">
               <ProjectFavicon
@@ -365,10 +367,10 @@ function SnoozePopoverButton(props: {
               onOpenChange(false);
               onSnooze(preset);
             }}
-            className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-foreground/90 hover:bg-accent hover:text-foreground"
+            className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-left text-(length:--text-ui) text-foreground/90 hover:bg-accent hover:text-foreground"
           >
             <span className="flex-1">{preset.label}</span>
-            <span className="font-mono text-[10px] text-muted-foreground/60 tabular-nums">
+            <span className="font-mono text-(length:--text-micro) text-muted-foreground/60 tabular-nums">
               {preset.whenLabel}
             </span>
           </button>
@@ -2279,7 +2281,7 @@ export default function SidebarV2() {
                 size="sm"
                 type="button"
                 aria-label="Search threads and commands"
-                className="h-8 gap-2 rounded-md border-0 bg-transparent px-2 py-1.5 text-sm font-medium text-sidebar-muted-foreground hover:bg-sidebar-row-hover hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar"
+                className="h-8 gap-2 rounded-md border-0 bg-transparent px-2 py-1.5 text-(length:--text-ui) font-medium text-sidebar-muted-foreground hover:bg-sidebar-row-hover hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar"
                 data-testid="command-palette-trigger"
               />
             }
@@ -2287,7 +2289,7 @@ export default function SidebarV2() {
             <SearchIcon className="size-4 shrink-0 text-sidebar-muted-foreground/80" />
             <div className="flex-1 truncate text-left">Search</div>
             {commandPaletteShortcutLabel ? (
-              <Kbd className="h-4 min-w-0 rounded-sm bg-sidebar-control-surface px-1.5 text-[10px] text-sidebar-muted-foreground ring-1 ring-sidebar-border">
+              <Kbd className="h-4 min-w-0 rounded-sm bg-sidebar-control-surface px-1.5 text-(length:--text-micro) text-sidebar-muted-foreground ring-1 ring-sidebar-border">
                 {commandPaletteShortcutLabel}
               </Kbd>
             ) : null}
@@ -2330,10 +2332,10 @@ export default function SidebarV2() {
                     <MenuRadioItem
                       value="all"
                       closeOnClick
-                      className="h-8 min-h-8 px-1 py-0 text-sm font-medium [&>span:last-child]:flex [&>span:last-child]:min-w-0 [&>span:last-child]:items-center [&>span:last-child]:gap-2"
+                      className="h-8 min-h-8 px-1 py-0 text-(length:--text-ui) font-medium [&>span:last-child]:flex [&>span:last-child]:min-w-0 [&>span:last-child]:items-center [&>span:last-child]:gap-2"
                     >
                       <FolderIcon className="size-4 shrink-0" />
-                      <span className="min-w-0 truncate text-sm">All projects</span>
+                      <span className="min-w-0 truncate text-(length:--text-ui)">All projects</span>
                     </MenuRadioItem>
                     {projectGroups.map((project) => {
                       const scopeKey = project.projectKey;
@@ -2342,14 +2344,16 @@ export default function SidebarV2() {
                           key={scopeKey}
                           value={scopeKey}
                           closeOnClick
-                          className="h-8 min-h-8 px-1 py-0 text-sm font-medium [&>span:last-child]:flex [&>span:last-child]:min-w-0 [&>span:last-child]:items-center [&>span:last-child]:gap-2"
+                          className="h-8 min-h-8 px-1 py-0 text-(length:--text-ui) font-medium [&>span:last-child]:flex [&>span:last-child]:min-w-0 [&>span:last-child]:items-center [&>span:last-child]:gap-2"
                         >
                           <ProjectFavicon
                             environmentId={project.environmentId}
                             cwd={project.workspaceRoot}
                             className="size-4 shrink-0"
                           />
-                          <span className="min-w-0 truncate text-sm">{project.displayName}</span>
+                          <span className="min-w-0 truncate text-(length:--text-ui)">
+                            {project.displayName}
+                          </span>
                           <button
                             type="button"
                             aria-label={`Project actions for ${project.displayName}`}
@@ -2585,12 +2589,12 @@ export default function SidebarV2() {
             </ul>
           </TooltipProvider>
           {activeThreads.length + snoozedThreads.length + settledThreads.length === 0 ? (
-            <div className="flex flex-col items-center gap-2 px-2 py-6 text-center text-xs text-muted-foreground/60">
+            <div className="flex flex-col items-center gap-2 px-2 py-6 text-center text-(length:--text-ui) text-muted-foreground/60">
               {projects.length === 0 ? (
                 <>
                   <span>No projects yet</span>
                   <AddProjectMenu align="start">
-                    <MenuTrigger className="inline-flex items-center gap-1.5 rounded-md border border-sidebar-border px-2.5 py-1 text-[11px] font-medium text-sidebar-muted-foreground transition-colors hover:bg-sidebar-row-hover hover:text-sidebar-foreground">
+                    <MenuTrigger className="inline-flex items-center gap-1.5 rounded-md border border-sidebar-border px-2.5 py-1 text-(length:--text-caption) font-medium text-sidebar-muted-foreground transition-colors hover:bg-sidebar-row-hover hover:text-sidebar-foreground">
                       <PlusIcon className="size-3" />
                       Add project
                     </MenuTrigger>
@@ -2634,14 +2638,14 @@ export default function SidebarV2() {
                       className="size-5 shrink-0 sm:size-4"
                     />
                     <div className="min-w-0 flex-1">
-                      <div className="flex min-w-0 items-center gap-1.5 text-base text-muted-foreground sm:text-sm">
+                      <div className="flex min-w-0 items-center gap-1.5 text-(length:--text-ui) text-muted-foreground">
                         <ServerIcon className="size-4 shrink-0 stroke-muted-foreground" />
                         <p className="min-w-0 truncate">
                           {member.environmentLabel ?? "Current environment"}
                         </p>
                       </div>
                       <p
-                        className="truncate font-mono text-base text-muted-foreground/72 sm:text-sm"
+                        className="truncate font-mono text-(length:--text-ui) text-muted-foreground/72"
                         title={member.workspaceRoot}
                       >
                         {member.workspaceRoot}
@@ -2749,10 +2753,10 @@ export default function SidebarV2() {
             {projectActionsTarget && projectActionsTarget.memberProjects.length > 1 ? (
               <div className="flex flex-col gap-3 border-t border-border/60 bg-muted/32 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
-                  <p className="text-base font-medium text-foreground sm:text-sm">
+                  <p className="text-(length:--text-ui) font-medium text-foreground">
                     Remove this project everywhere
                   </p>
-                  <p className="text-base text-pretty text-muted-foreground sm:text-sm">
+                  <p className="text-(length:--text-ui) text-pretty text-muted-foreground">
                     Deletes all grouped entries and their conversation history.
                   </p>
                 </div>

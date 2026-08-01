@@ -39,10 +39,14 @@ function MobileClientRow({ device }: { readonly device: RelayClientDeviceRecord 
         <div className="min-w-0 flex-1">
           <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
             <div className="min-w-0">
-              <h3 className="truncate text-sm font-semibold text-foreground">{device.label}</h3>
-              <p className="text-xs text-muted-foreground">{mobileClientPlatformLabel(device)}</p>
+              <h3 className="truncate text-(length:--text-ui) font-semibold text-foreground">
+                {device.label}
+              </h3>
+              <p className="text-(length:--text-caption) text-muted-foreground">
+                {mobileClientPlatformLabel(device)}
+              </p>
             </div>
-            <p className="shrink-0 text-[11px] text-muted-foreground/75">
+            <p className="shrink-0 text-(length:--text-caption) text-muted-foreground/75">
               {mobileClientUpdatedAtLabel(device.updatedAt)}
             </p>
           </div>
@@ -56,7 +60,7 @@ function MobileClientRow({ device }: { readonly device: RelayClientDeviceRecord 
               label="Live Activities"
             />
           </div>
-          <p className="mt-2 text-xs leading-relaxed text-muted-foreground/80">
+          <p className="mt-2 text-(length:--text-caption) leading-relaxed text-muted-foreground/80">
             {mobileClientNotificationDetail(device)}
           </p>
         </div>
@@ -114,8 +118,10 @@ export function MobileClientsUserProfilePage() {
     <div className="flex min-h-[30rem] w-full flex-col bg-background text-foreground">
       <header className="flex flex-col gap-4 border-b px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-base font-semibold tracking-[-0.01em]">Mobile clients</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <h2 className="text-(length:--text-title) font-semibold tracking-[-0.01em]">
+            Mobile clients
+          </h2>
+          <p className="mt-1 text-(length:--text-ui) text-muted-foreground">
             Devices registered to receive Vide Connect activity from your environments.
           </p>
         </div>
@@ -133,14 +139,16 @@ export function MobileClientsUserProfilePage() {
       <div className="flex-1 p-6">
         {devicesState.error ? (
           <div
-            className="mb-4 flex flex-col gap-3 rounded-lg border border-destructive/25 bg-destructive/5 p-3 text-sm sm:flex-row sm:items-center sm:justify-between"
+            className="mb-4 flex flex-col gap-3 rounded-lg border border-destructive/25 bg-destructive/5 p-3 text-(length:--text-ui) sm:flex-row sm:items-center sm:justify-between"
             role="alert"
           >
             <div>
               <p className="font-medium text-destructive-foreground">
                 Could not load mobile clients
               </p>
-              <p className="mt-0.5 text-xs text-muted-foreground">{devicesState.error}</p>
+              <p className="mt-0.5 text-(length:--text-caption) text-muted-foreground">
+                {devicesState.error}
+              </p>
             </div>
             <Button size="xs" variant="outline" onClick={devicesState.refresh}>
               Try again

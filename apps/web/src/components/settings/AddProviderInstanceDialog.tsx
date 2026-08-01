@@ -11,7 +11,7 @@ import {
 
 import { usePrimarySettings, useUpdatePrimarySettings } from "../../hooks/useSettings";
 import { cn } from "../../lib/utils";
-import { normalizeProviderAccentColor } from "../../providerInstances";
+import { PROVIDER_ACCENT_SWATCHES, normalizeProviderAccentColor } from "../../providerInstances";
 import { Button } from "../ui/button";
 import { ACPRegistryIcon, Gemini, GithubCopilotIcon, PiAgentIcon, type Icon } from "../Icons";
 import {
@@ -35,15 +35,6 @@ import {
   type WizardNavigation,
 } from "./AddProviderInstanceDialog.logic";
 import { AddProviderInstanceWizardSteps } from "./AddProviderInstanceWizardSteps";
-
-const PROVIDER_ACCENT_SWATCHES = [
-  "#2563eb",
-  "#16a34a",
-  "#ea580c",
-  "#dc2626",
-  "#7c3aed",
-  "#0891b2",
-] as const;
 
 /**
  * Normalize a user-provided label into a slug suffix for the instance id.
@@ -244,7 +235,10 @@ export function AddProviderInstanceDialog({ open, onOpenChange }: AddProviderIns
           >
             <AnimatedHeight>
               <div className={cn("grid gap-2", wizardStep !== 0 && "hidden")}>
-                <div id="add-instance-driver-label" className="text-sm font-medium text-foreground">
+                <div
+                  id="add-instance-driver-label"
+                  className="text-(length:--text-ui) font-medium text-foreground"
+                >
                   Driver
                 </div>
                 <RadioGroup
@@ -262,7 +256,7 @@ export function AddProviderInstanceDialog({ open, onOpenChange }: AddProviderIns
                         className="relative flex cursor-pointer items-center gap-3 rounded-lg bg-card px-3 py-3 text-left text-muted-foreground outline-none ring-1 ring-black/5 hover:bg-zinc-50 focus-visible:ring-2 focus-visible:ring-ring data-checked:bg-primary/8 data-checked:text-foreground data-checked:ring-2 data-checked:ring-primary data-checked:hover:bg-primary/8 dark:bg-white/3 dark:ring-white/5 dark:hover:bg-white/5 dark:data-checked:bg-primary/15 dark:data-checked:ring-primary dark:data-checked:hover:bg-primary/15"
                       >
                         <IconComponent className="size-4 shrink-0" aria-hidden />
-                        <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+                        <span className="min-w-0 flex-1 truncate text-(length:--text-ui) font-medium text-foreground">
                           {option.label}
                         </span>
                         <RadioPrimitive.Indicator
@@ -294,7 +288,7 @@ export function AddProviderInstanceDialog({ open, onOpenChange }: AddProviderIns
                           className="size-4 shrink-0 text-muted-foreground"
                           aria-hidden
                         />
-                        <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+                        <span className="min-w-0 flex-1 truncate text-(length:--text-ui) font-medium text-foreground">
                           {option.label}
                         </span>
                         <Badge variant="warning" size="sm">
@@ -307,20 +301,22 @@ export function AddProviderInstanceDialog({ open, onOpenChange }: AddProviderIns
               </div>
 
               <label className={cn("grid gap-2", wizardStep !== 1 && "hidden")}>
-                <span className="text-xs font-medium text-foreground">Label</span>
+                <span className="text-(length:--text-ui) font-medium text-foreground">Label</span>
                 <Input
                   className="bg-background"
                   placeholder="e.g. Work"
                   value={label}
                   onChange={(event) => setLabel(event.target.value)}
                 />
-                <span className="text-[11px] text-muted-foreground">
+                <span className="text-(length:--text-caption) text-muted-foreground">
                   Shown in the provider list. Optional.
                 </span>
               </label>
 
               <label className={cn("grid gap-2", wizardStep !== 1 && "hidden")}>
-                <span className="text-xs font-medium text-foreground">Instance ID</span>
+                <span className="text-(length:--text-ui) font-medium text-foreground">
+                  Instance ID
+                </span>
                 <Input
                   className="bg-background"
                   placeholder={`${driver}_work`}
@@ -331,16 +327,20 @@ export function AddProviderInstanceDialog({ open, onOpenChange }: AddProviderIns
                   aria-invalid={showInstanceIdError}
                 />
                 {showInstanceIdError ? (
-                  <span className="text-[11px] text-destructive">{instanceIdError}</span>
+                  <span className="text-(length:--text-caption) text-destructive">
+                    {instanceIdError}
+                  </span>
                 ) : (
-                  <span className="text-[11px] text-muted-foreground">
+                  <span className="text-(length:--text-caption) text-muted-foreground">
                     Routing key used by threads and sessions. Letters, digits, '-', or '_'.
                   </span>
                 )}
               </label>
 
               <div className={cn("grid gap-2", wizardStep !== 1 && "hidden")}>
-                <span className="text-xs font-medium text-foreground">Accent color</span>
+                <span className="text-(length:--text-ui) font-medium text-foreground">
+                  Accent color
+                </span>
                 <div className="flex min-w-0 flex-wrap items-center gap-2">
                   <input
                     type="color"
@@ -374,14 +374,14 @@ export function AddProviderInstanceDialog({ open, onOpenChange }: AddProviderIns
                       type="button"
                       size="sm"
                       variant="ghost"
-                      className="h-7 px-2 text-xs text-muted-foreground"
+                      className="h-7 px-2 text-(length:--text-ui) text-muted-foreground"
                       onClick={() => setAccentColor("")}
                     >
                       Clear
                     </Button>
                   ) : null}
                 </div>
-                <span className="text-[11px] text-muted-foreground">
+                <span className="text-(length:--text-caption) text-muted-foreground">
                   Optional marker shown in the picker.
                 </span>
               </div>
@@ -398,7 +398,7 @@ export function AddProviderInstanceDialog({ open, onOpenChange }: AddProviderIns
                 </div>
               ) : wizardStep === 2 ? (
                 <div className="grid gap-2">
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-(length:--text-ui) text-muted-foreground">
                     This driver has no required configuration. You can add the instance now.
                   </p>
                 </div>

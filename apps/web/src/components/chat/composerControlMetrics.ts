@@ -2,8 +2,8 @@
  * Shared metrics for the composer's three sibling controls — the
  * permissions picker, the model picker trigger, and the context meter.
  *
- * `buttonVariants`/`selectTriggerVariants` carry `sm:text-sm` (14px), which
- * is not on the Vide type scale, and the select trigger's `min-h-*` step
+ * `buttonVariants`/`selectTriggerVariants` carry `text-(length:--text-ui)`, and
+ * the select trigger's `min-h-*` step
  * lets its box grow past that font's line height rather than clip to it —
  * that's what made permissions read taller and chunkier than its neighbours.
  * Pinning height, type size, and gap here once keeps the three controls on

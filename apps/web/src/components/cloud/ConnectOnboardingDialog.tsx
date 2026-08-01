@@ -248,7 +248,7 @@ function ConfiguredConnectOnboardingDialog() {
           )}
         </DialogPanel>
         <DialogFooter variant="bare" className="sm:justify-between">
-          <label className="flex cursor-pointer items-center gap-2 self-start text-xs text-muted-foreground sm:self-center">
+          <label className="flex cursor-pointer items-center gap-2 self-start text-(length:--text-ui) text-muted-foreground sm:self-center">
             <Checkbox
               checked={dontShowAgain}
               onCheckedChange={(checked) => setDontShowAgain(checked === true)}
@@ -329,10 +329,10 @@ function OnboardingStepper({
           >
             {index < currentIndex ? <CheckIcon className="size-3" /> : null}
           </span>
-          <span className="text-[10px] font-medium uppercase text-muted-foreground">
+          <span className="text-(length:--text-micro) font-medium uppercase text-muted-foreground">
             Step {index + 1}
           </span>
-          <span className="truncate text-xs font-semibold text-foreground">
+          <span className="truncate text-(length:--text-ui) font-semibold text-foreground">
             {STEP_LABELS[step]}
           </span>
         </button>
@@ -374,7 +374,9 @@ function PublishStep({
           onCheckedChange={onPublishAgentActivityChange}
         />
       </div>
-      {operationError ? <p className="text-xs text-destructive">{operationError}</p> : null}
+      {operationError ? (
+        <p className="text-(length:--text-caption) text-destructive">{operationError}</p>
+      ) : null}
     </div>
   );
 }
@@ -395,8 +397,8 @@ function OnboardingToggleRow({
   return (
     <div className="flex items-start justify-between gap-4 border-t border-border/60 px-4 py-3 first:border-t-0">
       <div className="min-w-0">
-        <p className="text-sm font-medium">{title}</p>
-        <p className="mt-1 text-xs text-muted-foreground">{description}</p>
+        <p className="text-(length:--text-ui) font-medium">{title}</p>
+        <p className="mt-1 text-(length:--text-ui) text-muted-foreground">{description}</p>
       </div>
       <Switch
         aria-label={title}
@@ -422,7 +424,7 @@ function DevicesStep() {
         savedEnvironments={savedEnvironments}
         showSavedEnvironments
         empty={
-          <p className="px-4 py-6 text-center text-sm text-muted-foreground">
+          <p className="px-4 py-6 text-center text-(length:--text-ui) text-muted-foreground">
             No other environments are published to your account yet. Publish one from another device
             and it will show up here.
           </p>

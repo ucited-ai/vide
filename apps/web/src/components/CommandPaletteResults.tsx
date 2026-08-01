@@ -28,7 +28,7 @@ interface CommandPaletteResultsProps {
 export function CommandPaletteResults(props: CommandPaletteResultsProps) {
   if (props.groups.length === 0) {
     return (
-      <div className="py-10 text-center text-sm text-muted-foreground">
+      <div className="py-10 text-center text-(length:--text-ui) text-muted-foreground">
         {props.emptyStateMessage ??
           (props.isActionsOnly
             ? "No matching actions."
@@ -86,23 +86,23 @@ function CommandPaletteResultRow(props: {
       {props.item.icon}
       {props.item.description ? (
         <span className="flex min-w-0 flex-1 flex-col">
-          <span className="flex min-w-0 items-center gap-1.5 text-sm text-foreground">
+          <span className="flex min-w-0 items-center gap-1.5 text-(length:--text-ui) text-foreground">
             {props.item.titleLeadingContent}
             <span className="truncate">{props.item.title}</span>
           </span>
-          <span className="truncate text-muted-foreground/85 text-xs">
+          <span className="truncate text-muted-foreground/85 text-(length:--text-ui)">
             {props.item.description}
           </span>
         </span>
       ) : (
-        <span className="flex min-w-0 flex-1 items-center gap-1.5 text-sm text-foreground">
+        <span className="flex min-w-0 flex-1 items-center gap-1.5 text-(length:--text-ui) text-foreground">
           {props.item.titleLeadingContent}
           <span className="truncate">{props.item.title}</span>
         </span>
       )}
       {props.item.titleTrailingContent}
       {props.item.timestamp ? (
-        <span className="min-w-12 shrink-0 text-right text-[10px] tabular-nums text-muted-foreground/70">
+        <span className="min-w-12 shrink-0 text-right text-(length:--text-micro) tabular-nums text-muted-foreground/70">
           {props.item.timestamp}
         </span>
       ) : null}

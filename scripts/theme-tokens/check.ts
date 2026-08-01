@@ -127,7 +127,7 @@ const run = Effect.fn("themeTokensCheck")(function* (options: {
     return;
   }
 
-  const started = Date.now();
+  const started = yield* Effect.sync(() => performance.now());
   const scanned = options.staged ? yield* listStagedPaths(root) : yield* listTrackedPaths(root);
   const sources = yield* readSources(root, scanned);
   const findings = scanSources(sources, defaultScanConfig);
@@ -150,8 +150,19 @@ const run = Effect.fn("themeTokensCheck")(function* (options: {
     return;
   }
 
+  /*
+   * Nothing blocks without a ledger to compare against. A missing or corrupt
+   * baseline would otherwise read the entire existing debt as new and refuse
+   * every commit in the repo.
+   */
+  const trusted = loaded._tag === "loaded";
   if (loaded._tag === "unreadable") {
     yield* Console.log(`theme tokens: ${loaded.reason} — reporting only, nothing will block`);
+  }
+  if (loaded._tag === "missing") {
+    yield* Console.log(
+      `theme tokens: no ${BASELINE_FILE} yet — reporting only. Create it with --update-baseline.`,
+    );
   }
 
   const scannedPaths = new Set(scanned);
@@ -163,13 +174,13 @@ const run = Effect.fn("themeTokensCheck")(function* (options: {
   });
 
   const total = findings.reduce((sum, finding) => sum + finding.count, 0);
-  const elapsed = Date.now() - started;
+  const elapsed = yield* Effect.sync(() => Math.round(performance.now() - started));
   yield* Console.log(
     `theme tokens: ${String(classified.added.length)} new, ${String(classified.known.length)} known, ${String(classified.fixed.length)} centralised  (${String(sources.length)} files, ${String(elapsed)}ms)`,
   );
   if (total > 0) yield* Console.log(`  ${summarize(findings)}`);
 
-  const blocking = options.staged && loaded._tag !== "unreadable" ? classified.added : [];
+  const blocking = options.staged && trusted ? classified.added : [];
 
   for (const { finding, wasCount } of classified.added.slice(0, options.limit)) {
     yield* printFinding(

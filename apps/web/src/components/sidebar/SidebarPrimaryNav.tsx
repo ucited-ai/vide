@@ -100,7 +100,7 @@ export function useSidebarPrimaryNavEntries(options: {
 }
 
 const SIDEBAR_PRIMARY_NAV_ROW_CLASS =
-  "flex h-[30px] w-full min-w-0 items-center gap-2.5 rounded-md px-2.5 text-[13.5px] font-medium text-sidebar-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar";
+  "flex h-[30px] w-full min-w-0 items-center gap-2.5 rounded-md px-2.5 text-(length:--text-ui) font-medium text-sidebar-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar";
 
 const SidebarPrimaryNavRow = memo(function SidebarPrimaryNavRow({
   entry,

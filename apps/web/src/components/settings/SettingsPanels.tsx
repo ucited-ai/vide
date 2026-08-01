@@ -131,11 +131,15 @@ function ProviderLastChecked({ lastCheckedAt }: { lastCheckedAt: string | null }
   }
 
   if (lastCheckedRelative.status === "invalid") {
-    return <span className="text-[11px] text-muted-foreground/50">Checked unavailable</span>;
+    return (
+      <span className="text-(length:--text-caption) text-muted-foreground/50">
+        Checked unavailable
+      </span>
+    );
   }
 
   return (
-    <span className="text-[11px] text-muted-foreground/60">
+    <span className="text-(length:--text-caption) text-muted-foreground/60">
       {lastCheckedRelative.suffix ? (
         <>
           Checked <span className="font-mono tabular-nums">{lastCheckedRelative.value}</span>{" "}
@@ -152,7 +156,9 @@ function AboutVersionTitle() {
   return (
     <span className="inline-flex items-center gap-2">
       <span>Version</span>
-      <code className="text-[11px] font-medium text-muted-foreground">{APP_VERSION}</code>
+      <code className="text-(length:--text-caption) font-medium text-muted-foreground">
+        {APP_VERSION}
+      </code>
     </span>
   );
 }

@@ -20,7 +20,7 @@ export function PreviewPanel({ mode, threadRef, tabId, configuredUrls, visible }
     return (
       <PreviewPanelShell mode={mode}>
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
-          <p className="max-w-sm text-sm text-muted-foreground">
+          <p className="max-w-sm text-(length:--text-ui) text-muted-foreground">
             Preview is only available in the Vide desktop app.
           </p>
         </div>

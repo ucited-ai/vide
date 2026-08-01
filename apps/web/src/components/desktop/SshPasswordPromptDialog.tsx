@@ -175,13 +175,15 @@ function ActiveSshPasswordPrompt({
           >
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-3">
-                <p className="text-sm font-medium text-foreground">{request.prompt}</p>
+                <p className="text-(length:--text-ui) font-medium text-foreground">
+                  {request.prompt}
+                </p>
                 {remainingLabel ? (
                   <span
                     className={
                       isExpired
-                        ? "shrink-0 text-xs font-medium text-destructive"
-                        : "shrink-0 text-xs text-muted-foreground"
+                        ? "shrink-0 text-(length:--text-caption) font-medium text-destructive"
+                        : "shrink-0 text-(length:--text-caption) text-muted-foreground"
                     }
                   >
                     {isExpired ? "Expired" : remainingLabel}
@@ -199,9 +201,11 @@ function ActiveSshPasswordPrompt({
               />
             </div>
             {visibleResponseError ? (
-              <p className="text-sm text-destructive">{visibleResponseError}</p>
+              <p className="text-(length:--text-caption) text-destructive">
+                {visibleResponseError}
+              </p>
             ) : (
-              <p className="text-sm text-muted-foreground">
+              <p className="text-(length:--text-caption) text-muted-foreground">
                 Use SSH keys to avoid repeated password prompts on new SSH sessions.
               </p>
             )}

@@ -43,7 +43,7 @@ export function PreviewEmptyState({
   return (
     <div className="flex h-full min-h-0 overflow-y-auto px-5 py-8">
       <div className="m-auto flex w-full max-w-xl flex-col gap-3">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <div className="flex items-center gap-2 text-(length:--text-caption) text-muted-foreground">
           <RadioTower className="size-4 shrink-0" />
           <h2 className="font-medium">Local servers</h2>
         </div>
@@ -56,7 +56,7 @@ export function PreviewEmptyState({
             />
           ))}
         </div>
-        <p className="px-1 text-xs text-muted-foreground">
+        <p className="px-1 text-(length:--text-ui) text-muted-foreground">
           Select a listening port to open it in this browser tab.
         </p>
       </div>

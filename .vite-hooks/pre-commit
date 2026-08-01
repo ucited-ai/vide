@@ -10,3 +10,13 @@ vp staged
 if [ -f scripts/dead-code/check.ts ]; then
   node scripts/dead-code/check.ts --staged
 fi
+
+# Theme-token gate, the mirror of the one above: that one asks whether a token is
+# declared and never used, this one whether a colour or a text size is used and
+# never declared. Fails the commit only on values this commit put outside the
+# theme. Bypass one commit with VIDE_SKIP_THEME_TOKENS=1.
+#
+# Guarded for the same reason as the dead-code gate.
+if [ -f scripts/theme-tokens/check.ts ]; then
+  node scripts/theme-tokens/check.ts --staged
+fi

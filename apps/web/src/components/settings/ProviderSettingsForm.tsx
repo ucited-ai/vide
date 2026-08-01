@@ -190,9 +190,11 @@ function ProviderSettingsFieldRow({
   const inputId = `${idPrefix}-${field.key}`;
   const descriptionClassName =
     variant === "card"
-      ? "mt-1 block text-xs text-muted-foreground"
-      : "text-[11px] text-muted-foreground";
-  const label = <span className="text-xs font-medium text-foreground">{field.label}</span>;
+      ? "mt-1 block text-(length:--text-caption) text-muted-foreground"
+      : "text-(length:--text-caption) text-muted-foreground";
+  const label = (
+    <span className="text-(length:--text-ui) font-medium text-foreground">{field.label}</span>
+  );
   const description = field.description ? (
     <span className={descriptionClassName}>{field.description}</span>
   ) : null;

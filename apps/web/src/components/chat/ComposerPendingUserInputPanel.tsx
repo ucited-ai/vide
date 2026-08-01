@@ -155,18 +155,20 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
   return (
     <div className="px-4 py-3 sm:px-5">
       <div className="mb-2 flex items-center gap-3">
-        <span className="text-[11px] font-semibold tracking-widest text-muted-foreground/55 uppercase">
+        <span className="text-(length:--text-caption) font-semibold tracking-widest text-muted-foreground/55 uppercase">
           {activeQuestion.header}
         </span>
         {prompt.questions.length > 1 ? (
-          <span className="flex h-5 items-center rounded-md bg-muted/60 px-1.5 text-[10px] font-medium tabular-nums text-muted-foreground/60">
+          <span className="flex h-5 items-center rounded-md bg-muted/60 px-1.5 text-(length:--text-micro) font-medium tabular-nums text-muted-foreground/60">
             {questionIndex + 1}/{prompt.questions.length}
           </span>
         ) : null}
       </div>
-      <p className="text-sm text-foreground/90">{activeQuestion.question}</p>
+      <p className="text-(length:--text-ui) text-foreground/90">{activeQuestion.question}</p>
       {activeQuestion.multiSelect ? (
-        <p className="mt-1 text-xs text-muted-foreground/65">Select one or more options.</p>
+        <p className="mt-1 text-(length:--text-caption) text-muted-foreground/65">
+          Select one or more options.
+        </p>
       ) : null}
       <div className="mt-3 space-y-1.5">
         {activeQuestion.options.map((option, index) => {
@@ -188,9 +190,11 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
           const content = (
             <>
               <div className="min-w-0 flex-1 flex flex-col gap-0.5">
-                <span className="text-sm font-medium">{option.label}</span>
+                <span className="text-(length:--text-ui) font-medium">{option.label}</span>
                 {option.description && option.description !== option.label ? (
-                  <span className="text-xs text-muted-foreground">{option.description}</span>
+                  <span className="text-(length:--text-caption) text-muted-foreground">
+                    {option.description}
+                  </span>
                 ) : null}
               </div>
               {isSelected ? (
@@ -198,7 +202,7 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
               ) : shortcutKey !== null ? (
                 <kbd
                   className={cn(
-                    "flex size-5 shrink-0 items-center justify-center rounded border border-border/50 text-[11px] font-medium tabular-nums transition-colors",
+                    "flex size-5 shrink-0 items-center justify-center rounded border border-border/50 text-(length:--text-caption) font-medium tabular-nums transition-colors",
                     "bg-background/35 text-muted-foreground/70 group-hover:border-border/70 group-hover:text-muted-foreground",
                   )}
                 >

@@ -16,8 +16,10 @@ export function PreviewLocalServerCard({ server, onOpen }: Props) {
     >
       <BrowserMockup className="size-7 shrink-0" />
       <div className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate text-sm font-medium text-foreground">{subtitle}</span>
-        <span className="truncate text-xs text-muted-foreground">
+        <span className="truncate text-(length:--text-ui) font-medium text-foreground">
+          {subtitle}
+        </span>
+        <span className="truncate text-(length:--text-caption) text-muted-foreground">
           {server.host}:{server.port}
         </span>
       </div>
