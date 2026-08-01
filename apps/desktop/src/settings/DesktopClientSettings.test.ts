@@ -1,6 +1,6 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
-import { ClientSettingsSchema, type ClientSettings } from "@vide/contracts";
+import { ClientSettingsSchema, DEFAULT_THEME_PALETTE, type ClientSettings } from "@vide/contracts";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
@@ -19,8 +19,11 @@ const clientSettings: ClientSettings = {
   dismissedProviderUpdateNotificationKeys: [],
   diffIgnoreWhitespace: true,
   favorites: [],
-  glassOpacity: 80,
-  surfaceTint: { light: null, dark: null },
+  palette: {
+    light: DEFAULT_THEME_PALETTE,
+    dark: { ...DEFAULT_THEME_PALETTE, "surface-chrome": "rgb(35 36 41 / 92%)" },
+  },
+  textScale: 1.15,
   providerModelPreferences: {},
   sidebarAutoSettleAfterDays: 3,
   sidebarProjectGroupingMode: "repository_path",

@@ -6,11 +6,13 @@ import {
   ClientSettingsSchema,
   ClientSettingsPatch,
   DEFAULT_SERVER_SETTINGS,
+  DEFAULT_THEME_PALETTE,
   ServerSettings,
   ServerSettingsPatch,
 } from "./settings.ts";
 
 const decodeClientSettings = Schema.decodeUnknownSync(ClientSettingsSchema);
+const encodeClientSettings = Schema.encodeSync(ClientSettingsSchema);
 const decodeClientSettingsPatch = Schema.decodeUnknownSync(ClientSettingsPatch);
 const decodeServerSettings = Schema.decodeUnknownSync(ServerSettings);
 const decodeServerSettingsPatch = Schema.decodeUnknownSync(ServerSettingsPatch);
@@ -33,43 +35,81 @@ describe("ClientSettings word wrap", () => {
   });
 });
 
-describe("ClientSettings glass opacity", () => {
-  it("defaults to a readable translucent surface", () => {
-    expect(decodeClientSettings({}).glassOpacity).toBe(100);
+describe("ClientSettings text scale", () => {
+  it("defaults to the designed sizes", () => {
+    expect(decodeClientSettings({}).textScale).toBe(1);
   });
 
-  it.each([39, 101, 72.5])("rejects an invalid glass opacity: %s", (value) => {
-    expect(() => decodeClientSettings({ glassOpacity: value })).toThrow();
-    expect(() => decodeClientSettingsPatch({ glassOpacity: value })).toThrow();
+  it.each([0.8, 1.45, 0])("rejects a text scale outside the supported range: %s", (value) => {
+    expect(() => decodeClientSettings({ textScale: value })).toThrow();
+    expect(() => decodeClientSettingsPatch({ textScale: value })).toThrow();
   });
 
-  it.each([40, 75, 100])("accepts a glass opacity within the supported range: %s", (value) => {
-    expect(decodeClientSettings({ glassOpacity: value }).glassOpacity).toBe(value);
-    expect(decodeClientSettingsPatch({ glassOpacity: value }).glassOpacity).toBe(value);
+  it.each([0.85, 1, 1.4])("accepts a text scale within the supported range: %s", (value) => {
+    expect(decodeClientSettings({ textScale: value }).textScale).toBe(value);
+    expect(decodeClientSettingsPatch({ textScale: value }).textScale).toBe(value);
   });
 });
 
-describe("ClientSettings surface tint", () => {
-  it("defaults to leaving both theme surfaces unchanged", () => {
-    expect(decodeClientSettings({}).surfaceTint).toEqual({ light: null, dark: null });
+describe("ClientSettings palette", () => {
+  it("defaults to leaving every slot to the stylesheet", () => {
+    expect(decodeClientSettings({}).palette).toEqual({
+      light: DEFAULT_THEME_PALETTE,
+      dark: DEFAULT_THEME_PALETTE,
+    });
   });
 
   it.each([
-    { light: "#fff", dark: null },
-    { light: null, dark: "232429" },
-    { light: "#fdfdfd", dark: "not-a-color" },
-  ])("rejects an invalid surface tint: %o", (value) => {
-    expect(() => decodeClientSettings({ surfaceTint: value })).toThrow();
-    expect(() => decodeClientSettingsPatch({ surfaceTint: value })).toThrow();
+    "#fdfdfd",
+    "rgb(253,253,253 / 100%)",
+    "rgb(253 253 253 / 100)",
+    "rgb(300 0 0 / 100%)",
+    "rgb(0 0 0 / 120%)",
+  ])("rejects a colour that is not storable CSS: %s", (value) => {
+    const palette = { light: { "surface-chrome": value }, dark: {} };
+    expect(() => decodeClientSettings({ palette })).toThrow();
+    expect(() => decodeClientSettingsPatch({ palette })).toThrow();
   });
 
-  it.each([
-    { light: null, dark: null },
-    { light: "#f4f8ff", dark: null },
-    { light: "#FDFDFD", dark: "#232429" },
-  ])("accepts per-theme surface tints: %o", (value) => {
-    expect(decodeClientSettings({ surfaceTint: value }).surfaceTint).toEqual(value);
-    expect(decodeClientSettingsPatch({ surfaceTint: value }).surfaceTint).toEqual(value);
+  it("keeps a partially filled palette and defaults the rest", () => {
+    const decoded = decodeClientSettings({
+      palette: { light: { "surface-chrome": "rgb(255 255 255 / 92%)" }, dark: {} },
+    });
+
+    expect(decoded.palette.light["surface-chrome"]).toBe("rgb(255 255 255 / 92%)");
+    expect(decoded.palette.light.ink).toBeNull();
+    expect(decoded.palette.dark).toEqual(DEFAULT_THEME_PALETTE);
+  });
+});
+
+describe("ClientSettings surface tint migration", () => {
+  it("carries a tint chosen before the palette existed into the chrome slot", () => {
+    const decoded = decodeClientSettings({
+      surfaceTint: { light: "#FDFDFD", dark: "#232429" },
+    });
+
+    expect(decoded.palette.light["surface-chrome"]).toBe("rgb(253 253 253 / 100%)");
+    expect(decoded.palette.dark["surface-chrome"]).toBe("rgb(35 36 41 / 100%)");
+    expect(decoded).not.toHaveProperty("surfaceTint");
+  });
+
+  it("leaves a palette the user has already chosen alone", () => {
+    const decoded = decodeClientSettings({
+      surfaceTint: { light: "#fdfdfd", dark: "#232429" },
+      palette: { light: { "surface-chrome": "rgb(1 2 3 / 50%)" }, dark: {} },
+    });
+
+    expect(decoded.palette.light["surface-chrome"]).toBe("rgb(1 2 3 / 50%)");
+    expect(decoded.palette.dark["surface-chrome"]).toBe("rgb(35 36 41 / 100%)");
+  });
+
+  it("clears the retired field when settings are written back", () => {
+    const encoded = encodeClientSettings(
+      decodeClientSettings({ surfaceTint: { light: "#fdfdfd", dark: null } }),
+    );
+
+    expect(encoded.surfaceTint).toEqual({ light: null, dark: null });
+    expect(encoded.palette?.light?.["surface-chrome"]).toBe("rgb(253 253 253 / 100%)");
   });
 });
 

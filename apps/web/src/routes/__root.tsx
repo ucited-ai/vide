@@ -1,4 +1,4 @@
-import { type ServerLifecycleWelcomePayload } from "@vide/contracts";
+import { PALETTE_SLOTS, type ServerLifecycleWelcomePayload } from "@vide/contracts";
 import { scopedProjectKey, scopeProjectRef } from "@vide/client-runtime/environment";
 import { squashAtomCommandFailure } from "@vide/client-runtime/state/runtime";
 import {
@@ -127,7 +127,7 @@ function RootRouteView() {
     <ToastProvider>
       <AnchoredToastProvider>
         <DocumentTitleSync />
-        <GlassAppearanceSync />
+        <ThemeVariableSync />
         {primaryEnvironmentAuthenticated ? <AuthenticatedTracingBootstrap /> : null}
         <RelayClientInstallDialog />
         <ConnectOnboardingDialog />
@@ -142,34 +142,75 @@ function RootRouteView() {
   );
 }
 
-function GlassAppearanceSync() {
-  const glassOpacity = useClientSettings((settings) => settings.glassOpacity);
-  const surfaceTint = useClientSettings((settings) => settings.surfaceTint);
+/**
+ * A stored `rgb(r g b / a%)` taken apart into the colour and its opacity.
+ *
+ * They have to travel separately. Twenty-odd tokens are mixed from the ladder
+ * with `color-mix`, which carries alpha through, so a translucent rung would
+ * quietly make the diff background and the environment panel see-through. The
+ * rungs therefore stay opaque and the opacity is applied only where glass is
+ * meant — see `--surface-chrome-alpha` in `vide-theme.css`.
+ */
+function splitPaletteColor(color: string): { readonly rgb: string; readonly alpha: number } {
+  const parts = /^rgb\((\d+) (\d+) (\d+) \/ ([\d.]+)%\)$/.exec(color);
+  if (parts === null) return { rgb: color, alpha: 100 };
+  return { rgb: `rgb(${parts[1]} ${parts[2]} ${parts[3]})`, alpha: Number(parts[4]) };
+}
+
+function ThemeVariableSync() {
+  const textScale = useClientSettings((settings) => settings.textScale);
+  const palette = useClientSettings((settings) => settings.palette);
   const { resolvedTheme } = useTheme();
 
+  /* One factor, six roles. The stylesheet does the arithmetic. */
   useEffect(() => {
-    document.documentElement.style.setProperty("--glass-opacity", `${glassOpacity}%`);
-  }, [glassOpacity]);
+    document.documentElement.style.setProperty("--text-scale", String(textScale));
+  }, [textScale]);
 
   /*
-   * The one surface colour the user owns. Every surface they act through —
-   * sidebar, composer, popups, dialogs, the environment panel — is painted from
-   * `--surface-chrome`, so overriding that single custom property retints all of
-   * them at once and keeps them agreeing with each other by construction.
+   * The palette the user owns. Every surface they act through — sidebar,
+   * composer, popups, dialogs, the environment panel — is painted from these
+   * six custom properties, so overriding them retints the app at once and keeps
+   * its parts agreeing with each other by construction.
    *
-   * Stored per theme rather than as one colour, because a tint that reads as a
-   * lifted surface on a dark floor is a muddy grey on a light one; there is no
-   * single value that can serve both. Cleared rather than set when the user has
-   * not chosen one, so the stylesheet's own value stays in charge.
+   * Stored per theme rather than as one set, because a surface that reads as
+   * lifted on a dark floor is a muddy grey on a light one. Cleared rather than
+   * set where the user has not chosen, so the stylesheet's own value stays in
+   * charge and a later change to the ladder still reaches them.
    */
   useEffect(() => {
-    const tint = resolvedTheme === "dark" ? surfaceTint.dark : surfaceTint.light;
-    if (tint === null) {
-      document.documentElement.style.removeProperty("--surface-chrome");
+    const root = document.documentElement;
+    const themePalette = resolvedTheme === "dark" ? palette.dark : palette.light;
+
+    for (const slot of PALETTE_SLOTS) {
+      const color = themePalette[slot];
+      if (color === null) {
+        root.style.removeProperty(`--${slot}`);
+        continue;
+      }
+      root.style.setProperty(`--${slot}`, splitPaletteColor(color).rgb);
+    }
+
+    /*
+     * Only the chrome rung's opacity is worth anything: the content floor has
+     * nothing behind it but the window, and ink that wants to be lighter can
+     * simply be a lighter grey. Blur follows it, because it costs a compositing
+     * layer on every menu and buys nothing behind an opaque fill — while
+     * translucency without it reads as a bug rather than as glass.
+     */
+    const chrome = themePalette["surface-chrome"];
+    const chromeAlpha = chrome === null ? 100 : splitPaletteColor(chrome).alpha;
+    if (chromeAlpha >= 100) {
+      root.style.removeProperty("--surface-chrome-alpha");
+      root.style.removeProperty("--chrome-backdrop-filter");
       return;
     }
-    document.documentElement.style.setProperty("--surface-chrome", tint);
-  }, [resolvedTheme, surfaceTint]);
+    root.style.setProperty("--surface-chrome-alpha", `${chromeAlpha}%`);
+    root.style.setProperty(
+      "--chrome-backdrop-filter",
+      "blur(var(--glass-blur)) saturate(var(--glass-saturation))",
+    );
+  }, [palette, resolvedTheme]);
 
   return null;
 }

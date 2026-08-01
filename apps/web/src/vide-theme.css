@@ -16,10 +16,43 @@
     "Segoe UI", system-ui, sans-serif;
   --font-mono:
     ui-monospace, "SF Mono", "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace;
+
+  /*
+   * Tailwind's own size steps resolve to the role scale, so a component that
+   * still writes `text-sm` moves with the reader's text size instead of
+   * standing still while everything around it grows. Without this the size
+   * control only reaches the call sites that already ask for a role, and the
+   * app comes apart rather than scaling.
+   *
+   * It is a floor, not a replacement for asking by role: `text-sm` lands on
+   * --text-ui everywhere, which is the wrong role inside the transcript, and a
+   * hardcoded `text-[11px]` still cannot be reached at all.
+   *
+   * Only these four are mapped. `text-xl` and up are display copy — empty-state
+   * and pairing headlines — which the scale deliberately does not cover.
+   */
+  --text-lg: var(--text-section);
+  --text-base: var(--text-title);
+  --text-sm: var(--text-ui);
+  --text-xs: var(--text-caption);
 }
 
 /* ---------------------------------------------------------- surface ladder */
 
+/*
+ * The six rungs below are the whole palette the user owns. Everything after
+ * them — border, hover, popover, card, ring, primary — is derived, so the app
+ * cannot be talked into a second accent colour by a settings screen and stays
+ * one material by construction.
+ *
+ * The rungs stay opaque, always. Roughly twenty tokens are mixed from them with
+ * color-mix — the diff ladder, the environment panel, the composer surface —
+ * and color-mix carries alpha through: giving --surface-chrome 80% would quietly
+ * make the diff background and the environment panel see-through, which nobody
+ * asked for and which only shows up once someone picks a translucent colour.
+ * Transparency therefore travels in --surface-chrome-alpha instead, and is
+ * applied only where glass is actually wanted.
+ */
 :root:root:root {
   /* Light. Content pane is the tinted floor; chrome lifts toward white. */
   --surface-content: #f6f6f7;
@@ -34,6 +67,25 @@
   --ink-secondary: #5f5f68;
   --ink-tertiary: #8e8e98;
 
+  /*
+   * How solid the surfaces the user acts through are: composer, menus, dialogs,
+   * toasts. Opaque unless asked otherwise — every one of those is painted from
+   * one tone, and translucency breaks that agreement the moment a menu opens
+   * over something lighter than the surface it belongs to, which is what made
+   * the model picker read as a different material from the sidebar it matches
+   * on paper. Glass is a taste; it is just no longer what you get without
+   * asking.
+   *
+   * The environment column and the diff deliberately do not read this: they are
+   * long-lived tool surfaces, and code you are reading through is not a window.
+   */
+  --surface-chrome-alpha: 100%;
+
+  /*
+   * Not derived from --ink, on purpose. An edge and a wash are light and shade,
+   * not ink, so they stay neutral even when someone tints the text. This is a
+   * decision, not an omission.
+   */
   --edge: rgb(0 0 0 / 9%);
   --edge-strong: rgb(0 0 0 / 14%);
 
@@ -68,11 +120,31 @@
    * Type scale. Named by role rather than size so a component never has to pick
    * a number: the transcript is read, the sidebar is scanned, and captions are
    * glanced at, and each wants a different size.
+   *
+   * Six rungs, one factor. The designed sizes are kept as their own properties
+   * because the factor has to multiply the design every time, not whatever the
+   * role happens to hold: setting --text-ui from the previous --text-ui would
+   * compound on each change and drift away from the ladder within a few moves.
+   *
+   * The factor moves type only. Padding, icon sizes and row heights stay fixed,
+   * because the app has 139 hardcoded pixel measurements that would not come
+   * with them — a larger reading size in the same furniture is the goal.
    */
-  --text-chat: 14.5px;
-  --text-ui: 13.5px;
-  --text-caption: 11.5px;
-  --text-title: 15px;
+  --text-scale: 1;
+
+  --text-base-section: 17px; /* settings section headings */
+  --text-base-title: 15px;
+  --text-base-chat: 14.5px; /* the transcript — read */
+  --text-base-ui: 13.5px; /* sidebar, toolbars, context strip — scanned */
+  --text-base-caption: 11.5px; /* metadata and labels — glanced at */
+  --text-base-micro: 10.5px; /* badges and counters */
+
+  --text-section: calc(var(--text-base-section) * var(--text-scale));
+  --text-title: calc(var(--text-base-title) * var(--text-scale));
+  --text-chat: calc(var(--text-base-chat) * var(--text-scale));
+  --text-ui: calc(var(--text-base-ui) * var(--text-scale));
+  --text-caption: calc(var(--text-base-caption) * var(--text-scale));
+  --text-micro: calc(var(--text-base-micro) * var(--text-scale));
 
   /*
    * All popup primitives share this geometry. The item radius stays concentric
@@ -341,19 +413,33 @@
   max-width: calc(var(--composer-max-width) + 1.5rem);
 }
 
-:root:root:root .chat-composer-glass,
-:root:root:root .chat-composer-glass-shell::before {
-  background: var(--surface-chrome);
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
+/*
+ * Blur is off unless the chrome rung is actually translucent.
+ *
+ * Upstream blurs these surfaces unconditionally, which costs a compositing
+ * layer and a containing block on every menu for an effect nobody can see
+ * behind an opaque fill. ThemeVariableSync switches it on only when the user
+ * asks for an opacity below 100%, which is the only case where there is
+ * anything behind the surface worth softening.
+ */
+:root:root:root {
+  --chrome-backdrop-filter: none;
 }
 
-/* Existing glass classes must be neutralised to keep popup surfaces opaque. */
+:root:root:root .chat-composer-glass,
+:root:root:root .chat-composer-glass-shell::before {
+  background: color-mix(in srgb, var(--surface-chrome) var(--surface-chrome-alpha), transparent);
+  -webkit-backdrop-filter: var(--chrome-backdrop-filter);
+  backdrop-filter: var(--chrome-backdrop-filter);
+}
+
+/* Upstream's glass is replaced rather than tuned: these surfaces take the one
+   chrome opacity, not a denser mix of their own on top of it. */
 :root:root:root .dropdown-glass,
 :root:root:root .dialog-glass {
-  background: var(--popover);
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
+  background: color-mix(in srgb, var(--popover) var(--surface-chrome-alpha), transparent);
+  -webkit-backdrop-filter: var(--chrome-backdrop-filter);
+  backdrop-filter: var(--chrome-backdrop-filter);
   border-color: var(--edge);
 }
 

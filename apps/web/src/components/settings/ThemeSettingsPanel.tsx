@@ -1,6 +1,5 @@
-import { DEFAULT_UNIFIED_SETTINGS, MAX_GLASS_OPACITY, MIN_GLASS_OPACITY } from "@vide/contracts";
+import { DEFAULT_PALETTE, DEFAULT_UNIFIED_SETTINGS, hexToPaletteColor } from "@vide/contracts";
 import { CheckIcon } from "lucide-react";
-import type { CSSProperties } from "react";
 
 import { useClientSettings, useUpdateClientSettings } from "../../hooks/useSettings";
 import { useTheme } from "../../hooks/useTheme";
@@ -74,7 +73,8 @@ function SurfaceTintSwatches({
   return (
     <div className="flex flex-wrap items-center gap-2">
       {SURFACE_TINTS[theme].map((tint) => {
-        const isSelected = tint.value === selected;
+        const isSelected =
+          selected === (tint.value === null ? null : hexToPaletteColor(tint.value));
         return (
           <button
             key={tint.label}
@@ -230,19 +230,15 @@ export function ThemeSettingsPanel() {
   const updateSettings = useUpdateClientSettings();
   const { theme, setTheme, resolvedTheme } = useTheme();
 
-  const glassOpacityProgress =
-    (settings.glassOpacity - MIN_GLASS_OPACITY) / (MAX_GLASS_OPACITY - MIN_GLASS_OPACITY);
-  const glassOpacitySliderStyle = {
-    "--glass-opacity-progress": `${glassOpacityProgress * 100}%`,
-  } as CSSProperties;
-
   /*
    * The swatches edit the theme currently on screen, because that is the only
    * one whose result the user can see while choosing. Switching the appearance
    * above therefore switches which half of the setting this row is editing.
    */
-  const activeTint = settings.surfaceTint[resolvedTheme];
-  const tintIsDefault = settings.surfaceTint.light === null && settings.surfaceTint.dark === null;
+  const activeTint = settings.palette[resolvedTheme]["surface-chrome"];
+  const tintIsDefault =
+    settings.palette.light["surface-chrome"] === null &&
+    settings.palette.dark["surface-chrome"] === null;
 
   return (
     <SettingsPageContainer>
@@ -282,7 +278,7 @@ export function ThemeSettingsPanel() {
             tintIsDefault ? null : (
               <SettingResetButton
                 label="surface tint"
-                onClick={() => updateSettings({ surfaceTint: { light: null, dark: null } })}
+                onClick={() => updateSettings({ palette: DEFAULT_PALETTE })}
               />
             )
           }
@@ -292,56 +288,16 @@ export function ThemeSettingsPanel() {
               selected={activeTint}
               onSelect={(value) =>
                 updateSettings({
-                  surfaceTint: { ...settings.surfaceTint, [resolvedTheme]: value },
+                  palette: {
+                    ...settings.palette,
+                    [resolvedTheme]: {
+                      ...settings.palette[resolvedTheme],
+                      "surface-chrome": value === null ? null : hexToPaletteColor(value),
+                    },
+                  },
                 })
               }
             />
-          }
-        />
-
-        <SettingsRow
-          title="Glass opacity"
-          description="Control how transparent glass surfaces are. Higher values make menus, dialogs, and the composer more solid."
-          resetAction={
-            settings.glassOpacity !== DEFAULT_UNIFIED_SETTINGS.glassOpacity ? (
-              <SettingResetButton
-                label="glass opacity"
-                onClick={() =>
-                  updateSettings({ glassOpacity: DEFAULT_UNIFIED_SETTINGS.glassOpacity })
-                }
-              />
-            ) : null
-          }
-          control={
-            <div className="flex w-full items-center gap-3 sm:w-52">
-              <output
-                className="min-w-12 rounded-md bg-muted px-2 py-1 text-center font-mono text-xs font-medium tabular-nums text-foreground"
-                htmlFor="glass-opacity"
-              >
-                {settings.glassOpacity}%
-              </output>
-              <input
-                aria-label="Glass opacity"
-                className="glass-opacity-slider min-w-0 flex-1"
-                id="glass-opacity"
-                max={MAX_GLASS_OPACITY}
-                min={MIN_GLASS_OPACITY}
-                onChange={(event) => {
-                  const glassOpacity = Number(event.currentTarget.value);
-                  if (
-                    Number.isInteger(glassOpacity) &&
-                    glassOpacity >= MIN_GLASS_OPACITY &&
-                    glassOpacity <= MAX_GLASS_OPACITY
-                  ) {
-                    updateSettings({ glassOpacity });
-                  }
-                }}
-                step={5}
-                style={glassOpacitySliderStyle}
-                type="range"
-                value={settings.glassOpacity}
-              />
-            </div>
           }
         />
       </SettingsSection>

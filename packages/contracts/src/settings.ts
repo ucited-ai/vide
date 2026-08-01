@@ -48,24 +48,26 @@ export const SidebarAutoSettleAfterDays = Schema.Number.check(
 );
 export type SidebarAutoSettleAfterDays = typeof SidebarAutoSettleAfterDays.Type;
 export const DEFAULT_SIDEBAR_AUTO_SETTLE_AFTER_DAYS: SidebarAutoSettleAfterDays = 3;
-export const MIN_GLASS_OPACITY = 40;
-export const MAX_GLASS_OPACITY = 100;
-export const GlassOpacity = Schema.Int.check(
+/*
+ * How far the type scale is turned up or down. One factor for all six roles,
+ * because the point of the scale is that the sidebar, the transcript and the
+ * captions keep their relationship to each other at every size.
+ *
+ * Type only: spacing, icon sizes and row heights stay where they are. Scaling
+ * the whole layout was tried and rejected — the app carries enough hardcoded
+ * pixel measurements that they come apart before the text gets usefully bigger.
+ */
+export const MIN_TEXT_SCALE = 0.85;
+export const MAX_TEXT_SCALE = 1.4;
+export const TEXT_SCALE_STEP = 0.05;
+export const TextScale = Schema.Number.check(
   Schema.isBetween({
-    minimum: MIN_GLASS_OPACITY,
-    maximum: MAX_GLASS_OPACITY,
+    minimum: MIN_TEXT_SCALE,
+    maximum: MAX_TEXT_SCALE,
   }),
 );
-export type GlassOpacity = typeof GlassOpacity.Type;
-/*
- * Solid by default. Every surface the user acts through is painted from one
- * tone, and translucency breaks that agreement the moment a menu opens over
- * something darker or lighter than the surface it belongs to — which is what
- * made the model picker and the access menu read as a different material from
- * the sidebar they match on paper. Glass is a taste, so it stays available on
- * the slider; it is just no longer what you get without asking.
- */
-export const DEFAULT_GLASS_OPACITY: GlassOpacity = 100;
+export type TextScale = typeof TextScale.Type;
+export const DEFAULT_TEXT_SCALE: TextScale = 1;
 
 /*
  * ── Chat appearance ────────────────────────────────────────────
@@ -117,19 +119,97 @@ export const ChatChangedFilesLayout = Schema.Literals([
 export type ChatChangedFilesLayout = typeof ChatChangedFilesLayout.Type;
 export const DEFAULT_CHAT_CHANGED_FILES_LAYOUT: ChatChangedFilesLayout = "tree";
 
-export const SurfaceTintColor = Schema.String.check(Schema.isPattern(/^#[0-9a-f]{6}$/i));
-export type SurfaceTintColor = typeof SurfaceTintColor.Type;
-export const SurfaceTint = Schema.Struct({
-  light: Schema.NullOr(SurfaceTintColor),
-  dark: Schema.NullOr(SurfaceTintColor),
+/*
+ * The palette the user owns, and the whole of it.
+ *
+ * Three surfaces and three ink weights. Everything else the app paints with —
+ * borders, hovers, popovers, cards, the focus ring, the accent — is derived
+ * from these six in the stylesheet, so a chosen palette stays internally
+ * consistent and the monochrome direction cannot be edited away one control at
+ * a time.
+ */
+export const PALETTE_SLOTS = [
+  "surface-content",
+  "surface-recessed",
+  "surface-chrome",
+  "ink",
+  "ink-secondary",
+  "ink-tertiary",
+] as const;
+export type PaletteSlot = (typeof PALETTE_SLOTS)[number];
+
+const RGB_CHANNEL = String.raw`(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)`;
+const ALPHA_PERCENT = String.raw`(?:100|\d{1,2}(?:\.\d+)?)`;
+/*
+ * Stored as the CSS the browser is handed, rather than as a hex pair or a
+ * channel tuple, so a settings file can be read without decoding it and so the
+ * value that ships to `style.setProperty` needs no assembly on the way.
+ */
+export const PALETTE_COLOR_PATTERN = new RegExp(
+  `^rgb\\(${RGB_CHANNEL} ${RGB_CHANNEL} ${RGB_CHANNEL} / ${ALPHA_PERCENT}%\\)$`,
+);
+export const PaletteColor = Schema.String.check(Schema.isPattern(PALETTE_COLOR_PATTERN));
+export type PaletteColor = typeof PaletteColor.Type;
+
+/*
+ * `null` means "the stylesheet keeps its value", which is not the same as
+ * storing whatever the stylesheet holds today: a later change to the ladder has
+ * to reach everyone who never chose. The runtime removes the property rather
+ * than setting it.
+ */
+const PaletteSlotColor = Schema.NullOr(PaletteColor).pipe(
+  Schema.withDecodingDefault(Effect.succeed(null)),
+);
+
+export const ThemePalette = Schema.Struct({
+  "surface-content": PaletteSlotColor,
+  "surface-recessed": PaletteSlotColor,
+  "surface-chrome": PaletteSlotColor,
+  ink: PaletteSlotColor,
+  "ink-secondary": PaletteSlotColor,
+  "ink-tertiary": PaletteSlotColor,
 });
-export type SurfaceTint = typeof SurfaceTint.Type;
-export const DEFAULT_SURFACE_TINT: SurfaceTint = {
-  light: null,
-  dark: null,
+export type ThemePalette = typeof ThemePalette.Type;
+export const DEFAULT_THEME_PALETTE: ThemePalette = {
+  "surface-content": null,
+  "surface-recessed": null,
+  "surface-chrome": null,
+  ink: null,
+  "ink-secondary": null,
+  "ink-tertiary": null,
 };
 
-export const ClientSettingsSchema = Schema.Struct({
+/*
+ * Kept per theme rather than as one set, because a surface that reads as lifted
+ * on a dark floor is a muddy grey on a light one; there is no single value that
+ * serves both.
+ */
+export const Palette = Schema.Struct({
+  light: ThemePalette.pipe(Schema.withDecodingDefault(Effect.succeed(DEFAULT_THEME_PALETTE))),
+  dark: ThemePalette.pipe(Schema.withDecodingDefault(Effect.succeed(DEFAULT_THEME_PALETTE))),
+});
+export type Palette = typeof Palette.Type;
+export const DEFAULT_PALETTE: Palette = {
+  light: DEFAULT_THEME_PALETTE,
+  dark: DEFAULT_THEME_PALETTE,
+};
+
+/** `#rrggbb` as the palette stores colour, at full opacity. */
+export function hexToPaletteColor(hex: string): PaletteColor {
+  const numeric = Number.parseInt(hex.slice(1), 16);
+  return `rgb(${(numeric >> 16) & 255} ${(numeric >> 8) & 255} ${numeric & 255} / 100%)`;
+}
+
+/** Retired in favour of `palette`. Read only to carry an existing choice over. */
+const LegacySurfaceTintColor = Schema.String.check(Schema.isPattern(/^#[0-9a-f]{6}$/i));
+const LegacySurfaceTint = Schema.Struct({
+  light: Schema.NullOr(LegacySurfaceTintColor),
+  dark: Schema.NullOr(LegacySurfaceTintColor),
+});
+type LegacySurfaceTint = typeof LegacySurfaceTint.Type;
+const NO_LEGACY_SURFACE_TINT: LegacySurfaceTint = { light: null, dark: null };
+
+const clientSettingsFields = {
   autoOpenPlanSidebar: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   chatChangedFilesLayout: ChatChangedFilesLayout.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_CHAT_CHANGED_FILES_LAYOUT)),
@@ -146,10 +226,8 @@ export const ClientSettingsSchema = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed([])),
   ),
   diffIgnoreWhitespace: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
-  glassOpacity: GlassOpacity.pipe(
-    Schema.withDecodingDefault(Effect.succeed(DEFAULT_GLASS_OPACITY)),
-  ),
-  surfaceTint: SurfaceTint.pipe(Schema.withDecodingDefault(Effect.succeed(DEFAULT_SURFACE_TINT))),
+  palette: Palette.pipe(Schema.withDecodingDefault(Effect.succeed(DEFAULT_PALETTE))),
+  textScale: TextScale.pipe(Schema.withDecodingDefault(Effect.succeed(DEFAULT_TEXT_SCALE))),
   // Model favorites. Historically keyed by provider kind, now
   // widened to `ProviderInstanceId` so users can favorite a specific model
   // on a custom provider instance (e.g. "Codex Personal · gpt-5") without
@@ -199,7 +277,52 @@ export const ClientSettingsSchema = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_TIMESTAMP_FORMAT)),
   ),
   wordWrap: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+};
+
+/*
+ * What is actually on disk, which still includes the retired `surfaceTint`.
+ * Reading it here rather than dropping it is the whole migration: a tint chosen
+ * before the palette existed becomes the palette's chrome colour on the next
+ * read, and is written back as cleared once anything is saved.
+ */
+const ClientSettingsInput = Schema.Struct({
+  ...clientSettingsFields,
+  surfaceTint: LegacySurfaceTint.pipe(
+    Schema.withDecodingDefault(Effect.succeed(NO_LEGACY_SURFACE_TINT)),
+  ),
 });
+
+/*
+ * The type side only: the per-field decoding defaults have already been applied
+ * by `ClientSettingsInput`, so what comes out of the migration is a complete
+ * settings object rather than another partial one to fill in.
+ */
+const ClientSettingsOutput = Schema.toType(Schema.Struct(clientSettingsFields));
+
+function adoptLegacySurfaceTint(input: typeof ClientSettingsInput.Type) {
+  const { surfaceTint, palette, ...rest } = input;
+
+  /* An explicit palette choice wins: the tint is the older, coarser answer. */
+  const adopt = (theme: "light" | "dark"): ThemePalette => {
+    const tint = surfaceTint[theme];
+    if (tint === null || palette[theme]["surface-chrome"] !== null) {
+      return palette[theme];
+    }
+    return { ...palette[theme], "surface-chrome": hexToPaletteColor(tint) };
+  };
+
+  return { ...rest, palette: { light: adopt("light"), dark: adopt("dark") } };
+}
+
+export const ClientSettingsSchema = ClientSettingsInput.pipe(
+  Schema.decodeTo(
+    ClientSettingsOutput,
+    SchemaTransformation.transformOrFail({
+      decode: (input) => Effect.succeed(adoptLegacySurfaceTint(input)),
+      encode: (settings) => Effect.succeed({ ...settings, surfaceTint: NO_LEGACY_SURFACE_TINT }),
+    }),
+  ),
+);
 export type ClientSettings = typeof ClientSettingsSchema.Type;
 
 export const DEFAULT_CLIENT_SETTINGS: ClientSettings = Schema.decodeSync(ClientSettingsSchema)({});
@@ -688,8 +811,11 @@ export const ClientSettingsPatch = Schema.Struct({
   confirmThreadArchive: Schema.optionalKey(Schema.Boolean),
   confirmThreadDelete: Schema.optionalKey(Schema.Boolean),
   diffIgnoreWhitespace: Schema.optionalKey(Schema.Boolean),
-  glassOpacity: Schema.optionalKey(GlassOpacity),
-  surfaceTint: Schema.optionalKey(SurfaceTint),
+  // Whole-palette replacement, like `providerInstances` above: the slots of one
+  // theme are chosen against each other, so patching them individually would
+  // let a half-applied palette exist. The UI sends both themes every time.
+  palette: Schema.optionalKey(Palette),
+  textScale: Schema.optionalKey(TextScale),
   favorites: Schema.optionalKey(
     Schema.Array(
       Schema.Struct({
