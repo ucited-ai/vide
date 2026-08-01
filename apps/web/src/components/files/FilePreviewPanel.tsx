@@ -12,7 +12,15 @@ import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
 } from "@vide/client-runtime/state/runtime";
-import { ChevronRight, Code2, Eye, FolderTree, Globe2, LoaderCircle } from "lucide-react";
+import {
+  ChevronRight,
+  Code2,
+  Eye,
+  FolderOpen,
+  FolderTree,
+  Globe2,
+  LoaderCircle,
+} from "lucide-react";
 import * as Schema from "effect/Schema";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -29,6 +37,7 @@ import { cn } from "~/lib/utils";
 import { isPreviewSupportedInRuntime } from "~/previewStateStore";
 import { resolvePathLinkTarget } from "~/terminal-links";
 import { ScrollArea } from "~/components/ui/scroll-area";
+import { scrollSurfaceClassName } from "~/components/ui/scroll-surface";
 import { Separator } from "~/components/ui/separator";
 import { Toggle } from "~/components/ui/toggle";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
@@ -92,7 +101,12 @@ const FILE_LINK_REVEAL_ATTRIBUTE = "data-file-link-reveal";
  * all, and the surface ended wherever the code ended. Stretching the wrapper
  * first is what lets the file grow into the space below the last line.
  */
-const FILE_VIEWPORT_CLASS = "file-preview-virtualizer min-h-0 flex-1 overflow-auto";
+const FILE_VIEWPORT_CLASS = cn(
+  "file-preview-virtualizer flex-1",
+  // Same virtualiser as the review diff, so the same anchoring contract: it
+  // moves items in and out of the DOM itself and re-anchors in JavaScript.
+  scrollSurfaceClassName({ axis: "both", anchor: "none" }),
+);
 const FILE_VIEWPORT_CONTENT_CLASS = "flex min-h-full flex-col";
 const FILE_VIEWPORT_CONFIG = { overscrollSize: 600, intersectionObserverMargin: 1200 };
 
@@ -904,12 +918,7 @@ export default function FilePreviewPanel({
       ) : null}
       {/* The container `--file-explorer-width` measures against. */}
       <div className="@container flex min-h-0 flex-1 overflow-hidden">
-        <div
-          className={cn(
-            "min-w-0 flex-1 flex-col overflow-hidden",
-            relativePath ? "flex" : "hidden",
-          )}
-        >
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
           {relativePath && isImage && absolutePath ? (
             <WorkspaceImagePreview
               key={absolutePath}
@@ -980,7 +989,19 @@ export default function FilePreviewPanel({
                 onPendingChange={onPendingChange}
               />
             )
-          ) : null}
+          ) : (
+            <div className={cn(FILE_PANE_NOTICE_CLASS, "flex-col gap-3 px-6 text-center")}>
+              <FolderOpen aria-hidden className="size-8 text-muted-foreground" />
+              <div className="space-y-1">
+                <div className="text-(length:--text-ui) font-medium text-foreground">
+                  Open a file
+                </div>
+                <div className="text-(length:--text-caption) text-muted-foreground">
+                  Select a file in the workspace tree
+                </div>
+              </div>
+            </div>
+          )}
         </div>
         {/*
          * The explorer collapses the way every other panel does — permanently
@@ -989,36 +1010,39 @@ export default function FilePreviewPanel({
          * column, and the same reason: an unmounted element has nothing left to
          * transition.
          *
-         * Only meaningful beside an open file. With no file open the explorer *is*
-         * the panel's content, so it stays at full width and is never collapsible
-         * — hiding it there would leave an empty panel with no way back.
+         * It keeps its column whether or not a file is open. With nothing open
+         * the pane beside it says so, which is the state the panel should start
+         * in: the room the file will occupy is already visible and measured, so
+         * opening one fills a space that was there rather than rearranging the
+         * panel around it.
          *
          * One `FileBrowserPanel`, not one per branch: a second instance in a
          * different tree position would remount on opening a file and throw away
          * the tree's expansion state.
          */}
         <div
-          inert={relativePath ? !explorerOpen : undefined}
+          inert={explorerOpen ? undefined : true}
           className={cn(
-            "flex min-h-0 overflow-hidden",
-            relativePath
-              ? cn(
-                  "shrink-0 transition-[width] duration-(--duration-base) ease-(--ease-soft)",
-                  explorerOpen ? "w-(--file-explorer-width)" : "w-0",
-                )
-              : "min-w-0 flex-1",
+            "flex min-h-0 shrink-0 overflow-hidden",
+            "transition-[width] duration-(--duration-base) ease-(--ease-soft)",
+            // Follows the toggle alone. Ignoring it while no file was open made
+            // the button lie — it read "show file explorer" over an explorer
+            // that was plainly there, and then collapsed it out from under the
+            // first file you picked. The way back is the same toggle, which
+            // stays in the toolbar either way.
+            explorerOpen ? "w-(--file-explorer-width)" : "w-0",
           )}
         >
           {/* The explorer and file share one surface; only a hairline marks the
               boundary when both panes are present. */}
-          <aside
-            className={cn(
-              "flex min-h-0",
-              relativePath
-                ? "w-(--file-explorer-width) shrink-0 border-l border-(--edge)"
-                : "min-w-0 flex-1",
-            )}
-          >
+          {/* Follows the column it is in rather than restating its width. The
+              width is container-relative with a floor, so it re-resolves on
+              every frame of a drag and its clamps flip as the panel crosses
+              them; a `shrink-0` copy of it inside a column that is already that
+              wide could only ever spill past the edge and be clipped, which is
+              what made the tree's right-hand side wander out of view while the
+              panel was being resized. */}
+          <aside className="flex min-h-0 w-full min-w-0 border-l border-(--edge)">
             <FileBrowserPanel
               key={`${environmentId}:${cwd}`}
               environmentId={environmentId}

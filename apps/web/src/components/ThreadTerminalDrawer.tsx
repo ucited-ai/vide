@@ -33,6 +33,7 @@ import {
 } from "react";
 import { Menu, MenuItem, MenuPopup, MenuShortcut, MenuTrigger } from "~/components/ui/menu";
 import { Popover, PopoverPopup, PopoverTrigger } from "~/components/ui/popover";
+import { ScrollSurface } from "~/components/ui/scroll-surface";
 import { writeTextToClipboard } from "~/hooks/useCopyToClipboard";
 import { cn } from "~/lib/utils";
 import { type TerminalContextSelection } from "~/lib/terminalContext";
@@ -912,7 +913,7 @@ function TerminalMenuShortcut({ hint }: { hint: string | undefined }) {
 }
 
 const TERMINAL_ACTION_BUTTON_CLASS =
-  "inline-flex items-center p-1 text-foreground/90 transition-colors duration-(--duration-fast) ease-(--ease-out) hover:bg-accent";
+  "inline-flex items-center p-1 text-foreground/90 transition-colors hover:bg-accent";
 
 /**
  * The bottom panel's only chrome: add a terminal, and everything else behind
@@ -1440,7 +1441,7 @@ export default function ThreadTerminalDrawer({
 
           {hasTerminalSidebar && (
             <aside className="flex w-36 min-w-36 flex-col border border-border/70 bg-muted/10">
-              <div className="min-h-0 flex-1 overflow-y-auto px-1 py-1">
+              <ScrollSurface className="flex-1 px-1 py-1">
                 {resolvedTerminalGroups.map((terminalGroup, groupIndex) => {
                   const isGroupActive =
                     terminalGroup.terminalIds.includes(resolvedActiveTerminalId);
@@ -1496,7 +1497,7 @@ export default function ThreadTerminalDrawer({
                               </button>
                               {normalizedTerminalIds.length > 1 && (
                                 <TerminalActionButton
-                                  className="inline-flex size-3.5 items-center justify-center rounded text-xs font-medium leading-none text-muted-foreground opacity-0 transition-opacity duration-(--duration-fast) ease-(--ease-out) hover:bg-accent hover:text-foreground group-hover:opacity-100"
+                                  className="inline-flex size-3.5 items-center justify-center rounded text-xs font-medium leading-none text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground group-hover:opacity-100"
                                   onClick={() => onCloseTerminal(terminalId)}
                                   label={closeTerminalLabel}
                                 >
@@ -1510,7 +1511,7 @@ export default function ThreadTerminalDrawer({
                     </div>
                   );
                 })}
-              </div>
+              </ScrollSurface>
             </aside>
           )}
         </div>

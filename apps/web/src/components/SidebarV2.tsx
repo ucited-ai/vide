@@ -146,6 +146,7 @@ import { Input } from "./ui/input";
 import { Kbd } from "./ui/kbd";
 import { Menu, MenuPopup, MenuRadioGroup, MenuRadioItem, MenuTrigger } from "./ui/menu";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "./ui/select";
+import { scrollSurfaceClassName } from "./ui/scroll-surface";
 import { SidebarContent, SidebarGroup, SidebarMenuButton, useSidebar } from "./ui/sidebar";
 import { SidebarChromeFooter, SidebarChromeHeader } from "./sidebar/SidebarChrome";
 import {
@@ -182,8 +183,7 @@ const SIDEBAR_V2_SLIM_ROW_ACTION_CLASS = cn(
 // and rule opacity for no reason a reader could act on.
 const SIDEBAR_V2_SHELF_HEADER_CLASS =
   "mb-1 mt-3 flex h-6 w-full cursor-pointer items-center gap-2 px-2.5 text-left";
-const SIDEBAR_SHELF_CHEVRON_MOTION_CLASS =
-  "transition-transform duration-[var(--duration-fast)] ease-[var(--ease-out)]";
+const SIDEBAR_SHELF_CHEVRON_MOTION_CLASS = "transition-transform";
 const PROJECT_GROUPING_MODE_LABELS: Record<SidebarProjectGroupingMode, string> = {
   repository: "Group by repository",
   repository_path: "Group by repository path",
@@ -2403,7 +2403,9 @@ export default function SidebarV2() {
             </div>
           </SidebarGroup>
         ) : null}
-        <SidebarGroup className="min-h-0 flex-1 overflow-y-auto px-2 py-1 [scrollbar-gutter:stable]">
+        <SidebarGroup
+          className={cn(scrollSurfaceClassName({ gutter: "stable" }), "flex-1 px-2 py-1")}
+        >
           <TooltipProvider
             key="sidebar-thread-tooltips-150"
             delay={150}
