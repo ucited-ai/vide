@@ -168,9 +168,19 @@ export function syncBrowserChromeTheme() {
   const backgroundColor = surfaceColor ?? fallbackColor;
   if (!backgroundColor) return;
 
-  document.documentElement.style.backgroundColor = backgroundColor;
-  document.body.style.backgroundColor = backgroundColor;
   ensureThemeColorMetaTag().setAttribute("content", backgroundColor);
+  /*
+   * The inline fills are the boot-flash guard for browsers — and exactly the
+   * thing that painted the window's vibrancy material back over on macOS: an
+   * inline background outranks every stylesheet, including the transparent
+   * document floor the glass depends on. The desktop app keeps its floor.
+   */
+  const root = document.documentElement;
+  if (root.classList.contains("electron") && !root.classList.contains("electron-windows")) {
+    return;
+  }
+  root.style.backgroundColor = backgroundColor;
+  document.body.style.backgroundColor = backgroundColor;
 }
 
 function applyTheme(theme: Theme, suppressTransitions = false) {

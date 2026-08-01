@@ -55,7 +55,12 @@ const SLOT_LABELS: Readonly<Record<PaletteSlot, string>> = {
  * in vide-theme.css. Offering opacity on the others would be a slider that
  * moves and changes nothing.
  */
-const SLOT_TAKES_OPACITY: PaletteSlot = "surface-chrome";
+/* The two floors with the window's vibrancy material behind them. Ink never
+   takes an alpha — ink that wants to be lighter can be a lighter grey. */
+const SLOTS_TAKING_OPACITY: ReadonlySet<PaletteSlot> = new Set([
+  "surface-chrome",
+  "surface-content",
+]);
 
 /**
  * The tints the surface-tint setting used to offer, kept as somewhere to start.
@@ -258,7 +263,7 @@ export function ThemeColorsRow() {
       /* A rung the user has not chosen shows what the stylesheet is painting. */
       color={active[slot] ?? ladder[resolvedTheme][`--${slot}`] ?? "transparent"}
       presets={presetsFor(slot)}
-      showAlpha={slot === SLOT_TAKES_OPACITY}
+      showAlpha={SLOTS_TAKING_OPACITY.has(slot)}
       onChange={(value) => write(slot, value)}
     />
   );

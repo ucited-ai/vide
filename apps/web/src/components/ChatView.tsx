@@ -254,6 +254,7 @@ import {
 import { ThreadErrorBanner } from "./chat/ThreadErrorBanner";
 import { resolveThreadPr } from "./ThreadStatusIndicators";
 import { ChatGrow } from "./chat/ChatGrow";
+import { TasksOverChat } from "./chat/TasksOverChat";
 import { ComposerBannerStack, type ComposerBannerStackItem } from "./chat/ComposerBannerStack";
 import {
   DRAFT_HERO_TRANSITION_ANIMATION_ID,
@@ -5952,7 +5953,10 @@ function ChatViewContent(props: ChatViewProps) {
 
   return (
     <div
-      className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden bg-background"
+      /* No fill of its own: the pane's floor is SidebarInset's, once. A second
+         opaque coat here is what kept the chat pane from ever following the
+         content-surface opacity. */
+      className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden"
       style={
         {
           "--envcol-width": `${ENVIRONMENT_COLUMN_RESERVED_WIDTH}px`,
@@ -5984,7 +5988,7 @@ function ChatViewContent(props: ChatViewProps) {
             // The header's inset follows the sidebar, so it has to travel on the
             // sidebar's duration and curve. A linear 200ms against the panel's
             // soft 220ms let the two separate visibly mid-slide.
-            "bg-background transition-[padding-left] duration-(--duration-base) ease-(--ease-soft) motion-reduce:transition-none",
+            "bg-(--content-surface) transition-[padding-left] duration-(--duration-base) ease-(--ease-soft) motion-reduce:transition-none",
             isElectron
               ? cn(
                   "workspace-topbar drag-region relative px-3 sm:px-5",
@@ -6142,18 +6146,8 @@ function ChatViewContent(props: ChatViewProps) {
                           the environment panel beside it. */}
                       {activePlan && activeThreadRef ? (
                         <ChatGrow open={tasksPopoverOpen}>
-                          <div className="mb-2 flex max-h-[45vh] min-h-0 flex-col overflow-y-auto rounded-[var(--envcol-radius)] border border-(--envcol-edge) bg-(--envcol-surface) shadow-[var(--envcol-shadow)]">
-                            <PlanSidebar
-                              activePlan={activePlan}
-                              activeProposedPlan={null}
-                              label="Tasks"
-                              environmentId={activeThread.environmentId}
-                              threadRef={activeThreadRef}
-                              markdownCwd={gitCwd ?? undefined}
-                              workspaceRoot={activeWorkspaceRoot}
-                              timestampFormat={timestampFormat}
-                              mode="embedded"
-                            />
+                          <div className="mb-2">
+                            <TasksOverChat plan={activePlan} />
                           </div>
                         </ChatGrow>
                       ) : null}

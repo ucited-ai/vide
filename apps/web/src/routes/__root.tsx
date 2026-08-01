@@ -192,24 +192,35 @@ function ThemeVariableSync() {
     }
 
     /*
-     * Only the chrome rung's opacity is worth anything: the content floor has
-     * nothing behind it but the window, and ink that wants to be lighter can
-     * simply be a lighter grey. Blur follows it, because it costs a compositing
-     * layer on every menu and buys nothing behind an opaque fill — while
-     * translucency without it reads as a bug rather than as glass.
+     * Two rungs carry an opacity: the chrome (sidebar, menus, composer) and
+     * the content floor. Behind both sits the window's vibrancy material, so
+     * turning either down lets the desktop show through that surface. Ink
+     * never does — ink that wants to be lighter can simply be a lighter grey.
+     * Blur follows the chrome alpha, because it costs a compositing layer on
+     * every menu and buys nothing behind an opaque fill — while translucency
+     * without it reads as a bug rather than as glass. The content floor needs
+     * no blur of its own: the window material already blurs what is behind it.
      */
     const chrome = themePalette["surface-chrome"];
     const chromeAlpha = chrome === null ? 100 : splitPaletteColor(chrome).alpha;
     if (chromeAlpha >= 100) {
       root.style.removeProperty("--surface-chrome-alpha");
       root.style.removeProperty("--chrome-backdrop-filter");
-      return;
+    } else {
+      root.style.setProperty("--surface-chrome-alpha", `${chromeAlpha}%`);
+      root.style.setProperty(
+        "--chrome-backdrop-filter",
+        "blur(var(--glass-blur)) saturate(var(--glass-saturation))",
+      );
     }
-    root.style.setProperty("--surface-chrome-alpha", `${chromeAlpha}%`);
-    root.style.setProperty(
-      "--chrome-backdrop-filter",
-      "blur(var(--glass-blur)) saturate(var(--glass-saturation))",
-    );
+
+    const content = themePalette["surface-content"];
+    const contentAlpha = content === null ? 100 : splitPaletteColor(content).alpha;
+    if (contentAlpha >= 100) {
+      root.style.removeProperty("--surface-content-alpha");
+    } else {
+      root.style.setProperty("--surface-content-alpha", `${contentAlpha}%`);
+    }
   }, [palette, resolvedTheme]);
 
   return null;

@@ -94,6 +94,19 @@
   );
 
   /*
+   * The content floor, same construction. The chat pane and the app's html/body
+   * fall back to this: at the default 100% it is exactly --surface-content, and
+   * turning "Chat background" opacity down lets the window's vibrancy material
+   * show through the pane the way the chrome rung already can.
+   */
+  --surface-content-alpha: 100%;
+  --content-surface: color-mix(
+    in srgb,
+    var(--surface-content) var(--surface-content-alpha),
+    transparent
+  );
+
+  /*
    * Not derived from --ink, on purpose. An edge and a wash are light and shade,
    * not ink, so they stay neutral even when someone tints the text. This is a
    * decision, not an omission.
@@ -381,7 +394,10 @@
   --sidebar-row-hover: var(--wash-hover);
   --sidebar-row-active: var(--wash-active);
   --sidebar-row-selected: var(--wash-selected);
-  --sidebar-stage-fade: var(--surface-chrome);
+  /* Through the chrome alpha: the stage art fades into the sidebar's actual
+     fill. Fading into the opaque rung painted a solid gradient over a sidebar
+     that was otherwise translucent. */
+  --sidebar-stage-fade: var(--chrome-surface);
 }
 
 /*
@@ -623,19 +639,6 @@
     -webkit-font-smoothing: antialiased;
   }
 
-  /*
-   * macOS glass. The window's vibrancy material sits behind everything, so the
-   * document stops repainting an opaque floor over it — that is all this does.
-   * Every surface above (content pane, sidebar chrome, composer) still paints
-   * its own fill; with the default alpha of 100% the app looks exactly as
-   * before, and only turning "Sidebar & menus" opacity down in theme settings
-   * lets the desktop behind the window show through the chrome.
-   */
-  html.electron:not(.electron-windows),
-  html.electron:not(.electron-windows) body {
-    background: transparent;
-  }
-
   /* Nothing on macOS shows a text cursor over chrome. */
   html.electron button,
   html.electron [role="button"] {
@@ -660,6 +663,23 @@
     opacity: 0;
     transition: opacity 80ms var(--ease-out);
   }
+}
+
+/*
+ * macOS glass. The window's vibrancy material sits behind everything, so the
+ * document stops repainting an opaque floor over it — that is all this does.
+ * Every surface above (content pane, sidebar chrome, composer) still paints
+ * its own fill; with the default alpha of 100% the app looks exactly as
+ * before, and only turning the surface opacities down in theme settings lets
+ * the desktop behind the window show through.
+ *
+ * Unlayered on purpose: the boot stylesheet in index.html paints `body`
+ * unlayered, and a layered rule loses to it no matter how specific it is.
+ * Out here the higher specificity wins.
+ */
+html.electron:not(.electron-windows),
+html.electron:not(.electron-windows) body {
+  background: transparent;
 }
 
 /*
@@ -1233,6 +1253,25 @@
  * outside that range slide the image off the element, and `background-clip:
  * text` turns every uncovered glyph invisible.
  */
+/*
+ * A task row transitions in on its first paint, so a plan being written by the
+ * agent appears the way it is written — step by step. `@starting-style` fires
+ * only for elements entering the document; settled rows re-render without
+ * moving.
+ */
+.chat-task-row {
+  transition:
+    opacity var(--duration-base) var(--ease-out),
+    translate var(--duration-base) var(--ease-out);
+}
+
+@starting-style {
+  .chat-task-row {
+    opacity: 0;
+    translate: 0 0.25rem;
+  }
+}
+
 @keyframes chat-sheen {
   from {
     background-position: 100% 0;
