@@ -339,6 +339,10 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     };
   }, [timelineViewportElement, rows.length]);
 
+  /* Outlives the rows on purpose: a row's own state dies when it leaves the
+     virtualizer's buffer, and an expanded tool group must not snap shut
+     because the reader scrolled away and back. */
+  const [workRowOpenById] = useState(() => new Map<string, boolean>());
   const sharedState = useMemo<TimelineRowSharedState>(
     () => ({
       timestampFormat,
@@ -354,6 +358,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       onImageExpand,
       onOpenTurnDiff,
       onToggleTurnFold,
+      workRowOpenById,
     }),
     [
       timestampFormat,
@@ -368,6 +373,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       onImageExpand,
       onOpenTurnDiff,
       onToggleTurnFold,
+      workRowOpenById,
     ],
   );
   const activityState = useMemo<TimelineRowActivityState>(
@@ -428,6 +434,13 @@ export const MessagesTimeline = memo(function MessagesTimeline({
             keyExtractor={keyExtractor}
             getItemType={getItemType}
             renderItem={renderItem}
+            /*
+             * Explicitly remount-on-reuse. Rows hold no state that must
+             * survive them — reveal progress is keyed by message id, open
+             * states live in workRowOpenById — and recycling would instead
+             * hand one row's leftover DOM to a different item.
+             */
+            recycleItems={false}
             estimatedItemSize={90}
             initialScrollAtEnd
             {...(anchoredEndSpace ? { anchoredEndSpace } : {})}

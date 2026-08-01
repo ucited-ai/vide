@@ -235,7 +235,16 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
         align="start"
         side={props.popupSide ?? "bottom"}
         {...(props.popupSide ? { collisionAvoidance: PINNED_POPUP_COLLISION_AVOIDANCE } : {})}
-        className="border-0 bg-transparent p-0 shadow-none before:hidden [-webkit-backdrop-filter:none]! [--viewport-inline-padding:0] [backdrop-filter:none]!"
+        /*
+         * The popup carries the one pane of glass, like every other popover;
+         * the panel inside owns layout only. This used to be inverted — glass
+         * on the panel, `bg-transparent` on the popup — but the neutralising
+         * utilities are layered and `.dropdown-glass` is not, so the popup's
+         * background survived and the picker wore two panes of glass stacked:
+         * visibly brighter and more opaque than every sibling popup at the
+         * same chrome alpha.
+         */
+        className="p-0 [--viewport-inline-padding:0]"
         viewportClassName="rounded-lg !overflow-hidden p-0"
       >
         <ModelPickerContent

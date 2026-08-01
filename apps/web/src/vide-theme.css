@@ -314,12 +314,19 @@
   --app-chrome-background: var(--surface-content);
   --foreground: var(--ink);
 
-  --card: var(--surface-chrome);
+  /*
+   * Chrome-derived surfaces go through `--chrome-surface`, not the raw rung:
+   * the difference is the user's one chrome opacity. Cards and popovers that
+   * sampled `--surface-chrome` directly stayed solid grey while everything
+   * beside them went to glass — at the default alpha of 100% the two are
+   * pixel-identical, so nothing changes until the user asks it to.
+   */
+  --card: var(--chrome-surface);
   --card-foreground: var(--ink);
   /* Upstream's un-numbered name for the same thing, answered so the
      `bg-surface-raised` utility cannot quietly bypass the ladder. */
   --surface-raised: var(--surface-raised-1);
-  --popover: var(--surface-raised-1);
+  --popover: var(--chrome-surface);
   --popover-foreground: var(--ink);
 
   --muted: var(--wash-hover);
@@ -527,6 +534,13 @@
   backdrop-filter: var(--chrome-backdrop-filter);
 }
 
+/* The environment panel floats over the chat: translucent without blur there
+   reads as a rendering bug, not as glass. */
+:root:root:root [data-environment-column-surface] {
+  -webkit-backdrop-filter: var(--chrome-backdrop-filter);
+  backdrop-filter: var(--chrome-backdrop-filter);
+}
+
 /* Upstream's glass is replaced rather than tuned: these surfaces take the one
    chrome opacity, not a denser mix of their own on top of it. */
 :root:root:root .dropdown-glass,
@@ -535,20 +549,6 @@
   -webkit-backdrop-filter: var(--chrome-backdrop-filter);
   backdrop-filter: var(--chrome-backdrop-filter);
   border-color: var(--edge);
-}
-
-/* The composer's banners are chrome too. Upstream mixes the *content* floor at
-   chrome alpha here — the one glass that sat a different colour beside the
-   shell it touches. The tint layer stays: an error banner is still an error. */
-:root:root:root .alert-glass {
-  background:
-    linear-gradient(
-      color-mix(in srgb, var(--alert-glass-tint) 4%, transparent),
-      color-mix(in srgb, var(--alert-glass-tint) 4%, transparent)
-    ),
-    var(--chrome-surface) !important;
-  -webkit-backdrop-filter: var(--chrome-backdrop-filter);
-  backdrop-filter: var(--chrome-backdrop-filter);
 }
 
 :root:root:root .chat-composer-glass-shell {
@@ -1002,7 +1002,8 @@
    * was rejected because this long-lived tool surface must stay fully opaque.
    */
   --envcol-edge: var(--edge);
-  --envcol-surface: var(--surface-raised-1);
+  /* Through the chrome alpha, like every other floating chrome surface. */
+  --envcol-surface: var(--chrome-surface);
   --envcol-shadow: var(--elevation-popup);
 
   --envcol-enter-offset: 1.5rem;

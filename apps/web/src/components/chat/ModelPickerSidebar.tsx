@@ -97,10 +97,7 @@ export const ModelPickerSidebar = memo(function ModelPickerSidebar(props: {
   }, [props.instanceEntries, props.selectedInstanceId, showFavorites]);
 
   return (
-    <div
-      className="w-12 shrink-0 overflow-hidden border-r bg-muted/30"
-      data-model-picker-sidebar="true"
-    >
+    <div className="w-12 shrink-0 overflow-hidden border-r" data-model-picker-sidebar="true">
       <div className="h-full overflow-y-auto overscroll-contain [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <div
           ref={sidebarContentRef}

@@ -500,7 +500,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
           between them reads as one control rather than a different popup. */}
       <div
         className={cn(
-          "dropdown-glass relative flex w-screen max-w-88 flex-col overflow-hidden rounded-(--popup-radius) text-popover-foreground [clip-path:inset(0_round_var(--popup-radius))]",
+          "relative flex w-screen max-w-88 flex-col overflow-hidden rounded-(--popup-radius) text-popover-foreground [clip-path:inset(0_round_var(--popup-radius))]",
           /*
            * The list step needs a definite height or its virtualised rows have
            * nothing to shrink against: with only a max-height the box grew to
@@ -549,7 +549,10 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
               handleModelSelect(slug, instanceId);
             }}
           >
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-muted/40">
+            {/* No wash of its own: the popup's glass is the surface, and a
+                muted layer here was one of the two things that made this
+                picker read brighter than its sibling popups. */}
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
               {/* Search bar */}
               <div className="px-4 pt-2.5">
                 <div className="-translate-y-px border-b border-border/70 pb-2.5 transition-colors focus-within:border-ring">

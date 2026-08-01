@@ -50,8 +50,17 @@ import { summarizeWorkGroup } from "./workGroupSummary";
 type TimelineWorkRow = Extract<MessagesTimelineRow, { kind: "work" }>;
 
 export const WorkGroupRow = memo(function WorkGroupRow({ row }: { row: TimelineWorkRow }) {
-  const { workspaceRoot } = use(TimelineRowCtx);
-  const [open, setOpen] = useState(false);
+  const { workspaceRoot, workRowOpenById } = use(TimelineRowCtx);
+  /* Seeded from (and written back to) the timeline's map, so the open state
+     survives this row leaving the virtualizer's buffer and coming back. */
+  const [open, setOpenState] = useState(() => workRowOpenById.get(row.id) ?? false);
+  const setOpen = (update: (value: boolean) => boolean) => {
+    setOpenState((value) => {
+      const next = update(value);
+      workRowOpenById.set(row.id, next);
+      return next;
+    });
+  };
   const entries = row.groupedEntries;
   const newest = entries.at(-1);
   const failed = entries.some((entry) => workEntryIndicatesToolFailure(entry));
@@ -122,7 +131,15 @@ function WorkCallRow({
   readonly entry: WorkLogEntry;
   readonly workspaceRoot: string | undefined;
 }) {
-  const [open, setOpen] = useState(false);
+  const { workRowOpenById } = use(TimelineRowCtx);
+  const [open, setOpenState] = useState(() => workRowOpenById.get(entry.id) ?? false);
+  const setOpen = (update: (value: boolean) => boolean) => {
+    setOpenState((value) => {
+      const next = update(value);
+      workRowOpenById.set(entry.id, next);
+      return next;
+    });
+  };
   const heading = workEntryHeading(entry);
   const command = entry.rawCommand?.trim() || entry.command?.trim() || null;
   const preview = workEntryPreview(entry, workspaceRoot);

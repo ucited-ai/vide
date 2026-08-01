@@ -37,6 +37,14 @@ export interface TimelineRowSharedState {
   onImageExpand: (preview: ExpandedImagePreview) => void;
   onOpenTurnDiff: (turnId: TurnId, filePath?: string) => void;
   onToggleTurnFold: (turnId: TurnId) => void;
+  /**
+   * Open/closed state of work groups and their calls, by row/entry id. A row's
+   * own useState dies when the row leaves the virtualizer's buffer, and an
+   * expanded group snapping shut because the reader scrolled away and back is
+   * state loss, not a choice anyone made. Mutable and read at mount on
+   * purpose: writes must not re-render the list.
+   */
+  workRowOpenById: Map<string, boolean>;
 }
 
 export interface TimelineRowActivityState {

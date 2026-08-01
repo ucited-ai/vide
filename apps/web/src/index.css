@@ -419,12 +419,16 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(vide-mob
   .alert-glass {
     --alert-glass-tint: transparent;
 
+    /* Chrome, not content: mixing the content floor here made the composer's
+       banners the one pane of glass a different colour from the shell they
+       touch. (Fixed at the source — an unlayered !important override loses to
+       this rule, since layer order inverts for !important.) */
     background:
       linear-gradient(
         color-mix(in srgb, var(--alert-glass-tint) 4%, transparent),
         color-mix(in srgb, var(--alert-glass-tint) 4%, transparent)
       ),
-      color-mix(in srgb, var(--background) var(--surface-chrome-alpha), transparent) !important;
+      color-mix(in srgb, var(--surface-chrome) var(--surface-chrome-alpha), transparent) !important;
     -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
     backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
   }
