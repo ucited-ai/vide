@@ -37,6 +37,7 @@ import {
   findingKey,
   scanSources,
 } from "./scan.ts";
+import { collectDeclarations, describeGap, findCoverageGaps } from "./coverage.ts";
 import {
   classifyAgainstBaseline,
   emptyBaseline,
@@ -46,6 +47,14 @@ import {
 } from "./baseline.ts";
 
 const BASELINE_FILE = "scripts/theme-tokens/baseline.json";
+
+/*
+ * The two palettes the coverage check compares. Upstream's stays so its merges
+ * land cleanly; the theme's outranks it with repeated root selectors. That only
+ * holds while the theme answers every token upstream answers, just as broadly.
+ */
+const THEME_STYLESHEET = "apps/web/src/vide-theme.css";
+const UPSTREAM_STYLESHEET = "apps/web/src/index.css";
 
 const SOURCE_GLOBS = ["*.ts", "*.tsx", "*.css"] as const;
 
@@ -173,12 +182,38 @@ const run = Effect.fn("themeTokensCheck")(function* (options: {
     return keyPath !== undefined && scannedPaths.has(keyPath);
   });
 
+  /*
+   * Coverage is checked against the whole tree even in hook mode, and always
+   * blocks: it is a structural invariant between two files rather than a debt
+   * with a history, so there is nothing to grandfather and no baseline for it.
+   */
+  const stylesheets = yield* readSources(root, [THEME_STYLESHEET, UPSTREAM_STYLESHEET]);
+  const byPath = new Map(stylesheets.map((file) => [file.path, file.content]));
+  const themeCss = byPath.get(THEME_STYLESHEET);
+  const upstreamCss = byPath.get(UPSTREAM_STYLESHEET);
+  const gaps =
+    themeCss === undefined || upstreamCss === undefined
+      ? []
+      : findCoverageGaps(collectDeclarations(upstreamCss), collectDeclarations(themeCss));
+
   const total = findings.reduce((sum, finding) => sum + finding.count, 0);
   const elapsed = yield* Effect.sync(() => Math.round(performance.now() - started));
   yield* Console.log(
     `theme tokens: ${String(classified.added.length)} new, ${String(classified.known.length)} known, ${String(classified.fixed.length)} centralised  (${String(sources.length)} files, ${String(elapsed)}ms)`,
   );
   if (total > 0) yield* Console.log(`  ${summarize(findings)}`);
+
+  if (gaps.length > 0) {
+    yield* Console.log(
+      `  ${String(gaps.length)} token${gaps.length === 1 ? "" : "s"} upstream answers document-wide that the theme does not:`,
+    );
+    for (const gap of gaps) {
+      yield* Console.log(
+        `  GAP    --${gap.token}  ${UPSTREAM_STYLESHEET}:${String(gap.upstreamLine)}`,
+      );
+      yield* Console.log(`         ${describeGap(gap)}`);
+    }
+  }
 
   const blocking = options.staged && trusted ? classified.added : [];
 
@@ -201,6 +236,16 @@ const run = Effect.fn("themeTokensCheck")(function* (options: {
     yield* Console.log(
       `  ${String(classified.fixed.length)} baseline ${classified.fixed.length === 1 ? "entry is" : "entries are"} centralised now. Refresh with: node scripts/theme-tokens/check.ts --update-baseline`,
     );
+  }
+
+  if (gaps.length > 0) {
+    yield* Console.log("");
+    yield* Console.log(
+      `Commit blocked: ${String(gaps.length)} token${gaps.length === 1 ? " is" : "s are"} answered more narrowly by ${THEME_STYLESHEET} than by ${UPSTREAM_STYLESHEET}, so the ladder reaches only part of the app. Declare them at root scope in the theme.`,
+    );
+    yield* Effect.sync(() => {
+      process.exitCode = 1;
+    });
   }
 
   if (blocking.length === 0) return;

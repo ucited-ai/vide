@@ -82,6 +82,18 @@
   --surface-chrome-alpha: 100%;
 
   /*
+   * The chrome rung as it is actually painted — colour and opacity combined,
+   * once. Everything the "Sidebar & menus" swatch promises reads this: the
+   * sidebar, the composer, menus, dialogs and toasts. Each of them used to
+   * repeat the mix, which is how the sidebar came to be left out of it.
+   */
+  --chrome-surface: color-mix(
+    in srgb,
+    var(--surface-chrome) var(--surface-chrome-alpha),
+    transparent
+  );
+
+  /*
    * Not derived from --ink, on purpose. An edge and a wash are light and shade,
    * not ink, so they stay neutral even when someone tints the text. This is a
    * decision, not an omission.
@@ -255,6 +267,9 @@
 
   --card: var(--surface-chrome);
   --card-foreground: var(--ink);
+  /* Upstream's un-numbered name for the same thing, answered so the
+     `bg-surface-raised` utility cannot quietly bypass the ladder. */
+  --surface-raised: var(--surface-raised-1);
   --popover: var(--surface-raised-1);
   --popover-foreground: var(--ink);
 
@@ -287,9 +302,38 @@
    */
   --elevation-popup: 0 1rem 2.5rem -1.125rem rgb(0 0 0 / 55%);
   --elevation-dialog: 0 1.5rem 4rem -1.5rem rgb(0 0 0 / 65%);
+
+  /*
+   * The sidebar family, at root scope.
+   *
+   * These sat under `[data-sidebar-version]` alone, which meant the ladder
+   * reached them only inside the sidebar itself — while upstream declares them
+   * at `:root`, so every other consumer got upstream's zinc palette instead.
+   * The settings navigation is exactly that: it borrows the sidebar's row
+   * tokens and lives nowhere near the sidebar, so it never followed a chosen
+   * colour and could not be made to.
+   *
+   * Every token the app paints with has to be answered at root scope, or the
+   * ladder covers only the subtree someone happened to scope it to. That is the
+   * rule the theme-token gate now enforces.
+   */
+  --sidebar: var(--chrome-surface);
+  --sidebar-foreground: var(--ink);
+  --sidebar-muted-foreground: var(--ink-secondary);
+  --sidebar-border: var(--edge);
+  --sidebar-control-surface: var(--wash-hover);
+  --sidebar-row-hover: var(--wash-hover);
+  --sidebar-row-active: var(--wash-active);
+  --sidebar-row-selected: var(--wash-selected);
+  --sidebar-stage-fade: var(--surface-chrome);
 }
 
-/* Repeated selectors outrank upstream's dark sidebar token overrides. */
+/*
+ * What is genuinely different *inside* the sidebar: it is chrome, so the
+ * surface tokens a component reaches for there resolve to the chrome rung
+ * rather than the content floor. The sidebar family above needs no repeat —
+ * it is the same at root, which is the point.
+ */
 :root:root:root [data-sidebar-version="v1"],
 :root:root:root [data-sidebar-version="v2"],
 .dark.dark.dark [data-sidebar-version="v1"],
@@ -304,16 +348,6 @@
   --accent-foreground: var(--ink);
   --border: var(--edge);
   --input: var(--edge-strong);
-
-  --sidebar: var(--surface-chrome);
-  --sidebar-foreground: var(--ink);
-  --sidebar-muted-foreground: var(--ink-secondary);
-  --sidebar-border: var(--edge);
-  --sidebar-control-surface: var(--wash-hover);
-  --sidebar-row-hover: var(--wash-hover);
-  --sidebar-row-active: var(--wash-active);
-  --sidebar-row-selected: var(--wash-selected);
-  --sidebar-stage-fade: var(--surface-chrome);
 }
 
 /* ------------------------------------------------------- sidebar typography */
@@ -323,6 +357,11 @@
  * not read. It therefore runs a step larger and looser than the content pane,
  * which inverts the usual web instinct to shrink navigation.
  */
+:root:root:root [data-app-sidebar] [data-slot="sidebar-inner"] {
+  -webkit-backdrop-filter: var(--chrome-backdrop-filter);
+  backdrop-filter: var(--chrome-backdrop-filter);
+}
+
 :root:root:root [data-app-sidebar] {
   font-size: var(--text-ui);
   line-height: 1.45;
@@ -428,7 +467,7 @@
 
 :root:root:root .chat-composer-glass,
 :root:root:root .chat-composer-glass-shell::before {
-  background: color-mix(in srgb, var(--surface-chrome) var(--surface-chrome-alpha), transparent);
+  background: var(--chrome-surface);
   -webkit-backdrop-filter: var(--chrome-backdrop-filter);
   backdrop-filter: var(--chrome-backdrop-filter);
 }
@@ -437,7 +476,7 @@
    chrome opacity, not a denser mix of their own on top of it. */
 :root:root:root .dropdown-glass,
 :root:root:root .dialog-glass {
-  background: color-mix(in srgb, var(--popover) var(--surface-chrome-alpha), transparent);
+  background: var(--chrome-surface);
   -webkit-backdrop-filter: var(--chrome-backdrop-filter);
   backdrop-filter: var(--chrome-backdrop-filter);
   border-color: var(--edge);

@@ -186,7 +186,7 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
         collapsible="offcanvas"
         data-app-sidebar=""
         data-sidebar-version={useSidebarV2Theme ? "v2" : "v1"}
-        className="border-r border-sidebar-border bg-sidebar text-sidebar-foreground"
+        className="border-r border-sidebar-border text-sidebar-foreground"
         resizable={{
           maxWidth: sidebarMaximumWidth,
           minWidth: THREAD_SIDEBAR_MIN_WIDTH,
