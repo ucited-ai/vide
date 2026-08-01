@@ -10,6 +10,7 @@ import {
   WrapTextIcon,
 } from "lucide-react";
 import type { ScopedThreadRef, ServerProviderSkill } from "@vide/contracts";
+import type { ChatStreamAnimation } from "@vide/contracts/settings";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
@@ -66,6 +67,7 @@ import {
   serializeTableElementToMarkdown,
 } from "../markdown-clipboard";
 import { remarkNormalizeListItemIndentation } from "../markdown-list-indentation";
+import { rehypeChatStreamWords } from "../markdown-stream-words";
 import {
   normalizeMarkdownLinkDestination,
   resolveMarkdownFileLinkMeta,
@@ -117,6 +119,8 @@ interface ChatMarkdownProps {
   threadRef?: ScopedThreadRef | undefined;
   onTaskListChange?: ((input: { markerOffset: number; checked: boolean }) => void) | undefined;
   isStreaming?: boolean;
+  /** How words arrive while `isStreaming`. Ignored once the message settles. */
+  streamAnimation?: ChatStreamAnimation | undefined;
   skills?: ReadonlyArray<Pick<ServerProviderSkill, "name" | "displayName">>;
   className?: string;
   /** Treat single newlines as hard breaks — chat-style user input. */
@@ -187,6 +191,12 @@ const CHAT_MARKDOWN_REMARK_PLUGINS_WITH_BREAKS = [
 const CHAT_MARKDOWN_REHYPE_PLUGINS = [
   rehypeRaw,
   [rehypeSanitize, CHAT_MARKDOWN_SANITIZE_SCHEMA],
+] satisfies NonNullable<ReactMarkdownOptions["rehypePlugins"]>;
+
+/* Word wrapping goes last: ordered before the sanitiser, its spans are stripped. */
+const CHAT_MARKDOWN_REHYPE_PLUGINS_WITH_STREAM_WORDS = [
+  ...CHAT_MARKDOWN_REHYPE_PLUGINS,
+  rehypeChatStreamWords,
 ] satisfies NonNullable<ReactMarkdownOptions["rehypePlugins"]>;
 
 function extractFenceLanguage(className: string | undefined): string {
@@ -1257,6 +1267,7 @@ function ChatMarkdown({
   threadRef,
   onTaskListChange,
   isStreaming = false,
+  streamAnimation,
   skills = EMPTY_MARKDOWN_SKILLS,
   className,
   lineBreaks = false,
@@ -1554,6 +1565,13 @@ function ChatMarkdown({
     ],
   );
 
+  // Only a message that is still arriving is worth wrapping word by word, and
+  // only for a variant that has motion to show. Everything else renders the
+  // plain tree, which is also what a message falls back to the moment it
+  // settles.
+  const revealsWords =
+    isStreaming && streamAnimation !== undefined && streamAnimation !== "instant";
+
   return (
     <div
       className={cn(
@@ -1562,13 +1580,18 @@ function ChatMarkdown({
         "chat-markdown w-full min-w-0 text-(length:--text-chat) leading-relaxed text-foreground/80",
         className,
       )}
+      data-chat-stream-animation={revealsWords ? streamAnimation : undefined}
       onCopy={handleCopy}
     >
       <ReactMarkdown
         remarkPlugins={
           lineBreaks ? CHAT_MARKDOWN_REMARK_PLUGINS_WITH_BREAKS : CHAT_MARKDOWN_REMARK_PLUGINS
         }
-        rehypePlugins={CHAT_MARKDOWN_REHYPE_PLUGINS}
+        rehypePlugins={
+          revealsWords
+            ? CHAT_MARKDOWN_REHYPE_PLUGINS_WITH_STREAM_WORDS
+            : CHAT_MARKDOWN_REHYPE_PLUGINS
+        }
         components={markdownComponents}
         urlTransform={markdownUrlTransform}
       >

@@ -64,6 +64,8 @@ import { buildExpandedImagePreview, ExpandedImagePreview } from "./ExpandedImage
 import { ProposedPlanCard } from "./ProposedPlanCard";
 import { ChangedFilesCard } from "./ChangedFilesTree";
 import { shouldAutoExpandChangedFiles } from "./changedFilesPresentation";
+import { useChatAppearance, type ChatAppearanceSettings } from "./chatAppearance";
+import { ThinkingIndicator } from "./ThinkingIndicator";
 import { MessageCopyButton } from "./MessageCopyButton";
 import {
   computeStableMessagesTimelineRows,
@@ -98,7 +100,7 @@ import {
 } from "~/lib/previewAnnotation";
 import { cn } from "~/lib/utils";
 import { useUiStateStore } from "~/uiStateStore";
-import { type TimestampFormat } from "@vide/contracts/settings";
+import { type ChatChangedFilesLayout, type TimestampFormat } from "@vide/contracts/settings";
 import { formatChatTimestampTooltip, formatShortTimestamp } from "../../timestampFormat";
 
 import {
@@ -125,6 +127,7 @@ import {
 
 interface TimelineRowSharedState {
   timestampFormat: TimestampFormat;
+  chatAppearance: ChatAppearanceSettings;
   routeThreadKey: string;
   threadRef: ScopedThreadRef | null;
   markdownCwd: string | undefined;
@@ -222,6 +225,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   hideEmptyPlaceholder = false,
   topFadeEnabled = false,
 }: MessagesTimelineProps) {
+  const chatAppearance = useChatAppearance();
   const [expandedTurnIds, setExpandedTurnIds] = useState<ReadonlySet<TurnId>>(new Set());
   const [expandedWorkGroupIds, setExpandedWorkGroupIds] = useState<ReadonlySet<string>>(new Set());
   const [minimapStripMap] = useState(() => new Map<string, HTMLSpanElement>());
@@ -420,6 +424,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   const sharedState = useMemo<TimelineRowSharedState>(
     () => ({
       timestampFormat,
+      chatAppearance,
       routeThreadKey,
       threadRef: parseScopedThreadKey(routeThreadKey),
       markdownCwd,
@@ -435,6 +440,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     }),
     [
       timestampFormat,
+      chatAppearance,
       routeThreadKey,
       markdownCwd,
       resolvedTheme,
@@ -1040,11 +1046,13 @@ function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "mess
           cwd={ctx.markdownCwd}
           threadRef={ctx.threadRef ?? undefined}
           isStreaming={Boolean(row.message.streaming)}
+          streamAnimation={ctx.chatAppearance.streamAnimation}
           skills={ctx.skills}
         />
         <AssistantChangedFilesSection
           turnSummary={row.assistantTurnDiffSummary}
           routeThreadKey={ctx.routeThreadKey}
+          layout={ctx.chatAppearance.changedFilesLayout}
           resolvedTheme={ctx.resolvedTheme}
           onOpenTurnDiff={ctx.onOpenTurnDiff}
         />
@@ -1105,14 +1113,12 @@ function ProposedPlanTimelineRow({
 }
 
 function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "working" }> }) {
+  const ctx = use(TimelineRowCtx);
+
   return (
     <div className="py-0.5 pl-1.5">
       <div className="flex items-center gap-2 pt-1 text-[11px] text-muted-foreground/70 tabular-nums">
-        <span className="inline-flex items-center gap-[3px]">
-          <span className="h-1 w-1 rounded-full bg-muted-foreground/30 animate-status-pulse" />
-          <span className="h-1 w-1 rounded-full bg-muted-foreground/30 animate-status-pulse [animation-delay:200ms]" />
-          <span className="h-1 w-1 rounded-full bg-muted-foreground/30 animate-status-pulse [animation-delay:400ms]" />
-        </span>
+        <ThinkingIndicator variant={ctx.chatAppearance.thinkingIndicator} />
         <span>
           {row.createdAt ? (
             <>
@@ -1251,11 +1257,13 @@ function WorkGroupToggleTimelineRow({
 const AssistantChangedFilesSection = memo(function AssistantChangedFilesSection({
   turnSummary,
   routeThreadKey,
+  layout,
   resolvedTheme,
   onOpenTurnDiff,
 }: {
   turnSummary: TurnDiffSummary | undefined;
   routeThreadKey: string;
+  layout: ChatChangedFilesLayout;
   resolvedTheme: "light" | "dark";
   onOpenTurnDiff: (turnId: TurnId, filePath?: string) => void;
 }) {
@@ -1268,6 +1276,7 @@ const AssistantChangedFilesSection = memo(function AssistantChangedFilesSection(
       turnSummary={turnSummary}
       checkpointFiles={checkpointFiles}
       routeThreadKey={routeThreadKey}
+      layout={layout}
       resolvedTheme={resolvedTheme}
       onOpenTurnDiff={onOpenTurnDiff}
     />
@@ -1280,12 +1289,14 @@ function AssistantChangedFilesSectionInner({
   turnSummary,
   checkpointFiles,
   routeThreadKey,
+  layout,
   resolvedTheme,
   onOpenTurnDiff,
 }: {
   turnSummary: TurnDiffSummary;
   checkpointFiles: TurnDiffSummary["files"];
   routeThreadKey: string;
+  layout: ChatChangedFilesLayout;
   resolvedTheme: "light" | "dark";
   onOpenTurnDiff: (turnId: TurnId, filePath?: string) => void;
 }) {
@@ -1308,6 +1319,7 @@ function AssistantChangedFilesSectionInner({
       expanded={expanded}
       showCompactPreview={isLatestTurn}
       allDirectoriesExpanded={allDirectoriesExpanded}
+      layout={layout}
       resolvedTheme={resolvedTheme}
       onExpandedChange={(nextExpanded) =>
         setExpanded(routeThreadKey, turnSummary.turnId, nextExpanded)

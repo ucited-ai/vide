@@ -67,6 +67,53 @@ export type GlassOpacity = typeof GlassOpacity.Type;
  */
 export const DEFAULT_GLASS_OPACITY: GlassOpacity = 100;
 
+/*
+ * ── Chat appearance ────────────────────────────────────────────
+ *
+ * Three independent axes of the agent turn: how streamed prose arrives, what
+ * the live indicator does while the agent works, and how the files a turn
+ * changed are laid out. Each is a plain list of ids, in the order the settings
+ * UI offers them; the labels, descriptions and the actual motion live with the
+ * components that render them (`apps/web/src/components/chat/chatAppearance.ts`).
+ *
+ * Adding a variant is: one id here, one entry in that registry — the registry
+ * is keyed by this union, so the compiler names the file that still needs it.
+ */
+
+export const ChatStreamAnimation = Schema.Literals([
+  "instant",
+  "assemble",
+  "fade",
+  "blur",
+  "wipe",
+  "sweep",
+  "phrase",
+]);
+export type ChatStreamAnimation = typeof ChatStreamAnimation.Type;
+export const DEFAULT_CHAT_STREAM_ANIMATION: ChatStreamAnimation = "assemble";
+
+export const ChatThinkingIndicator = Schema.Literals([
+  "orbits",
+  "scan",
+  "mark",
+  "sonar",
+  "swarm",
+  "helix",
+]);
+export type ChatThinkingIndicator = typeof ChatThinkingIndicator.Type;
+export const DEFAULT_CHAT_THINKING_INDICATOR: ChatThinkingIndicator = "orbits";
+
+export const ChatChangedFilesLayout = Schema.Literals([
+  "tree",
+  "rows",
+  "stat",
+  "cards",
+  "split",
+  "strip",
+]);
+export type ChatChangedFilesLayout = typeof ChatChangedFilesLayout.Type;
+export const DEFAULT_CHAT_CHANGED_FILES_LAYOUT: ChatChangedFilesLayout = "tree";
+
 export const SurfaceTintColor = Schema.String.check(Schema.isPattern(/^#[0-9a-f]{6}$/i));
 export type SurfaceTintColor = typeof SurfaceTintColor.Type;
 export const SurfaceTint = Schema.Struct({
@@ -81,6 +128,15 @@ export const DEFAULT_SURFACE_TINT: SurfaceTint = {
 
 export const ClientSettingsSchema = Schema.Struct({
   autoOpenPlanSidebar: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  chatChangedFilesLayout: ChatChangedFilesLayout.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_CHAT_CHANGED_FILES_LAYOUT)),
+  ),
+  chatStreamAnimation: ChatStreamAnimation.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_CHAT_STREAM_ANIMATION)),
+  ),
+  chatThinkingIndicator: ChatThinkingIndicator.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_CHAT_THINKING_INDICATOR)),
+  ),
   confirmThreadArchive: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   confirmThreadDelete: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   dismissedProviderUpdateNotificationKeys: Schema.Array(TrimmedNonEmptyString).pipe(
@@ -623,6 +679,9 @@ export type ServerSettingsPatch = typeof ServerSettingsPatch.Type;
 
 export const ClientSettingsPatch = Schema.Struct({
   autoOpenPlanSidebar: Schema.optionalKey(Schema.Boolean),
+  chatChangedFilesLayout: Schema.optionalKey(ChatChangedFilesLayout),
+  chatStreamAnimation: Schema.optionalKey(ChatStreamAnimation),
+  chatThinkingIndicator: Schema.optionalKey(ChatThinkingIndicator),
   confirmThreadArchive: Schema.optionalKey(Schema.Boolean),
   confirmThreadDelete: Schema.optionalKey(Schema.Boolean),
   diffIgnoreWhitespace: Schema.optionalKey(Schema.Boolean),

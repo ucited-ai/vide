@@ -381,6 +381,15 @@ export function useSettingsRestore(onRestored?: () => void) {
     () => [
       ...(theme !== "system" ? ["Theme"] : []),
       ...(settings.glassOpacity !== DEFAULT_UNIFIED_SETTINGS.glassOpacity ? ["Glass opacity"] : []),
+      ...(settings.chatStreamAnimation !== DEFAULT_UNIFIED_SETTINGS.chatStreamAnimation
+        ? ["Streaming text"]
+        : []),
+      ...(settings.chatThinkingIndicator !== DEFAULT_UNIFIED_SETTINGS.chatThinkingIndicator
+        ? ["Thinking indicator"]
+        : []),
+      ...(settings.chatChangedFilesLayout !== DEFAULT_UNIFIED_SETTINGS.chatChangedFilesLayout
+        ? ["Changed files"]
+        : []),
       ...(settings.timestampFormat !== DEFAULT_UNIFIED_SETTINGS.timestampFormat
         ? ["Time format"]
         : []),
@@ -430,6 +439,9 @@ export function useSettingsRestore(onRestored?: () => void) {
     [
       isTextGenerationModelDirty,
       settings.autoOpenPlanSidebar,
+      settings.chatChangedFilesLayout,
+      settings.chatStreamAnimation,
+      settings.chatThinkingIndicator,
       settings.confirmThreadArchive,
       settings.confirmThreadDelete,
       settings.addProjectBaseDirectory,
@@ -460,6 +472,9 @@ export function useSettingsRestore(onRestored?: () => void) {
 
     setTheme("system");
     updateSettings({
+      chatChangedFilesLayout: DEFAULT_UNIFIED_SETTINGS.chatChangedFilesLayout,
+      chatStreamAnimation: DEFAULT_UNIFIED_SETTINGS.chatStreamAnimation,
+      chatThinkingIndicator: DEFAULT_UNIFIED_SETTINGS.chatThinkingIndicator,
       timestampFormat: DEFAULT_UNIFIED_SETTINGS.timestampFormat,
       wordWrap: DEFAULT_UNIFIED_SETTINGS.wordWrap,
       diffIgnoreWhitespace: DEFAULT_UNIFIED_SETTINGS.diffIgnoreWhitespace,

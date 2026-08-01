@@ -13,6 +13,7 @@ describe("ChangedFilesCard", () => {
         expanded
         showCompactPreview={false}
         allDirectoriesExpanded
+        layout="tree"
         resolvedTheme="light"
         onExpandedChange={() => {}}
         onToggleAllDirectories={() => {}}
@@ -50,6 +51,7 @@ describe("ChangedFilesCard", () => {
         expanded={false}
         showCompactPreview
         allDirectoriesExpanded={false}
+        layout="tree"
         resolvedTheme="light"
         onExpandedChange={() => {}}
         onToggleAllDirectories={() => {}}
@@ -78,6 +80,7 @@ describe("ChangedFilesCard", () => {
         expanded={false}
         showCompactPreview={false}
         allDirectoriesExpanded={false}
+        layout="tree"
         resolvedTheme="light"
         onExpandedChange={() => {}}
         onToggleAllDirectories={() => {}}

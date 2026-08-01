@@ -1,4 +1,5 @@
 import { type TurnId } from "@vide/contracts";
+import { type ChatChangedFilesLayout } from "@vide/contracts/settings";
 import { memo, useCallback, useMemo, useState } from "react";
 import { type TurnDiffFileChange } from "../../types";
 import {
@@ -20,6 +21,7 @@ import { PierreEntryIcon } from "./PierreEntryIcon";
 import { QUALIFIER_CLASS_NAME, QualifiedLabel } from "./QualifiedLabel";
 import { Button } from "../ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { ChangedFilesList } from "./ChangedFilesList";
 import {
   changedFileName,
   selectChangedFilePreview,
@@ -55,6 +57,7 @@ export const ChangedFilesCard = memo(function ChangedFilesCard(props: {
   expanded: boolean;
   showCompactPreview: boolean;
   allDirectoriesExpanded: boolean;
+  layout: ChatChangedFilesLayout;
   resolvedTheme: "light" | "dark";
   onExpandedChange: (expanded: boolean) => void;
   onToggleAllDirectories: () => void;
@@ -66,6 +69,7 @@ export const ChangedFilesCard = memo(function ChangedFilesCard(props: {
     expanded,
     showCompactPreview,
     allDirectoriesExpanded,
+    layout,
     resolvedTheme,
     onExpandedChange,
     onToggleAllDirectories,
@@ -121,7 +125,8 @@ export const ChangedFilesCard = memo(function ChangedFilesCard(props: {
           </span>
         </button>
         <div className="flex items-center gap-1.5">
-          {expanded ? (
+          {/* Only the tree has folders to fold. */}
+          {expanded && layout === "tree" ? (
             <Tooltip>
               <TooltipTrigger
                 render={
@@ -169,14 +174,24 @@ export const ChangedFilesCard = memo(function ChangedFilesCard(props: {
         </div>
       </div>
       {expanded ? (
-        <ChangedFilesTree
-          key={`changed-files-tree:${turnId}`}
-          turnId={turnId}
-          files={files}
-          allDirectoriesExpanded={allDirectoriesExpanded}
-          resolvedTheme={resolvedTheme}
-          onOpenTurnDiff={onOpenTurnDiff}
-        />
+        layout === "tree" ? (
+          <ChangedFilesTree
+            key={`changed-files-tree:${turnId}`}
+            turnId={turnId}
+            files={files}
+            allDirectoriesExpanded={allDirectoriesExpanded}
+            resolvedTheme={resolvedTheme}
+            onOpenTurnDiff={onOpenTurnDiff}
+          />
+        ) : (
+          <ChangedFilesList
+            turnId={turnId}
+            files={files}
+            layout={layout}
+            resolvedTheme={resolvedTheme}
+            onOpenTurnDiff={onOpenTurnDiff}
+          />
+        )
       ) : compactPreviewVisible ? (
         <div className="px-2 pb-1.5 pt-1">
           <p className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-(length:--text-caption) text-muted-foreground">

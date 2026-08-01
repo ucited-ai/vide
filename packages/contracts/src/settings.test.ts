@@ -73,6 +73,32 @@ describe("ClientSettings surface tint", () => {
   });
 });
 
+describe("ClientSettings chat appearance", () => {
+  it("defaults every chat appearance axis", () => {
+    const settings = decodeClientSettings({});
+
+    expect(settings.chatStreamAnimation).toBe("assemble");
+    expect(settings.chatThinkingIndicator).toBe("orbits");
+    expect(settings.chatChangedFilesLayout).toBe("tree");
+  });
+
+  it("rejects a variant that is not on the list", () => {
+    expect(() => decodeClientSettings({ chatStreamAnimation: "retired-variant" })).toThrow();
+    expect(() => decodeClientSettingsPatch({ chatThinkingIndicator: "spinner" })).toThrow();
+  });
+
+  it("round-trips a chosen variant on each axis", () => {
+    const chosen = {
+      chatStreamAnimation: "wipe",
+      chatThinkingIndicator: "helix",
+      chatChangedFilesLayout: "cards",
+    } as const;
+
+    expect(decodeClientSettings(chosen)).toMatchObject(chosen);
+    expect(decodeClientSettingsPatch(chosen)).toMatchObject(chosen);
+  });
+});
+
 describe("ClientSettings sidebar v2", () => {
   it("defaults the beta off with a three-day auto-settle threshold", () => {
     const settings = decodeClientSettings({});

@@ -847,3 +847,217 @@
 :root:root:root {
   --right-panel-card-hover: color-mix(in srgb, var(--card) 92%, var(--ink));
 }
+
+/* ------------------------------------------------------- chat appearance */
+
+/*
+ * The live indicator.
+ *
+ * Sized in `em` so it scales with whatever line it sits in, and coloured by
+ * `currentColor` so it inherits the row's ink instead of carrying a colour of
+ * its own. The canvas reads both back out of computed style — this block is
+ * where they are actually decided.
+ */
+:root:root:root {
+  --chat-thinking-indicator-size: 1.25em;
+}
+
+.chat-thinking-indicator {
+  display: inline-flex;
+  align-items: center;
+  height: var(--chat-thinking-indicator-size);
+  color: currentcolor;
+}
+
+.chat-thinking-indicator canvas {
+  display: block;
+  width: var(--chat-thinking-indicator-size);
+  height: var(--chat-thinking-indicator-size);
+}
+
+/*
+ * Streamed prose, one word at a time.
+ *
+ * A word animates because its element is new, not because anything told it to:
+ * the reveal fires on first paint and never again, so re-rendering a message
+ * leaves the words already on screen exactly where they were. Every variant is
+ * therefore only a keyframe plus a curve — the timing that used to belong to a
+ * scheduler is the arrival of the text itself.
+ *
+ * Adding one is a keyframe, a rule here, and an id in the settings contract.
+ * `instant` needs no rule at all: it is the absence of this whole block.
+ */
+.chat-stream-word {
+  display: inline-block;
+  /* Words hold their own baseline, so a reveal that moves or scales one cannot
+     nudge the line it is set in. */
+  vertical-align: baseline;
+  animation-duration: var(--chat-stream-duration, 440ms);
+  animation-timing-function: var(--chat-stream-ease, var(--ease-soft));
+
+  /*
+   * `backwards`, not `both`. Every variant ends at the word's resting state, so
+   * holding the last frame would buy nothing and cost a filter, a transform or
+   * a clip-path left standing on every word of a long answer — a thousand
+   * needless compositing layers by the end of one. Backwards still hides a word
+   * through its delay, which is the half that matters.
+   */
+  animation-fill-mode: backwards;
+}
+
+/* Words land in threes: the delay is inside the group, not across the message,
+   so a long answer never accumulates a lag behind the text arriving. */
+[data-chat-stream-animation="phrase"] .chat-stream-word[data-word-slot="1"] {
+  animation-delay: 70ms;
+}
+
+[data-chat-stream-animation="phrase"] .chat-stream-word[data-word-slot="2"] {
+  animation-delay: 140ms;
+}
+
+[data-chat-stream-animation="assemble"] .chat-stream-word {
+  animation-name: chat-stream-assemble;
+}
+
+[data-chat-stream-animation="fade"] .chat-stream-word {
+  --chat-stream-duration: 560ms;
+  --chat-stream-ease: var(--ease-out);
+
+  animation-name: chat-stream-fade;
+}
+
+[data-chat-stream-animation="blur"] .chat-stream-word {
+  --chat-stream-duration: 820ms;
+  --chat-stream-ease: var(--ease-out);
+
+  animation-name: chat-stream-blur;
+}
+
+[data-chat-stream-animation="wipe"] .chat-stream-word {
+  --chat-stream-duration: 460ms;
+  --chat-stream-ease: var(--ease-out);
+
+  animation-name: chat-stream-wipe;
+}
+
+/* The soft-edged cousin of wipe: the word is uncovered by a gradient rather
+   than a hard edge, which is what the block-wide sweep read as. */
+[data-chat-stream-animation="sweep"] .chat-stream-word {
+  --chat-stream-duration: 620ms;
+  --chat-stream-ease: linear;
+
+  mask-image: linear-gradient(100deg, #000 0 34%, rgb(0 0 0 / 35%) 52%, transparent 68%);
+  -webkit-mask-image: linear-gradient(100deg, #000 0 34%, rgb(0 0 0 / 35%) 52%, transparent 68%);
+  mask-size: 300% 100%;
+  -webkit-mask-size: 300% 100%;
+  mask-repeat: no-repeat;
+  -webkit-mask-repeat: no-repeat;
+  animation-name: chat-stream-sweep;
+}
+
+[data-chat-stream-animation="phrase"] .chat-stream-word {
+  --chat-stream-duration: 620ms;
+  --chat-stream-ease: var(--ease-out);
+
+  animation-name: chat-stream-phrase;
+}
+
+@keyframes chat-stream-assemble {
+  from {
+    opacity: 0;
+    transform: translateY(3px) scaleX(1.16);
+    filter: blur(2.4px);
+  }
+
+  58% {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+    filter: blur(0);
+  }
+}
+
+@keyframes chat-stream-fade {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes chat-stream-blur {
+  from {
+    opacity: 0;
+    filter: blur(7px);
+  }
+
+  60% {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 1;
+    filter: blur(0);
+  }
+}
+
+@keyframes chat-stream-wipe {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+@keyframes chat-stream-sweep {
+  from {
+    mask-position: 100% 0;
+    -webkit-mask-position: 100% 0;
+  }
+
+  to {
+    mask-position: 0 0;
+    -webkit-mask-position: 0 0;
+  }
+}
+
+@keyframes chat-stream-phrase {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+    filter: blur(1.5px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+    filter: blur(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /*
+   * Text still has to appear; it just stops travelling to get there. Wound up
+   * past the per-variant rules on purpose — those are two classes deep, and an
+   * override that loses to them silences nothing. The indicator holds a single
+   * frame, which its own component arranges.
+   */
+  :root:root:root .chat-stream-word {
+    animation-name: none;
+    opacity: 1;
+    filter: none;
+    clip-path: none;
+    mask-image: none;
+    -webkit-mask-image: none;
+    transform: none;
+  }
+}
