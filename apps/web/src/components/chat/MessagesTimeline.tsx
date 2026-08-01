@@ -30,7 +30,8 @@ import {
   computeStableMessagesTimelineRows,
   deriveMessagesTimelineRows,
   resolveAssistantMessageCopyState,
-  resolveTimelineIsAtEnd,
+  resolveTimelineEndState,
+  type TimelineEndReport,
   resolveTimelineMinimapHasPersistentGutter,
   resolveTimelineMinimapHeightStyle,
   resolveTimelineMinimapHitStripWidth,
@@ -117,7 +118,7 @@ interface MessagesTimelineProps {
   onAnchorReady: (messageId: MessageId, anchorIndex: number) => void;
   onAnchorSizeChanged: (messageId: MessageId, size: number) => void;
   contentInsetEndAdjustment: number;
-  onIsAtEndChange: (isAtEnd: boolean) => void;
+  onIsAtEndChange: (end: TimelineEndReport) => void;
   onManualNavigation: () => void;
   hideEmptyPlaceholder?: boolean;
   topFadeEnabled?: boolean;
@@ -271,9 +272,9 @@ export const MessagesTimeline = memo(function MessagesTimeline({
 
   const handleScroll = useCallback(() => {
     const state = listRef.current?.getState?.();
-    const isAtEnd = resolveTimelineIsAtEnd(state);
-    if (isAtEnd !== undefined) {
-      onIsAtEndChange(isAtEnd);
+    const endState = resolveTimelineEndState(state);
+    if (endState !== undefined) {
+      onIsAtEndChange(endState);
     }
     if (!state || minimapItems.length === 0) {
       return;

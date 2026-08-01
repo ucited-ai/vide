@@ -20,8 +20,29 @@ export interface TimelineEndState {
   readonly isNearEnd?: boolean;
 }
 
-export function resolveTimelineIsAtEnd(state: TimelineEndState | undefined): boolean | undefined {
-  return state?.isNearEnd ?? state?.isAtEnd;
+export interface TimelineEndReport {
+  /** The scroll sits at the actual end, to the list's epsilon. */
+  readonly atEnd: boolean;
+  /** Within LegendList's near-end slack — half a viewport by default. */
+  readonly nearEnd: boolean;
+}
+
+/**
+ * Both readings, because they answer different questions: `nearEnd` is whether
+ * an already-running live-follow should survive (content growing under it puts
+ * the end briefly out of reach), `atEnd` is whether the reader has actually
+ * returned to the end. Collapsing them into one boolean is how "reading two
+ * lines above the bottom" used to count as "wants to follow" — and every new
+ * delta yanked the reader back down.
+ */
+export function resolveTimelineEndState(
+  state: TimelineEndState | undefined,
+): TimelineEndReport | undefined {
+  if (!state || (state.isAtEnd === undefined && state.isNearEnd === undefined)) {
+    return undefined;
+  }
+  const atEnd = state.isAtEnd ?? false;
+  return { atEnd, nearEnd: state.isNearEnd ?? atEnd };
 }
 
 export function resolveTimelineMinimapHeightStyle(itemCount: number): string {

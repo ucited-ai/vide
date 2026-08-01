@@ -294,9 +294,9 @@ describe("MessagesTimeline", () => {
     expect(markup).toContain("whitespace-nowrap");
   });
 
-  it("uses LegendList isNearEnd when deciding whether the live edge is visible", async () => {
+  it("reports strict and near end separately, so near-end alone cannot arm live-follow", async () => {
     const {
-      resolveTimelineIsAtEnd,
+      resolveTimelineEndState,
       resolveTimelineMinimapHasPersistentGutter,
       resolveTimelineMinimapHeightStyle,
       resolveTimelineMinimapHitStripWidth,
@@ -305,10 +305,19 @@ describe("MessagesTimeline", () => {
       resolveTimelineMinimapTopPercent,
     } = await import("./MessagesTimeline.logic");
 
-    expect(resolveTimelineIsAtEnd({ isNearEnd: true, isAtEnd: false })).toBe(true);
-    expect(resolveTimelineIsAtEnd({ isNearEnd: false, isAtEnd: true })).toBe(false);
-    expect(resolveTimelineIsAtEnd({ isAtEnd: true })).toBe(true);
-    expect(resolveTimelineIsAtEnd(undefined)).toBeUndefined();
+    // Reading just above the bottom is near the end but not at it — collapsing
+    // the two is what used to yank the reader down on the next delta.
+    expect(resolveTimelineEndState({ isNearEnd: true, isAtEnd: false })).toEqual({
+      atEnd: false,
+      nearEnd: true,
+    });
+    expect(resolveTimelineEndState({ isNearEnd: false, isAtEnd: true })).toEqual({
+      atEnd: true,
+      nearEnd: false,
+    });
+    expect(resolveTimelineEndState({ isAtEnd: true })).toEqual({ atEnd: true, nearEnd: true });
+    expect(resolveTimelineEndState({})).toBeUndefined();
+    expect(resolveTimelineEndState(undefined)).toBeUndefined();
 
     expect(resolveTimelineMinimapHeightStyle(5)).toBe("min(32px, calc(100vh - 18rem))");
     expect(resolveTimelineMinimapTopPercent(2, 5)).toBe(50);

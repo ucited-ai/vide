@@ -229,6 +229,7 @@ import { DraftHeroSuggestions } from "./chat/DraftHeroSuggestions";
 import { ExpandedImageDialog } from "./chat/ExpandedImageDialog";
 import { PullRequestThreadDialog } from "./PullRequestThreadDialog";
 import { MessagesTimeline } from "./chat/MessagesTimeline";
+import { type TimelineEndReport } from "./chat/MessagesTimeline.logic";
 import { ChatEnvironmentColumn } from "./chat/ChatEnvironmentColumn";
 import { ChatHeader } from "./chat/ChatHeader";
 import { PanelLayoutControls, RightPanelMaximizeControl } from "./chat/PanelLayoutControls";
@@ -3833,11 +3834,20 @@ function ChatViewContent(props: ChatViewProps) {
     });
   }, []);
 
-  const onIsAtEndChange = useCallback((isAtEnd: boolean) => {
-    if (
-      !isAtEnd &&
-      liveFollowUserScrollGenerationRef.current === anchorUserScrollGenerationRef.current
-    ) {
+  const onIsAtEndChange = useCallback((end: TimelineEndReport) => {
+    /*
+     * Asymmetric on purpose. A live-follow that is already running survives the
+     * near-end slack — content growing under it puts the exact end briefly out
+     * of reach, and follow breaking on every delta would be worse. But *arming*
+     * follow takes the strict end: "within half a viewport" is where someone
+     * reads the recent past, and treating it as "wants to follow" is what
+     * yanked the reader to the bottom on the next delta — worst right after
+     * expanding an old turn, whose fresh rows churn the estimated positions.
+     */
+    const armed =
+      liveFollowUserScrollGenerationRef.current === anchorUserScrollGenerationRef.current;
+    const isAtEnd = armed ? end.nearEnd : end.atEnd;
+    if (!isAtEnd && armed) {
       showScrollDebouncer.current.cancel();
       setShowScrollToBottom(false);
       return;
