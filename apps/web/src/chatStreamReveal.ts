@@ -25,7 +25,7 @@
  */
 
 import { type ChatStreamAnimation } from "@vide/contracts/settings";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 
 import { countStreamWords, type ChatStreamWordTiming } from "./markdown-stream-words";
 
@@ -107,9 +107,14 @@ const NO_REVEAL: ChatStreamRevealState = {
 };
 
 /**
- * Everything the reveal remembers between renders. A ref rather than state:
- * the baseline has to advance during the render that brings the new text, and
- * none of this should re-render anything by itself.
+ * Everything the reveal remembers between renders — and between mounts.
+ *
+ * Keyed by the message rather than held in a ref, because the component's
+ * lifetime is not the message's: the virtualized list unmounts and remounts
+ * rows as their heights churn, and a reveal whose bookkeeping died with the
+ * component replayed the whole message on every remount. The map survives;
+ * an entry is dropped when its message's reveal settles, and the cap sweeps
+ * up entries whose rows unmounted mid-turn and never came back.
  */
 interface ChatStreamRevealMemory {
   text: string;
@@ -124,12 +129,37 @@ interface ChatStreamRevealMemory {
   /** The current delta's step, frozen when the delta arrives. */
   step: number;
   /**
-   * The style each word was created with, by absolute tree index. Handing a
-   * word the same style forever keeps its markup byte-identical across
-   * re-renders — React then keeps its DOM node, and the animation that already
-   * ran is neither restarted nor retimed. Empty string = at rest (no style).
+   * What each word was born with, by absolute tree index. While a word's
+   * animation may still be running it keeps its exact style, so its markup
+   * re-renders byte-identical and React never touches its DOM; once its
+   * window has passed (`restAtMs`) it is at rest — `style: null` — and rests
+   * are rendered as plain spans, so a remounted row cannot animate them:
+   * a CSS animation fires on any first paint, not only the first ever.
    */
-  styleByIndex: Map<number, string>;
+  wordsByIndex: Map<number, { style: string | null; restAtMs: number }>;
+}
+
+const REVEAL_MEMORY_CAP = 64;
+const revealMemoryByKey = new Map<string, ChatStreamRevealMemory>();
+
+function acquireRevealMemory(key: string): ChatStreamRevealMemory {
+  const existing = revealMemoryByKey.get(key);
+  if (existing) return existing;
+  const fresh: ChatStreamRevealMemory = {
+    text: "",
+    sourceWordCount: 0,
+    lastDeltaWordCount: 0,
+    treeWordCount: 0,
+    baseline: 0,
+    step: WORD_STEP_MS,
+    wordsByIndex: new Map(),
+  };
+  revealMemoryByKey.set(key, fresh);
+  if (revealMemoryByKey.size > REVEAL_MEMORY_CAP) {
+    const oldest = revealMemoryByKey.keys().next().value;
+    if (oldest !== undefined) revealMemoryByKey.delete(oldest);
+  }
+  return fresh;
 }
 
 export function useChatStreamReveal(input: {
@@ -137,21 +167,19 @@ export function useChatStreamReveal(input: {
   readonly animation: ChatStreamAnimation | undefined;
   /** Whether the turn this text belongs to is still running. */
   readonly live: boolean;
+  /**
+   * Stable identity of the text across remounts — the message id. Without it
+   * the reveal falls back to this component instance, which is only safe for
+   * hosts that never recycle their rows.
+   */
+  readonly memoryKey?: string | undefined;
 }): ChatStreamRevealState {
   const animation = input.animation;
   const reveals = input.live && animation !== undefined && animation !== "instant";
 
-  const memoryRef = useRef<ChatStreamRevealMemory | null>(null);
-  memoryRef.current ??= {
-    text: "",
-    sourceWordCount: 0,
-    lastDeltaWordCount: 0,
-    treeWordCount: 0,
-    baseline: 0,
-    step: WORD_STEP_MS,
-    styleByIndex: new Map(),
-  };
-  const memory = memoryRef.current;
+  const instanceKey = useId();
+  const memoryKey = input.memoryKey ?? instanceKey;
+  const memory = acquireRevealMemory(memoryKey);
 
   /*
    * Advance the delta during render — the words animate on the render that
@@ -191,13 +219,14 @@ export function useChatStreamReveal(input: {
 
   const active = (reveals || settling) && animation !== undefined && animation !== "instant";
 
-  /* A finished message keeps no per-word bookkeeping around. */
+  /* A settled message keeps no bookkeeping around — and must not, or the map
+     would hold every message the session ever revealed. Dropped only when the
+     reveal settles while mounted; an unmount mid-turn deliberately leaves the
+     entry, because surviving that unmount is the map's whole purpose. */
   useEffect(() => {
     if (active) return;
-    memory.styleByIndex.clear();
-    memory.treeWordCount = 0;
-    memory.baseline = 0;
-  }, [active, memory]);
+    revealMemoryByKey.delete(memoryKey);
+  }, [active, memoryKey]);
 
   return useMemo(() => {
     if (!active || animation === undefined) return NO_REVEAL;
@@ -205,8 +234,15 @@ export function useChatStreamReveal(input: {
       active: true,
       timing: {
         styleOf: (index: number): string | null => {
-          const known = memory.styleByIndex.get(index);
-          if (known !== undefined) return known === "" ? null : known;
+          const known = memory.wordsByIndex.get(index);
+          if (known !== undefined) {
+            /* Its animation window has passed: from here on the word renders
+               as a plain span, so a remounted row cannot animate it again. */
+            if (known.style !== null && Date.now() >= known.restAtMs) {
+              known.style = null;
+            }
+            return known.style;
+          }
           if (index < memory.baseline) {
             /*
              * On screen before this delta and never styled while we watched —
@@ -214,17 +250,21 @@ export function useChatStreamReveal(input: {
              * own delay phase, where `animation-fill-mode: backwards` hides
              * it: the word would blink out because a later word arrived.
              */
-            memory.styleByIndex.set(index, "");
+            memory.wordsByIndex.set(index, { style: null, restAtMs: 0 });
             return null;
           }
           const indexInDelta = index - memory.baseline;
+          const delayMs = Math.round(chatStreamDelayMs(indexInDelta, memory.step, animation));
           const angle = noise(index) * Math.PI * 2;
           const style = [
-            `--chat-stream-delay:${String(Math.round(chatStreamDelayMs(indexInDelta, memory.step, animation)))}ms`,
+            `--chat-stream-delay:${String(delayMs)}ms`,
             `--chat-stream-dx:${(Math.cos(angle) * 8).toFixed(1)}px`,
             `--chat-stream-dy:${(Math.sin(angle) * 5).toFixed(1)}px`,
           ].join(";");
-          memory.styleByIndex.set(index, style);
+          memory.wordsByIndex.set(index, {
+            style,
+            restAtMs: Date.now() + delayMs + WORD_MOTION_MS,
+          });
           return style;
         },
         reportWordCount: (count: number) => {
@@ -232,5 +272,5 @@ export function useChatStreamReveal(input: {
         },
       },
     };
-  }, [active, animation, memory]);
+  }, [active, animation, memory, memoryKey]);
 }

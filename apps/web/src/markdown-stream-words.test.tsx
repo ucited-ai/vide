@@ -46,13 +46,17 @@ describe("rehypeChatStreamWords", () => {
     expect(html).toContain("</span> <span");
   });
 
-  it("wraps a word at rest without a style, so its markup can stay byte-identical", () => {
+  it("wraps a word at rest as a bare span, so a remounted row cannot animate it", () => {
     const html = renderMarkdown("one two", {
       styleOf: () => null,
       reportWordCount: () => {},
     });
 
-    expect(html).toContain('<span class="chat-stream-word">one</span>');
+    // Still wrapped (the tree keeps its shape for React), but carrying neither
+    // the animated class nor a delay — a CSS animation fires on any first
+    // paint, so a classed word would replay whenever its row remounts.
+    expect(html).toContain("<span>one</span>");
+    expect(html).not.toContain("chat-stream-word");
     expect(html).not.toContain("--chat-stream-delay");
   });
 

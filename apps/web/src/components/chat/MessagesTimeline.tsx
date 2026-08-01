@@ -958,6 +958,7 @@ function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "mess
         isStreaming={Boolean(row.message.streaming)}
         skills={ctx.skills}
         streamAnimation={ctx.chatAppearance.streamAnimation}
+        streamRevealKey={row.message.id}
         text={messageText}
         threadRef={ctx.threadRef ?? undefined}
       />

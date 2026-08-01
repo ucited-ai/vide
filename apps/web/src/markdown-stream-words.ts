@@ -73,10 +73,13 @@ export function rehypeChatStreamWords(timing: ChatStreamWordTiming) {
       return {
         type: "element",
         tagName: "span",
-        properties:
-          style === null
-            ? { className: [STREAM_WORD_CLASS_NAME] }
-            : { className: [STREAM_WORD_CLASS_NAME], style },
+        /*
+         * A word at rest is a bare span — wrapped, so the tree keeps its shape
+         * for React, but carrying neither the class nor a delay. The class is
+         * what the variant selectors animate, and a CSS animation fires on any
+         * first paint: a remounted row would replay every classed word.
+         */
+        properties: style === null ? {} : { className: [STREAM_WORD_CLASS_NAME], style },
         children,
       };
     };

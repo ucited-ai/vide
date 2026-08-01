@@ -3143,15 +3143,39 @@ function ChatViewContent(props: ChatViewProps) {
     planSidebarDismissedForTurnRef.current =
       activePlan?.turnId ?? sidebarProposedPlan?.turnId ?? "__dismissed__";
   }, [activePlan?.turnId, sidebarProposedPlan?.turnId]);
+  /*
+   * The task list opens over the chat, not as a right-panel surface: it is a
+   * glance at what the agent is working through, read next to the composer it
+   * answers. A proposed plan is different — a document to review — and keeps
+   * the panel.
+   */
+  const [tasksPopoverOpen, setTasksPopoverOpen] = useState(false);
   const togglePlanSidebar = useCallback(() => {
     if (!activeThreadRef) return;
+    if (!sidebarProposedPlan && interactionMode !== "plan") {
+      setTasksPopoverOpen((open) => {
+        if (open) {
+          dismissPlanSidebarForCurrentTurn();
+        } else {
+          planSidebarDismissedForTurnRef.current = null;
+        }
+        return !open;
+      });
+      return;
+    }
     if (planSidebarOpen) {
       dismissPlanSidebarForCurrentTurn();
     } else {
       planSidebarDismissedForTurnRef.current = null;
     }
     useRightPanelStore.getState().toggle(activeThreadRef, "plan");
-  }, [activeThreadRef, dismissPlanSidebarForCurrentTurn, planSidebarOpen]);
+  }, [
+    activeThreadRef,
+    dismissPlanSidebarForCurrentTurn,
+    interactionMode,
+    planSidebarOpen,
+    sidebarProposedPlan,
+  ]);
   const closePlanSidebar = useCallback(() => {
     if (!activeThreadRef) return;
     setMaximizedRightPanelThreadKey(null);
@@ -3616,6 +3640,54 @@ function ChatViewContent(props: ChatViewProps) {
   const showScrollDebouncer = useRef(
     new Debouncer(() => setShowScrollToBottom(true), { wait: 150 }),
   );
+  /*
+   * The chat row's width, frozen for the length of the right panel's open or
+   * close transition (see the row itself for why), then released in the same
+   * moment the settle blur starts — the blur exists to cover exactly one
+   * re-wrap, and that re-wrap now happens at release, not during the slide.
+   */
+  const chatColumnFreezeRef = useRef<HTMLDivElement | null>(null);
+  const [frozenChatColumnWidth, setFrozenChatColumnWidth] = useState<number | null>(null);
+  const [chatColumnSettleDirection, setChatColumnSettleDirection] = useState<"open" | "closed">(
+    rightPanelOpen ? "open" : "closed",
+  );
+  const chatColumnFreezeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const previousRightPanelOpenRef = useRef(rightPanelOpen);
+  useLayoutEffect(() => {
+    if (previousRightPanelOpenRef.current === rightPanelOpen) return;
+    previousRightPanelOpenRef.current = rightPanelOpen;
+    const row = chatColumnFreezeRef.current;
+    if (!row) return;
+    // Measured now, before the panel's width transition has advanced.
+    setFrozenChatColumnWidth(row.getBoundingClientRect().width);
+    if (chatColumnFreezeTimerRef.current !== null) {
+      clearTimeout(chatColumnFreezeTimerRef.current);
+    }
+    /* The hold lasts as long as the panel's slide — same token, read back so
+       the two cannot drift apart. */
+    const durationToken = getComputedStyle(row).getPropertyValue("--duration-base").trim();
+    const holdMs = durationToken.endsWith("ms")
+      ? Number.parseFloat(durationToken)
+      : Number.parseFloat(durationToken) * 1000;
+    const nextDirection: "open" | "closed" = rightPanelOpen ? "open" : "closed";
+    chatColumnFreezeTimerRef.current = setTimeout(
+      () => {
+        chatColumnFreezeTimerRef.current = null;
+        setFrozenChatColumnWidth(null);
+        setChatColumnSettleDirection(nextDirection);
+      },
+      Number.isFinite(holdMs) && holdMs > 0 ? holdMs : 300,
+    );
+  }, [rightPanelOpen]);
+  useEffect(
+    () => () => {
+      if (chatColumnFreezeTimerRef.current !== null) {
+        clearTimeout(chatColumnFreezeTimerRef.current);
+      }
+    },
+    [],
+  );
+
   const timelineScrollModeRef = useRef<TimelineScrollMode>("following-end");
   /*
    * The mode ref, mirrored as state, so the list itself can be told whether it
@@ -3975,21 +4047,27 @@ function ChatViewContent(props: ChatViewProps) {
   useEffect(() => {
     if (!autoOpenPlanSidebar) return;
     if (!activePlan) return;
-    if (planSidebarOpen) return;
+    if (planSidebarOpen || tasksPopoverOpen) return;
     const latestTurnId = activeLatestTurn?.turnId ?? null;
     if (latestTurnId && activePlan.turnId !== latestTurnId) return;
     const turnKey = activePlan.turnId ?? sidebarProposedPlan?.turnId ?? "__dismissed__";
     if (planSidebarDismissedForTurnRef.current === turnKey) return;
     if (activeThreadRef) {
-      useRightPanelStore.getState().open(activeThreadRef, "plan");
+      if (!sidebarProposedPlan && interactionMode !== "plan") {
+        setTasksPopoverOpen(true);
+      } else {
+        useRightPanelStore.getState().open(activeThreadRef, "plan");
+      }
     }
   }, [
     activePlan,
     activeLatestTurn?.turnId,
     activeThreadRef,
     autoOpenPlanSidebar,
+    interactionMode,
     planSidebarOpen,
-    sidebarProposedPlan?.turnId,
+    sidebarProposedPlan,
+    tasksPopoverOpen,
   ]);
 
   useEffect(() => {
@@ -5893,10 +5971,10 @@ function ChatViewContent(props: ChatViewProps) {
           "chat-column-reflow",
         )}
         data-chat-column-maximized-away={rightPanelMaximized ? "true" : "false"}
-        /* Flipping this restarts the settle animation in index.css, which is
-           what covers the prose re-wrapping while the panel eases the column
-           narrower. */
-        data-chat-column-reflowing={rightPanelOpen ? "open" : "closed"}
+        /* Flips when the frozen row is released, not when the panel starts
+           moving — restarting the settle animation in index.css at exactly the
+           moment of the one real re-wrap it exists to cover. */
+        data-chat-column-reflowing={chatColumnSettleDirection}
       >
         {/* Top bar */}
         <header
@@ -5938,7 +6016,24 @@ function ChatViewContent(props: ChatViewProps) {
           onDismiss={() => setThreadError(activeThread.id, null)}
         />
         {/* Main content area with optional plan sidebar */}
-        <div className="flex min-h-0 min-w-0 flex-1">
+        <div
+          className="flex min-h-0 min-w-0 flex-1"
+          /*
+           * Frozen at its pre-transition width while the right panel eases open
+           * or closed. Flexbox re-solves this row every frame of the panel's
+           * width transition, and prose re-wrapping thirty times in a quarter
+           * second is the chaos the settle blur used to only cover. Held still,
+           * the panel slides over (or away from) text that does not move, and
+           * the one real re-wrap happens on release — under the same blur.
+           * Pointer-driven resizes never freeze: a drag wants live feedback.
+           */
+          ref={chatColumnFreezeRef}
+          style={
+            frozenChatColumnWidth !== null
+              ? { width: `${String(frozenChatColumnWidth)}px`, flex: "none", overflow: "hidden" }
+              : undefined
+          }
+        >
           {/* Chat column */}
           <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
             {/* Provider status overlays the timeline without changing its content height. */}

@@ -128,6 +128,12 @@ interface ChatMarkdownProps {
   isLiveTurn?: boolean;
   /** How words arrive while the turn is live. Ignored once its reveal has run out. */
   streamAnimation?: ChatStreamAnimation | undefined;
+  /**
+   * Stable identity of this text across remounts — the message id. A
+   * virtualized host recycles rows, and a reveal keyed to the component alone
+   * replays from the first word on every remount.
+   */
+  streamRevealKey?: string | undefined;
   skills?: ReadonlyArray<Pick<ServerProviderSkill, "name" | "displayName">>;
   className?: string;
   /** Treat single newlines as hard breaks — chat-style user input. */
@@ -1270,6 +1276,7 @@ function ChatMarkdown({
   isStreaming = false,
   isLiveTurn = false,
   streamAnimation,
+  streamRevealKey,
   skills = EMPTY_MARKDOWN_SKILLS,
   className,
   lineBreaks = false,
@@ -1598,7 +1605,12 @@ function ChatMarkdown({
   // and only for a variant that has motion to show. Everything else renders the
   // plain tree, which is also what a message falls back to once its last delta
   // has finished arriving.
-  const reveal = useChatStreamReveal({ text, animation: streamAnimation, live: isLiveTurn });
+  const reveal = useChatStreamReveal({
+    text,
+    animation: streamAnimation,
+    live: isLiveTurn,
+    memoryKey: streamRevealKey,
+  });
   /* Word wrapping goes last: ordered before the sanitiser, its spans are stripped. */
   const rehypePlugins = useMemo(
     () =>
