@@ -465,7 +465,7 @@ function AddProjectMenuItems({
       {/* Shared by both clone sources: a Git URL, or a repository path resolved
           through the provider picked above. */}
       <div
-        className="grid transition-[grid-template-rows] duration-(--duration-popup) ease-(--ease-out)"
+        className="grid transition-[grid-template-rows] duration-(--duration-popup)"
         style={{ gridTemplateRows: showUrlInput ? "1fr" : "0fr" }}
       >
         <div className="overflow-hidden">

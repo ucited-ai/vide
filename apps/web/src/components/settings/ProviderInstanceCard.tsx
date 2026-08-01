@@ -715,7 +715,7 @@ export function ProviderInstanceCard({
               aria-label={`Toggle ${displayName} details`}
             >
               <ChevronDownIcon
-                className={cn("size-3.5 transition-transform", isExpanded && "rotate-180")}
+                className={cn("size-3.5 transition-[rotate]", isExpanded && "rotate-180")}
               />
             </Button>
             <Switch

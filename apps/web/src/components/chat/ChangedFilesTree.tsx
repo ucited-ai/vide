@@ -40,7 +40,7 @@ const CARD_SURFACE_CLASS = "bg-(--surface-chrome)";
  * radius, and one wash on hover so a long list reads as an even column.
  */
 const TREE_ROW_CLASS =
-  "group flex w-full items-center gap-1.5 rounded-(--radius) py-1 pr-3 text-left text-(length:--text-ui) transition-colors duration-(--duration-fast) ease-(--ease-out) hover:bg-(--wash-hover) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+  "group flex w-full items-center gap-1.5 rounded-(--radius) py-1 pr-3 text-left text-(length:--text-ui) transition-colors hover:bg-(--wash-hover) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 /** Counts stay monospaced and tabular so the column of stats does not jitter. */
 const TREE_ROW_STAT_CLASS = "ml-auto shrink-0 font-mono text-(length:--text-caption) tabular-nums";
@@ -93,13 +93,13 @@ export const ChangedFilesCard = memo(function ChangedFilesCard(props: {
           type="button"
           aria-expanded={expanded}
           data-scroll-anchor-ignore
-          className="group flex min-w-0 flex-1 items-center gap-1.5 rounded-(--radius) px-1 py-1.5 text-left transition-colors duration-(--duration-fast) ease-(--ease-out) hover:bg-(--wash-hover) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="group flex min-w-0 flex-1 items-center gap-1.5 rounded-(--radius) px-1 py-1.5 text-left transition-colors hover:bg-(--wash-hover) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           onClick={() => onExpandedChange(!expanded)}
         >
           <ChevronRightIcon
             aria-hidden="true"
             className={cn(
-              "size-3.5 shrink-0 text-muted-foreground transition-transform duration-(--duration-fast) ease-(--ease-out)",
+              "size-3.5 shrink-0 text-muted-foreground transition-transform",
               expanded && "rotate-90",
             )}
           />
@@ -196,7 +196,7 @@ export const ChangedFilesCard = memo(function ChangedFilesCard(props: {
                 key={file.path}
                 type="button"
                 title={file.path}
-                className="inline-flex max-w-48 items-center gap-1 rounded-(--radius) border border-border bg-(--wash-hover) px-1.5 py-1 text-(length:--text-caption) text-muted-foreground transition-colors duration-(--duration-fast) ease-(--ease-out) hover:bg-(--wash-active) hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="inline-flex max-w-48 items-center gap-1 rounded-(--radius) border border-border bg-(--wash-hover) px-1.5 py-1 text-(length:--text-caption) text-muted-foreground transition-colors hover:bg-(--wash-active) hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 onClick={() => onOpenTurnDiff(turnId, file.path)}
               >
                 <PierreEntryIcon
@@ -210,7 +210,7 @@ export const ChangedFilesCard = memo(function ChangedFilesCard(props: {
             ))}
             <button
               type="button"
-              className="rounded-(--radius) px-1.5 py-1 text-(length:--text-caption) font-medium text-muted-foreground transition-colors duration-(--duration-fast) ease-(--ease-out) hover:bg-(--wash-hover) hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="rounded-(--radius) px-1.5 py-1 text-(length:--text-caption) font-medium text-muted-foreground transition-colors hover:bg-(--wash-hover) hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               onClick={() => onExpandedChange(true)}
             >
               Show all {files.length} files
@@ -281,7 +281,7 @@ export const ChangedFilesTree = memo(function ChangedFilesTree(props: {
             <ChevronRightIcon
               aria-hidden="true"
               className={cn(
-                "size-3.5 shrink-0 text-muted-foreground transition-transform duration-(--duration-fast) ease-(--ease-out)",
+                "size-3.5 shrink-0 text-muted-foreground transition-transform",
                 isExpanded && "rotate-90",
               )}
             />

@@ -357,7 +357,7 @@ export function AddProviderInstanceDialog({ open, onOpenChange }: AddProviderIns
                           key={swatch}
                           type="button"
                           className={cn(
-                            "size-6 cursor-pointer rounded-full border transition",
+                            "size-6 cursor-pointer rounded-full border transition-[border-color,box-shadow,scale]",
                             selected
                               ? "scale-110 border-foreground ring-2 ring-ring ring-offset-1 ring-offset-background"
                               : "border-black/10 hover:scale-105 dark:border-white/20",

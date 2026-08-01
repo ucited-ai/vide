@@ -1,3 +1,4 @@
+import { readCssTimeMs } from "~/lib/cssTime";
 /**
  * Shared sidebar row chrome.
  *
@@ -99,10 +100,10 @@ export function sidebarListAnimationOptions(element: HTMLElement): {
   easing?: string;
 } {
   const styles = window.getComputedStyle(element);
-  const duration = Number.parseFloat(styles.getPropertyValue("--duration-base"));
+  const duration = readCssTimeMs(styles, "--duration-base");
   const easing = styles.getPropertyValue("--ease-out").trim();
   return {
-    ...(Number.isFinite(duration) ? { duration } : {}),
+    ...(duration === null ? {} : { duration }),
     ...(easing.length > 0 ? { easing } : {}),
   };
 }
