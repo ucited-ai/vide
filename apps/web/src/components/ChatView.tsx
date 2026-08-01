@@ -253,6 +253,7 @@ import {
 } from "./chat/ProviderStatusBanner";
 import { ThreadErrorBanner } from "./chat/ThreadErrorBanner";
 import { resolveThreadPr } from "./ThreadStatusIndicators";
+import { ChatGrow } from "./chat/ChatGrow";
 import { ComposerBannerStack, type ComposerBannerStackItem } from "./chat/ComposerBannerStack";
 import {
   DRAFT_HERO_TRANSITION_ANIMATION_ID,
@@ -6135,7 +6136,29 @@ function ChatViewContent(props: ChatViewProps) {
                       <ComposerBannerStack className="relative z-0" items={composerBannerItems} />
                     </div>
                   ) : (
-                    <ComposerBannerStack className="relative z-0" items={composerBannerItems} />
+                    <>
+                      {/* The task list, over the chat: same grow mechanic as
+                          everything else that opens, same surface tokens as
+                          the environment panel beside it. */}
+                      {activePlan && activeThreadRef ? (
+                        <ChatGrow open={tasksPopoverOpen}>
+                          <div className="mb-2 flex max-h-[45vh] min-h-0 flex-col overflow-y-auto rounded-[var(--envcol-radius)] border border-(--envcol-edge) bg-(--envcol-surface) shadow-[var(--envcol-shadow)]">
+                            <PlanSidebar
+                              activePlan={activePlan}
+                              activeProposedPlan={null}
+                              label="Tasks"
+                              environmentId={activeThread.environmentId}
+                              threadRef={activeThreadRef}
+                              markdownCwd={gitCwd ?? undefined}
+                              workspaceRoot={activeWorkspaceRoot}
+                              timestampFormat={timestampFormat}
+                              mode="embedded"
+                            />
+                          </div>
+                        </ChatGrow>
+                      ) : null}
+                      <ComposerBannerStack className="relative z-0" items={composerBannerItems} />
+                    </>
                   )}
                   <div
                     className="relative"
