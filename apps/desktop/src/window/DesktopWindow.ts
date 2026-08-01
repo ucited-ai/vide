@@ -110,18 +110,29 @@ type WindowMaterialOptions = Pick<
 >;
 
 /**
- * The window paints its own opaque surfaces rather than sampling the desktop.
+ * On macOS the window is backed by NSVisualEffectView vibrancy behind a
+ * transparent base — but the renderer's surfaces stay opaque by default, so
+ * nothing samples the desktop until the user turns a surface's opacity down
+ * in theme settings. That is the deal an earlier revision missed when it made
+ * vibrancy drive every surface at once (and was reverted for it): the window
+ * offers the glass, the stylesheet decides — per surface, per user — whether
+ * any of it shows.
  *
- * An earlier revision backed the window with NSVisualEffectView vibrancy, which
- * makes chrome translucent. That is the wrong material for this app: the design
- * calls for solid, lifted greys where the sidebar reads *lighter* than the
- * content pane, and translucency destroys that relationship by letting whatever
- * sits behind the window drive both surfaces.
+ * Elsewhere the window paints its own opaque colour; `transparent: true` is
+ * still deliberately avoided everywhere, because it discards the native
+ * frame, corner radius and shadow.
  */
 function getWindowMaterialOptions(
   shouldUseDarkColors: boolean,
-  _platform: NodeJS.Platform,
+  platform: NodeJS.Platform,
 ): WindowMaterialOptions {
+  if (platform === "darwin") {
+    return {
+      backgroundColor: "#00000000",
+      vibrancy: "under-window",
+      visualEffectState: "followWindow",
+    };
+  }
   return { backgroundColor: getInitialWindowBackgroundColor(shouldUseDarkColors) };
 }
 

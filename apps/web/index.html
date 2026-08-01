@@ -15,6 +15,11 @@
       (() => {
         const LIGHT_BACKGROUND = "#ffffff";
         const DARK_BACKGROUND = "#131416";
+        // In Electron the window itself carries the base colour (vibrancy glass
+        // on macOS). An inline colour here outranks every stylesheet and would
+        // permanently blind the window's material, so the boot flash guard is
+        // for browsers only.
+        const isElectron = navigator.userAgent.includes("Electron");
         const themeColorMeta = document.querySelector('meta[name="theme-color"]');
         try {
           const storedTheme = window.localStorage.getItem("vide:theme");
@@ -26,11 +31,15 @@
           const isDark = theme === "dark" || (theme === "system" && prefersDark);
           document.documentElement.classList.toggle("dark", isDark);
           const chromeColor = isDark ? DARK_BACKGROUND : LIGHT_BACKGROUND;
-          document.documentElement.style.backgroundColor = chromeColor;
+          if (!isElectron) {
+            document.documentElement.style.backgroundColor = chromeColor;
+          }
           themeColorMeta?.setAttribute("content", chromeColor);
         } catch {
           document.documentElement.classList.add("dark");
-          document.documentElement.style.backgroundColor = DARK_BACKGROUND;
+          if (!navigator.userAgent.includes("Electron")) {
+            document.documentElement.style.backgroundColor = DARK_BACKGROUND;
+          }
           themeColorMeta?.setAttribute("content", DARK_BACKGROUND);
         }
       })();

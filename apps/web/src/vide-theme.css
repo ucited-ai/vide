@@ -537,6 +537,20 @@
   border-color: var(--edge);
 }
 
+/* The composer's banners are chrome too. Upstream mixes the *content* floor at
+   chrome alpha here — the one glass that sat a different colour beside the
+   shell it touches. The tint layer stays: an error banner is still an error. */
+:root:root:root .alert-glass {
+  background:
+    linear-gradient(
+      color-mix(in srgb, var(--alert-glass-tint) 4%, transparent),
+      color-mix(in srgb, var(--alert-glass-tint) 4%, transparent)
+    ),
+    var(--chrome-surface) !important;
+  -webkit-backdrop-filter: var(--chrome-backdrop-filter);
+  backdrop-filter: var(--chrome-backdrop-filter);
+}
+
 :root:root:root .chat-composer-glass-shell {
   --chat-composer-glass-surface: var(--surface-chrome);
 }
@@ -607,6 +621,19 @@
     font-synthesis-weight: none;
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
+  }
+
+  /*
+   * macOS glass. The window's vibrancy material sits behind everything, so the
+   * document stops repainting an opaque floor over it — that is all this does.
+   * Every surface above (content pane, sidebar chrome, composer) still paints
+   * its own fill; with the default alpha of 100% the app looks exactly as
+   * before, and only turning "Sidebar & menus" opacity down in theme settings
+   * lets the desktop behind the window show through the chrome.
+   */
+  html.electron:not(.electron-windows),
+  html.electron:not(.electron-windows) body {
+    background: transparent;
   }
 
   /* Nothing on macOS shows a text cursor over chrome. */
@@ -1059,8 +1086,14 @@
   align-items: center;
 }
 
+/*
+ * Prose sits on the column's own edge — the same edge the icons sit on, the
+ * same edge the composer's box starts at. It used to hang indented behind the
+ * icon gutter, which put the icons visibly outside the text column; nothing
+ * in the turn starts left of the text anymore.
+ */
 .chat-turn-body {
-  padding-inline-start: var(--chat-turn-gutter);
+  padding-inline-start: 0;
 }
 
 /*
