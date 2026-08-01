@@ -59,6 +59,11 @@
      land faster than a panel — it is a response to a click, not a layout. */
   --duration-popup: 150ms;
 
+  /* How soft text goes while a panel resizes the column it is set in. Enough to
+     stop the eye tracking individual words across a re-wrap, not enough to read
+     as an effect. */
+  --chat-reflow-blur: 3px;
+
   /*
    * Type scale. Named by role rather than size so a component never has to pick
    * a number: the transcript is read, the sidebar is scanned, and captions are

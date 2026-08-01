@@ -1358,6 +1358,41 @@ label:has(> select#reasoning-effort) select {
   animation: provider-update-pill-countdown var(--provider-update-pill-dismiss-ms) linear forwards;
 }
 
+/*
+ * The chat column settling after the right panel changes its width.
+ *
+ * Messages are centred at `max-w-3xl`, so nothing moves while the column is
+ * wider than that. Once the panel squeezes it past 48rem the prose re-wraps on
+ * every frame of the eased width — words jumping between lines for the whole
+ * transition, which is what reads as chaotic. Flexbox re-solves the width each
+ * frame, so there is no way to lay the text out once while the box is moving.
+ *
+ * So cover the re-wrap instead of fighting it: the column goes soft as the
+ * width starts moving and comes back sharp as it lands, over the same
+ * `--duration-base` the panel itself uses. Restarting is free — the two
+ * attribute values are two selectors, so flipping open/closed re-triggers it.
+ */
+@keyframes chat-column-settle {
+  from {
+    filter: blur(var(--chat-reflow-blur));
+  }
+  to {
+    filter: blur(0);
+  }
+}
+
+.chat-column-reflow[data-chat-column-reflowing="open"],
+.chat-column-reflow[data-chat-column-reflowing="closed"] {
+  animation: chat-column-settle var(--duration-base) var(--ease-soft);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-column-reflow[data-chat-column-reflowing="open"],
+  .chat-column-reflow[data-chat-column-reflowing="closed"] {
+    animation: none;
+  }
+}
+
 /* Diffs theme bridge (match diff surfaces to app palette) */
 .diff-panel-viewport {
   background: var(--panel-diff-viewport-surface);

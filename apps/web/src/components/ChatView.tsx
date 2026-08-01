@@ -5866,8 +5866,13 @@ function ChatViewContent(props: ChatViewProps) {
           // the movement glided and half of it snapped.
           "transition-[flex-grow,width] duration-(--duration-base) ease-(--ease-soft)",
           rightPanelMaximized ? "w-0 min-w-0 flex-none" : "min-w-(--layout-chat-min-width) flex-1",
+          "chat-column-reflow",
         )}
         data-chat-column-maximized-away={rightPanelMaximized ? "true" : "false"}
+        /* Flipping this restarts the settle animation in index.css, which is
+           what covers the prose re-wrapping while the panel eases the column
+           narrower. */
+        data-chat-column-reflowing={rightPanelOpen ? "open" : "closed"}
       >
         {/* Top bar */}
         <header
