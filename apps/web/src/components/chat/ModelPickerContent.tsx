@@ -500,7 +500,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
           between them reads as one control rather than a different popup. */}
       <div
         className={cn(
-          "dropdown-glass model-picker-surface relative flex w-screen max-w-88 flex-col overflow-hidden rounded-(--popup-radius) text-popover-foreground [clip-path:inset(0_round_var(--popup-radius))]",
+          "dropdown-glass relative flex w-screen max-w-88 flex-col overflow-hidden rounded-(--popup-radius) text-popover-foreground [clip-path:inset(0_round_var(--popup-radius))]",
           /*
            * The list step needs a definite height or its virtualised rows have
            * nothing to shrink against: with only a max-height the box grew to

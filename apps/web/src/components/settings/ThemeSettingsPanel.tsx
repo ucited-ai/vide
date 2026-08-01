@@ -9,7 +9,7 @@ import {
   type ChatAppearanceOption,
 } from "../chat/chatAppearance";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
-import { TextSizeRow, ThemeColorsRow } from "./ThemeAppearanceControls";
+import { TextSizeRow, ThemeColorsRow, ThemePreview } from "./ThemeAppearanceControls";
 import {
   SettingResetButton,
   SettingsPageContainer,
@@ -193,6 +193,11 @@ export function ThemeSettingsPanel() {
 
         <TextSizeRow />
         <ThemeColorsRow />
+
+        {/* One picture for both controls above, rather than one each. */}
+        <div className="px-3 pb-1 sm:px-4">
+          <ThemePreview />
+        </div>
       </SettingsSection>
 
       <ChatAppearanceSection />

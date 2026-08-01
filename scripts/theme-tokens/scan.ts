@@ -11,7 +11,7 @@
  * It reports what it finds; `check.ts` decides what blocks.
  */
 
-export type FindingKind = "hardcoded-text-size" | "raw-color";
+export type FindingKind = "hardcoded-text-size" | "raw-color" | "raw-font-size";
 
 export interface Finding {
   readonly kind: FindingKind;
@@ -29,13 +29,23 @@ export interface SourceFile {
   readonly content: string;
 }
 
+/** `"all"` where a file is the theme; otherwise the kinds it is excused from. */
+export type Exemption = "all" | ReadonlyArray<FindingKind>;
+
 export interface ScanConfig {
   /** Directory prefixes to scan. Everything else is somebody else's concern. */
   readonly roots: ReadonlyArray<string>;
   /** Directory prefixes inside those roots that are not the app's to theme. */
   readonly exemptRoots: ReadonlyArray<string>;
-  /** Files allowed to hold theme values, by exact path. */
-  readonly exemptPaths: ReadonlySet<string>;
+  /**
+   * What a given file is excused from, by exact path.
+   *
+   * Per kind rather than per file, because the first version was per file and
+   * that is how ten `font-size` declarations hid in plain sight: `index.css` was
+   * excused because it legitimately holds derived colours, and the blanket
+   * exemption took the sizes with them.
+   */
+  readonly exemptPaths: ReadonlyMap<string, Exemption>;
   /** Suffixes whose files are exempt — tests naming a colour are asserting, not styling. */
   readonly exemptSuffixes: ReadonlyArray<string>;
 }
@@ -53,13 +63,26 @@ export const defaultScanConfig: ScanConfig = {
      It cannot see Vide's stylesheet, so its colours have nowhere to come from
      but itself — that is a boundary, not debt. */
   exemptRoots: ["apps/desktop/src/preview/"],
-  exemptPaths: new Set([
-    "apps/web/src/vide-theme.css",
-    "apps/web/src/index.css",
-    "apps/web/src/components/Icons.tsx",
-    "apps/web/src/components/JetBrainsIcons.tsx",
-    "apps/web/src/components/SidebarStageBackdrop.tsx",
-    "apps/web/src/components/chat/PierreEntryIcon.tsx",
+  exemptPaths: new Map<string, Exemption>([
+    /* The theme itself. Every value here is the answer, not the debt. */
+    ["apps/web/src/vide-theme.css", "all"],
+    /*
+     * Upstream's stylesheet. Its colours are derived from the ladder and belong
+     * here, but a size declared in it escapes the scale exactly like one
+     * declared in a component — so only the colour channel is excused.
+     */
+    ["apps/web/src/index.css", ["raw-color"]],
+    /* Brand marks: a vendor's logo is that vendor's colour. */
+    ["apps/web/src/components/Icons.tsx", ["raw-color"]],
+    ["apps/web/src/components/JetBrainsIcons.tsx", ["raw-color"]],
+    ["apps/web/src/components/chat/PierreEntryIcon.tsx", ["raw-color"]],
+    /* A decorative gradient whose stops are the artwork. */
+    ["apps/web/src/components/SidebarStageBackdrop.tsx", ["raw-color"]],
+    /*
+     * The pre-launch splash is a data-URL document with no stylesheet to read,
+     * the same boundary as the injected preview overlay.
+     */
+    ["apps/desktop/src/window/DesktopWindow.ts", "all"],
   ]),
   exemptSuffixes: [".test.ts", ".test.tsx", ".stories.tsx", ".generated.ts"],
 };
@@ -98,11 +121,31 @@ const HEX_COLOR = /(?<![\w#])#(?:[\da-fA-F]{8}|[\da-fA-F]{6}|[\da-fA-F]{3,4})(?!
  */
 const FUNCTIONAL_COLOR = /\b(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch)\(\s*[\d.][^)\n]*\)/g;
 
+/**
+ * A size declared as a number rather than asked for by role.
+ *
+ * This is the kind the first pass missed, and it cost the most: ten `font-size`
+ * declarations in a stylesheet and one `fontSize: 12` handed to a canvas meant
+ * the whole rendered answer, the diff, the file tree and the terminal stood
+ * still while everything around them scaled. Classes were being checked and
+ * declarations were not, so centralisation stopped exactly at the file boundary.
+ *
+ * `em` and `%` are absent on purpose: both are proportions of an inherited size,
+ * which is a way of *following* the scale, not of escaping it.
+ */
+const RAW_FONT_SIZE =
+  /font-?[sS]ize"?'?\s*[:=]\s*"?'?\{?\s*(-?\d+(?:\.\d+)?(?:px|rem|pt)?)(?![\w%.])/g;
+
 const isScannable = (path: string, config: ScanConfig): boolean =>
   config.roots.some((root) => path.startsWith(root)) &&
   !config.exemptRoots.some((root) => path.startsWith(root)) &&
-  !config.exemptPaths.has(path) &&
+  config.exemptPaths.get(path) !== "all" &&
   !config.exemptSuffixes.some((suffix) => path.endsWith(suffix));
+
+const isExempt = (path: string, kind: FindingKind, config: ScanConfig): boolean => {
+  const exemption = config.exemptPaths.get(path);
+  return exemption !== undefined && (exemption === "all" || exemption.includes(kind));
+};
 
 /** Line number of an offset, 1-based. */
 const lineAt = (content: string, index: number): number => {
@@ -143,10 +186,15 @@ export const scanFile = (file: SourceFile, config: ScanConfig): ReadonlyArray<Fi
   if (!isScannable(file.path, config)) return [];
 
   const found = new Map<string, Finding>();
+  const look = (kind: FindingKind, pattern: RegExp) => {
+    if (!isExempt(file.path, kind, config)) collect(file, kind, pattern, found);
+  };
+
   /* A stylesheet has no Tailwind classes to hardcode; it declares CSS directly. */
-  if (!file.path.endsWith(".css")) collect(file, "hardcoded-text-size", TEXT_SIZE, found);
-  collect(file, "raw-color", HEX_COLOR, found);
-  collect(file, "raw-color", FUNCTIONAL_COLOR, found);
+  if (!file.path.endsWith(".css")) look("hardcoded-text-size", TEXT_SIZE);
+  look("raw-color", HEX_COLOR);
+  look("raw-color", FUNCTIONAL_COLOR);
+  look("raw-font-size", RAW_FONT_SIZE);
   return [...found.values()];
 };
 
@@ -175,4 +223,6 @@ export const advice: Readonly<Record<FindingKind, string>> = {
     "ask for a role: text-(length:--text-ui), --text-chat, --text-caption, --text-micro",
   "raw-color":
     "use a ladder token: var(--surface-chrome), var(--ink-secondary), or a color-mix from one",
+  "raw-font-size":
+    "read a role: var(--text-ui), var(--text-chat), var(--code-font-size) — or an em, which follows the scale",
 };

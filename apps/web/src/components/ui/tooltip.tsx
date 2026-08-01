@@ -17,7 +17,6 @@ function TooltipPopup({
   align = "center",
   sideOffset = 4,
   side = "top",
-  variant = "default",
   anchor,
   children,
   ...props
@@ -25,7 +24,6 @@ function TooltipPopup({
   align?: TooltipPrimitive.Positioner.Props["align"];
   side?: TooltipPrimitive.Positioner.Props["side"];
   sideOffset?: TooltipPrimitive.Positioner.Props["sideOffset"];
-  variant?: "default" | "glass";
   anchor?: TooltipPrimitive.Positioner.Props["anchor"];
 }) {
   return (
@@ -41,9 +39,18 @@ function TooltipPopup({
         <TooltipPrimitive.Popup
           className={cn(
             "relative flex h-(--popup-height,auto) w-(--popup-width,auto) origin-(--transform-origin) text-balance rounded-md text-(length:--text-caption) text-popover-foreground transition-[width,height,scale,opacity] before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-md)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)] data-ending-style:scale-98 data-starting-style:scale-98 data-ending-style:opacity-0 data-starting-style:opacity-0 data-instant:duration-0 dark:before:shadow-[0_-1px_--theme(--color-white/6%)]",
-            variant === "glass"
-              ? "dropdown-glass shadow-xl shadow-black/25 before:hidden"
-              : "border bg-popover not-dark:bg-clip-padding shadow-md/5",
+            /*
+             * A tooltip is a popup, so it is painted like one. It carried a
+             * `glass` variant for this and nobody ever passed it, which left
+             * every tooltip in the app on its own `border bg-popover` while
+             * every menu and popover took the shared surface — two looks for
+             * one kind of thing, by accident rather than by choice.
+             *
+             * The lighter shadow stays: a tooltip is a label that appeared, not
+             * a surface you act through, and a full popup elevation reads as a
+             * menu opening.
+             */
+            "dropdown-glass shadow-md/5 before:hidden",
             className,
           )}
           data-slot="tooltip-popup"

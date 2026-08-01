@@ -34,46 +34,6 @@
       "since": "2026-08-01",
       "count": 1
     },
-    "raw-color:apps/desktop/src/window/DesktopWindow.ts:#00000000": {
-      "since": "2026-08-01",
-      "count": 1
-    },
-    "raw-color:apps/desktop/src/window/DesktopWindow.ts:#01000000": {
-      "since": "2026-08-01",
-      "count": 1
-    },
-    "raw-color:apps/desktop/src/window/DesktopWindow.ts:#0e0e10": {
-      "since": "2026-08-01",
-      "count": 1
-    },
-    "raw-color:apps/desktop/src/window/DesktopWindow.ts:#1f2937": {
-      "since": "2026-08-01",
-      "count": 2
-    },
-    "raw-color:apps/desktop/src/window/DesktopWindow.ts:#6b7280": {
-      "since": "2026-08-01",
-      "count": 1
-    },
-    "raw-color:apps/desktop/src/window/DesktopWindow.ts:#9ca3af": {
-      "since": "2026-08-01",
-      "count": 1
-    },
-    "raw-color:apps/desktop/src/window/DesktopWindow.ts:#f6f6f7": {
-      "since": "2026-08-01",
-      "count": 1
-    },
-    "raw-color:apps/desktop/src/window/DesktopWindow.ts:#f8fafc": {
-      "since": "2026-08-01",
-      "count": 2
-    },
-    "raw-color:apps/desktop/src/window/DesktopWindow.ts:rgba(248,250,252,0.18)": {
-      "since": "2026-08-01",
-      "count": 1
-    },
-    "raw-color:apps/desktop/src/window/DesktopWindow.ts:rgba(31,41,55,0.18)": {
-      "since": "2026-08-01",
-      "count": 1
-    },
     "raw-color:apps/web/src/browser/annotationTheme.ts:oklch(0.269 0 0)": {
       "since": "2026-08-01",
       "count": 3

@@ -265,7 +265,6 @@ function SidebarV2ThreadTooltip({
       side="right"
       align="start"
       sideOffset={8}
-      variant="glass"
       className="max-w-80 text-left whitespace-normal"
     >
       <div className="flex max-w-80 flex-col gap-2 p-2">

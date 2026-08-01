@@ -484,14 +484,6 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(vide-mob
     box-shadow: 0 18px 44px -18px rgb(0 0 0 / 80%);
   }
 
-  .dark .model-picker-surface.model-picker-surface {
-    background: color-mix(
-      in srgb,
-      var(--popover) 18%,
-      color-mix(in srgb, var(--popover) var(--surface-chrome-alpha), transparent)
-    );
-  }
-
   .dark .dialog-glass {
     border-color: color-mix(in srgb, var(--color-white) 8%, transparent);
     box-shadow:
@@ -1012,22 +1004,29 @@ label:has(> select#reasoning-effort) select {
   color: var(--foreground);
 }
 
+/*
+ * Headings are proportions of the prose they head, so they are set in `em`
+ * against the message's own size rather than in `rem` against the document.
+ * Written as `rem` they were fixed at 20/18/16/14px, which meant turning the
+ * reading size up grew the paragraphs and left every heading in the answer
+ * standing where it was.
+ */
 .chat-markdown h1 {
-  font-size: 1.25rem;
+  font-size: 1.375em;
 }
 
 .chat-markdown h2 {
-  font-size: 1.125rem;
+  font-size: 1.25em;
 }
 
 .chat-markdown h3 {
-  font-size: 1rem;
+  font-size: 1.1em;
 }
 
 .chat-markdown h4,
 .chat-markdown h5,
 .chat-markdown h6 {
-  font-size: 0.875rem;
+  font-size: 0.965em;
 }
 
 .chat-markdown h6 {
@@ -1110,7 +1109,7 @@ label:has(> select#reasoning-effort) select {
   border-top: 1px solid var(--border);
   padding-top: 0.75rem;
   color: var(--muted-foreground);
-  font-size: 0.75rem;
+  font-size: var(--text-caption);
 }
 
 .chat-markdown section[data-footnotes] ol {
@@ -1130,7 +1129,7 @@ label:has(> select#reasoning-effort) select {
   justify-content: center;
   border-radius: 0.25rem;
   text-decoration: none;
-  font-size: 0.6875rem;
+  font-size: 0.76em;
   font-weight: 600;
 }
 
@@ -1140,7 +1139,7 @@ label:has(> select#reasoning-effort) select {
   background: var(--muted);
   padding: 0.1rem 0.35rem;
   color: var(--foreground);
-  font-size: 0.75rem;
+  font-size: 0.86em;
 }
 
 .chat-markdown a.chat-markdown-file-link {
@@ -1171,7 +1170,7 @@ label:has(> select#reasoning-effort) select {
   border: none;
   background: transparent;
   padding: 0;
-  font-size: 0.75rem;
+  font-size: var(--code-font-size);
 }
 
 .chat-markdown pre {
@@ -1235,7 +1234,7 @@ label:has(> select#reasoning-effort) select {
   align-items: center;
   gap: 0.4rem;
   font-family: var(--font-mono, ui-monospace, SFMono-Regular, monospace);
-  font-size: 0.6875rem;
+  font-size: var(--text-caption);
 }
 
 .chat-markdown .chat-markdown-chrome-action {
@@ -1278,7 +1277,7 @@ label:has(> select#reasoning-effort) select {
   border-collapse: collapse;
   overflow-wrap: normal;
   word-break: normal;
-  font-size: 0.75rem;
+  font-size: var(--text-caption);
 }
 
 .chat-markdown th,

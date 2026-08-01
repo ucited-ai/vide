@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  type Exemption,
   type ScanConfig,
   type SourceFile,
   defaultScanConfig,
@@ -12,7 +13,10 @@ import {
 const config: ScanConfig = {
   roots: ["apps/web/src/"],
   exemptRoots: ["apps/web/src/injected/"],
-  exemptPaths: new Set(["apps/web/src/vide-theme.css"]),
+  exemptPaths: new Map<string, Exemption>([
+    ["apps/web/src/vide-theme.css", "all"],
+    ["apps/web/src/derived.css", ["raw-color"]],
+  ]),
   exemptSuffixes: [".test.tsx"],
 };
 
@@ -54,7 +58,7 @@ describe("hardcoded text sizes", () => {
   });
 
   it("does not look for classes inside stylesheets", () => {
-    expect(values("apps/web/src/a.css", `.x { font-size: 1rem } /* text-sm */`)).toEqual([]);
+    expect(values("apps/web/src/a.css", `.x { color: inherit } /* text-sm */`)).toEqual([]);
   });
 
   it("counts repeats in one file under a single entry", () => {
@@ -97,6 +101,27 @@ describe("raw colours", () => {
   });
 });
 
+describe("raw font sizes", () => {
+  it("reports a size declared in a stylesheet", () => {
+    expect(values("apps/web/src/a.css", `.x { font-size: 1.25rem }`)).toEqual(["1.25rem"]);
+    expect(values("apps/web/src/a.css", `.x { font-size: 13px }`)).toEqual(["13px"]);
+  });
+
+  it("reports a size handed to a canvas from TypeScript", () => {
+    expect(values("apps/web/src/a.ts", `new Terminal({ fontSize: 12 })`)).toEqual(["12"]);
+  });
+
+  it("leaves a role token alone", () => {
+    expect(values("apps/web/src/a.css", `.x { font-size: var(--text-ui) }`)).toEqual([]);
+  });
+
+  it("leaves em and percent alone — both follow the inherited size", () => {
+    expect(values("apps/web/src/a.css", `.x { font-size: 1.375em }`)).toEqual([]);
+    expect(values("apps/web/src/a.css", `.x { font-size: 0.965em }`)).toEqual([]);
+    expect(values("apps/web/src/a.css", `.x { font-size: 100% }`)).toEqual([]);
+  });
+});
+
 describe("scope", () => {
   it("ignores files outside the scanned roots", () => {
     expect(values("apps/server/src/a.ts", `"#ffffff"`)).toEqual([]);
@@ -112,6 +137,13 @@ describe("scope", () => {
 
   it("ignores tests, which assert colours rather than style with them", () => {
     expect(values("apps/web/src/a.test.tsx", `expect(x).toBe("#17171a")`)).toEqual([]);
+  });
+
+  it("excuses a file from one kind without excusing it from the others", () => {
+    /* The blanket version of this exemption is how ten font-size declarations
+       hid inside a stylesheet that was excused for its colours. */
+    expect(values("apps/web/src/derived.css", `.x { color: #fff }`)).toEqual([]);
+    expect(values("apps/web/src/derived.css", `.x { font-size: 12px }`)).toEqual(["12px"]);
   });
 
   it("exempts brand marks by default", () => {

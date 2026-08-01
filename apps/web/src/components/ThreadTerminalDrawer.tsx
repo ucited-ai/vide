@@ -127,6 +127,23 @@ function normalizeComputedColor(value: string | null | undefined, fallback: stri
   return value ?? fallback;
 }
 
+/**
+ * The terminal's type size, taken from the same token the editor and the diff
+ * use rather than from a number here.
+ *
+ * xterm renders to a canvas, so it cannot inherit anything — every value has to
+ * be handed to it. That is exactly why a literal `12` survived the migration:
+ * nothing in CSS could reach it, and it sat at 12px while the panes either side
+ * of it grew.
+ */
+function terminalFontSizeFromApp(): number {
+  const declared = getComputedStyle(document.documentElement)
+    .getPropertyValue("--code-font-size")
+    .trim();
+  const parsed = Number.parseFloat(declared);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 12;
+}
+
 function terminalThemeFromApp(mountElement?: HTMLElement | null): ITheme {
   const isDark = document.documentElement.classList.contains("dark");
   const fallbackBackground = isDark ? "rgb(14, 18, 24)" : "rgb(255, 255, 255)";
@@ -392,7 +409,7 @@ export function TerminalViewport({
     const terminal = new Terminal({
       cursorBlink: true,
       lineHeight: 1,
-      fontSize: 12,
+      fontSize: terminalFontSizeFromApp(),
       scrollback: 5_000,
       fontFamily:
         '"SF Mono", "SFMono-Regular", "JetBrains Mono", Consolas, "Liberation Mono", Menlo, monospace',

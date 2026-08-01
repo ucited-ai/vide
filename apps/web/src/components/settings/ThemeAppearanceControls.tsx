@@ -273,30 +273,68 @@ export function ThemeColorsRow() {
 }
 
 /**
- * What the slider is actually doing, at the size it will do it.
+ * A miniature of the app, painted from the same tokens the app is painted from.
  *
- * Without this the control is blind: text size only shows itself once you leave
- * the settings screen, so choosing one means guessing, leaving, coming back and
- * guessing again. The three lines are the three roles a reader meets — an index
- * entry, a paragraph of an answer, a timestamp under it — set in the real
- * tokens, so the preview cannot drift from the app.
+ * Both controls in this section change this picture, so there is one of it rather
+ * than one per row. It is not a mock: every surface here reads a ladder rung and
+ * every line reads a type role, and the popup carries the real `dropdown-glass`
+ * class — so it cannot drift from the app, and a colour with opacity shows the
+ * same blur here that it will show over the transcript.
+ *
+ * It deliberately does not override the scale locally. A `--text-scale` set on
+ * this element would do nothing: the six roles are substituted at `:root`, so
+ * what inherits down here is already a resolved pixel value. The preview shows
+ * the live setting instead, which is also the honest thing — what you see is
+ * what the app is doing right now.
+ *
+ * What it earns is the part of the app you cannot see from the settings screen:
+ * a sidebar row, a paragraph of an answer, a timestamp and a line of code, at
+ * one glance and at the same moment.
  */
-function TextSizePreview({ scale }: { readonly scale: number }) {
-  const style = { "--text-scale": String(scale) } as CSSProperties;
-
+export function ThemePreview() {
   return (
     <div
-      style={style}
-      className="mt-3 grid gap-1 rounded-lg border border-border bg-muted/40 px-3 py-2.5"
+      aria-hidden
+      className="mt-1 overflow-hidden rounded-xl border border-border"
+      /* Its own stacking context, so the popup's blur samples the preview
+         rather than the settings page behind it. */
+      style={{ isolation: "isolate" }}
     >
-      <p className="text-(length:--text-ui) text-foreground">Projects · vide</p>
-      <p className="text-(length:--text-chat) leading-[1.55] text-foreground">
-        The transcript is set a step larger than the rest, because it is the one thing here that is
-        read rather than scanned.
-      </p>
-      <p className="text-(length:--text-caption) tabular-nums text-muted-foreground">
-        14:32 · 1,204 tokens
-      </p>
+      <div className="flex h-36 bg-(--surface-content)">
+        <div className="flex w-28 shrink-0 flex-col gap-1 border-r border-border bg-(--surface-chrome) p-2">
+          <span className="text-(length:--text-caption) font-medium text-(--ink-tertiary)">
+            Projects
+          </span>
+          <span className="truncate rounded-md bg-(--wash-selected) px-1.5 py-0.5 text-(length:--text-ui) text-(--ink)">
+            vide
+          </span>
+          <span className="truncate px-1.5 text-(length:--text-ui) text-(--ink-secondary)">
+            relay
+          </span>
+        </div>
+
+        <div className="relative flex min-w-0 flex-1 flex-col gap-1.5 p-3">
+          <p className="text-(length:--text-chat) leading-[1.5] text-(--ink)">
+            The transcript runs a step larger than the rest, because it is the one thing here that
+            is read rather than scanned.
+          </p>
+          <p className="font-mono text-(length:--code-font-size) text-(--ink-secondary)">
+            const scale = 1;
+          </p>
+          <p className="text-(length:--text-caption) tabular-nums text-(--ink-tertiary)">
+            14:32 · 1,204 tokens
+          </p>
+
+          {/* The real popup surface, so opacity and blur are shown, not described. */}
+          <div className="dropdown-glass absolute right-3 bottom-3 rounded-(--popup-radius) px-2 py-1.5">
+            <span className="text-(length:--text-ui) text-(--ink)">gpt-5</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="border-t border-border bg-(--surface-recessed) px-3 py-1.5">
+        <span className="text-(length:--text-micro) text-(--ink-tertiary)">main · 2 changed</span>
+      </div>
     </div>
   );
 }
@@ -349,8 +387,6 @@ export function TextSizeRow() {
           />
         </div>
       }
-    >
-      <TextSizePreview scale={textScale} />
-    </SettingsRow>
+    />
   );
 }

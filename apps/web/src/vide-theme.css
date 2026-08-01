@@ -629,10 +629,23 @@
  * rhythm adjustable without reaching back into either library's shadow DOM.
  */
 :root:root:root {
-  --code-font-size: 12.5px;
-  --code-line-height: 18px;
+  /*
+   * Code and the file tree are two more rungs of the same scale, and they move
+   * with it. They are not in the six roles because neither is prose: code is
+   * read at a fixed measure where a character's width matters as much as its
+   * height, and a tree is a list of names. But standing still while the app
+   * around them grew was the same bug in a different pane — a 12.5px diff
+   * beside an 19px transcript reads as two applications.
+   *
+   * The line height follows the size, or a larger font would collide with the
+   * row above it.
+   */
+  --code-base-font-size: 12.5px;
+  --code-font-size: calc(var(--code-base-font-size) * var(--text-scale));
+  --code-line-height: calc(1.44 * var(--code-font-size));
 
-  --tree-font-size: 12.5px;
+  --tree-base-font-size: 12.5px;
+  --tree-font-size: calc(var(--tree-base-font-size) * var(--text-scale));
   --tree-padding-inline: 0.5rem;
   --tree-level-gap: 0.75rem;
   --tree-search-icon-size: 0.875rem;
