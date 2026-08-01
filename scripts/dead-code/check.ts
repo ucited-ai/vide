@@ -96,9 +96,10 @@ const listTrackedPaths = Effect.fn("listTrackedPaths")(function* (root: string) 
 });
 
 /*
- * Unreadable files are skipped rather than fatal. This repo contains a committed
- * broken symlink (CLAUDE.md -> "AGENTS.md\n", with a trailing newline inside the
- * link target), which crashes any naive read loop.
+ * Unreadable files are skipped rather than fatal. A tracked path is not
+ * necessarily a readable one: this repo carried a broken symlink for months
+ * (CLAUDE.md -> "AGENTS.md\n", a trailing newline inside the link target), and
+ * a naive read loop died on it.
  */
 const readSources = Effect.fn("readSources")(function* (
   root: string,

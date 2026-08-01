@@ -37,7 +37,7 @@ Costs of adopting knip here, honestly:
 - **False-positive rate on this codebase is high until tuned.** A pure name-reference count over the
   whole repo yields **3199** unused exports, **1617 of them in `packages/effect-codex-app-server`
   alone** and 360 in `packages/contracts` — both are deliberately exhaustive bindings for an external
-  protocol, where a complete surface is the charter (AGENTS.md: "Keep this package schema-only").
+  protocol, where a complete surface is the charter (CLAUDE.md: "Schema-only: no runtime logic").
   knip would report the same order of magnitude until per-workspace `ignore`/`ignoreExportsUsedInFile`
   were tuned. That tuning is a project, and it is a project that has to be re-done whenever a
   workspace is added.
@@ -118,9 +118,9 @@ library-rendered DOM (CodeMirror, shiki, markdown) rather than by our source.
 One pass, no program graph:
 
 1. `git ls-files` over text source extensions, minus `.repos/` and the lockfile.
-2. Read every file. Unreadable files are skipped, not fatal — this repo contains a **committed broken
-   symlink** (`CLAUDE.md` → `AGENTS.md\n`, with a literal trailing newline in the link target) which
-   makes a naive `readFileSync` loop crash on file 68.
+2. Read every file. Unreadable files are skipped, not fatal — this repo carried a **committed broken
+   symlink** for months (`CLAUDE.md` → `AGENTS.md\n`, with a literal trailing newline in the link
+   target) which made a naive `readFileSync` loop crash on file 68.
 3. Build **one inverted index**: token → set of file ids. The token pattern matches JS identifiers and
    CSS custom-property names in the same scan.
 4. Extract exported declarations from in-scope files by regex.
