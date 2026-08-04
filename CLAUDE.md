@@ -68,11 +68,9 @@ Committing runs formatting and a **dead-code gate**. It blocks on a newly export
 references; a symbol only a test references is a note, not a block. Delete the symbol rather than
 updating the baseline.
 
-After any user-visible frontend change, run one integrated pass on each affected client — the
-`test-vide-app` skill for web, `test-vide-mobile` for mobile. One isolated environment, authenticate
-through the printed pairing URL, verify the flow in a controlled browser, then stop the server.
-Subagents should not start their own dev servers. **A claim about how something looks is worth
-nothing unless something actually looked at it** — say plainly when the visual check has not happened.
+**A claim about how something looks is worth nothing unless something actually looked at it** —
+say plainly when a visual check has not happened. Do not start dev servers or drive browsers for
+verification unless the user asks for it.
 
 ## Reference material
 

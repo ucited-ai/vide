@@ -18,7 +18,10 @@ import {
   DEFAULT_CHAT_INDICATOR_COLOR,
   DEFAULT_PALETTE,
   DEFAULT_TEXT_SCALE,
+  GLASS_BLUR_STEP,
+  MAX_GLASS_BLUR,
   MAX_TEXT_SCALE,
+  MIN_GLASS_BLUR,
   MIN_TEXT_SCALE,
   PALETTE_SLOTS,
   type PaletteSlot,
@@ -38,28 +41,55 @@ import { SettingResetButton, SettingsRow } from "./settingsLayout";
 
 /*
  * What each rung is called to someone who has never read the stylesheet, in the
- * order they sit in: three surfaces from the floor up, then three weights of
- * text from strongest to faintest.
+ * order they sit in: surfaces from the floor up, then three weights of text
+ * from strongest to faintest. One label, one surface family — the sidebar, the
+ * panels the user acts through (composer, environment column) and the popups
+ * (menus, dialogs, toasts) are separate swatches because they are separately
+ * tintable rungs.
  */
 const SLOT_LABELS: Readonly<Record<PaletteSlot, string>> = {
   "surface-content": "Chat background",
-  "surface-recessed": "Inset areas",
-  "surface-chrome": "Sidebar & menus",
+  "surface-recessed": "Context bar",
+  "surface-sidebar": "Sidebar",
+  "surface-panel": "Chat input & side panels",
+  "surface-chrome": "Menus, dialogs & tooltips",
   ink: "Text",
   "ink-secondary": "Secondary text",
   "ink-tertiary": "Faint text",
 };
 
 /*
- * Only the chrome rung is ever painted translucent — see --surface-chrome-alpha
- * in vide-theme.css. Offering opacity on the others would be a slider that
- * moves and changes nothing.
+ * The word that fits under a 28px swatch. The full label stays in the tooltip
+ * and the picker; this is the one-word answer to "which dot was that again",
+ * which the row used to leave to hovering.
  */
-/* The two floors with the window's vibrancy material behind them. Ink never
+const SLOT_CAPTIONS: Readonly<Record<PaletteSlot, string>> = {
+  "surface-content": "Chat",
+  "surface-recessed": "Context",
+  "surface-sidebar": "Sidebar",
+  "surface-panel": "Input",
+  "surface-chrome": "Menus",
+  ink: "Text",
+  "ink-secondary": "Muted",
+  "ink-tertiary": "Faint",
+};
+
+/* The surfaces with the window's vibrancy material behind them. Ink never
    takes an alpha — ink that wants to be lighter can be a lighter grey. */
 const SLOTS_TAKING_OPACITY: ReadonlySet<PaletteSlot> = new Set([
   "surface-chrome",
+  "surface-sidebar",
+  "surface-panel",
   "surface-content",
+  "surface-recessed",
+]);
+
+/* The rungs that ride the chrome tone until the user splits them off — they
+   share chrome's presets, so "somewhere to start" stays one list. */
+const CHROME_FAMILY_SLOTS: ReadonlySet<PaletteSlot> = new Set([
+  "surface-chrome",
+  "surface-sidebar",
+  "surface-panel",
 ]);
 
 /**
@@ -248,7 +278,7 @@ export function ThemeColorsRow() {
     /* What this rung is today, so "undo my drag" is one click away. */
     push(`${SLOT_LABELS[slot]}, as designed`, toPickerValue(ladder[resolvedTheme][`--${slot}`]));
     push(`${SLOT_LABELS[slot]} in ${other}`, toPickerValue(ladder[other][`--${slot}`]));
-    if (slot === "surface-chrome") {
+    if (CHROME_FAMILY_SLOTS.has(slot)) {
       for (const [label, hex] of CHROME_PRESET_HEXES[resolvedTheme]) {
         push(label, hexToPaletteColor(hex));
       }
@@ -257,21 +287,25 @@ export function ThemeColorsRow() {
   };
 
   const swatch = (slot: PaletteSlot) => (
-    <SwatchButton
-      key={slot}
-      label={SLOT_LABELS[slot]}
-      /* A rung the user has not chosen shows what the stylesheet is painting. */
-      color={active[slot] ?? ladder[resolvedTheme][`--${slot}`] ?? "transparent"}
-      presets={presetsFor(slot)}
-      showAlpha={SLOTS_TAKING_OPACITY.has(slot)}
-      onChange={(value) => write(slot, value)}
-    />
+    <div key={slot} className="flex flex-col items-center gap-1">
+      <SwatchButton
+        label={SLOT_LABELS[slot]}
+        /* A rung the user has not chosen shows what the stylesheet is painting. */
+        color={active[slot] ?? ladder[resolvedTheme][`--${slot}`] ?? "transparent"}
+        presets={presetsFor(slot)}
+        showAlpha={SLOTS_TAKING_OPACITY.has(slot)}
+        onChange={(value) => write(slot, value)}
+      />
+      <span className="text-(length:--text-micro) leading-none text-(--ink-tertiary)">
+        {SLOT_CAPTIONS[slot]}
+      </span>
+    </div>
   );
 
   return (
     <SettingsRow
       title="Colours"
-      description={`Three surfaces and three weights of text. Everything else — borders, hovers, menus, the focus ring — follows from them. Stored separately for light and dark; you are editing ${resolvedTheme}.`}
+      description={`Five surfaces and three weights of text. Surfaces can carry an opacity — below 100% the surface becomes glass and shows what is behind it. Everything else — borders, hovers, the focus ring — follows from these eight. Stored separately for light and dark; you are editing ${resolvedTheme}.`}
       resetAction={
         isDefault ? null : (
           <SettingResetButton
@@ -283,14 +317,16 @@ export function ThemeColorsRow() {
       control={
         /* Surfaces and text as two groups, so the row reads as two decisions
            rather than six. */
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5">
+        <div className="flex items-start gap-3">
+          <div className="flex items-start gap-1.5">
             {swatch("surface-content")}
             {swatch("surface-recessed")}
+            {swatch("surface-sidebar")}
+            {swatch("surface-panel")}
             {swatch("surface-chrome")}
           </div>
-          <span aria-hidden className="h-5 w-px bg-border" />
-          <div className="flex items-center gap-1.5">
+          <span aria-hidden className="mt-1 h-5 w-px bg-border" />
+          <div className="flex items-start gap-1.5">
             {swatch("ink")}
             {swatch("ink-secondary")}
             {swatch("ink-tertiary")}
@@ -355,68 +391,188 @@ export function ChatIndicatorColorRow() {
   );
 }
 
+const GLASS_BLUR_PROPERTIES = ["--glass-blur"];
+
 /**
- * A miniature of the app, painted from the same tokens the app is painted from.
+ * How strongly translucent surfaces frost what is behind them.
  *
- * Both controls in this section change this picture, so there is one of it rather
- * than one per row. It is not a mock: every surface here reads a ladder rung and
- * every line reads a type role, and the popup carries the real `dropdown-glass`
- * class — so it cannot drift from the app, and a colour with opacity shows the
- * same blur here that it will show over the transcript.
+ * One slider for the whole app: sidebar, chat background, composer, menus and
+ * dialogs all frost with the same strength, because two panes of one window
+ * frosted differently read as two materials. It only shows at all where a
+ * surface's opacity is below 100% — an opaque fill has nothing behind it to
+ * frost — which the description says out loud, since a slider that visibly
+ * does nothing is worse than no slider.
+ */
+export function GlassBlurRow() {
+  const glassBlur = useClientSettings((settings) => settings.glassBlur);
+  const updateSettings = useUpdateClientSettings();
+  const { resolvedTheme } = useTheme();
+  /* The stylesheet's per-theme default, read back rather than copied here. */
+  const probedDefault = useProbedColors(GLASS_BLUR_PROPERTIES)[resolvedTheme]["--glass-blur"];
+  const themeDefault = Number.parseFloat(probedDefault ?? "12");
+  const effective = glassBlur ?? (Number.isFinite(themeDefault) ? themeDefault : 12);
+
+  const progress = (effective - MIN_GLASS_BLUR) / (MAX_GLASS_BLUR - MIN_GLASS_BLUR);
+  const sliderStyle = {
+    "--settings-slider-progress": `${String(progress * 100)}%`,
+  } as CSSProperties;
+
+  return (
+    <SettingsRow
+      title="Glass blur"
+      description="How strongly see-through surfaces frost what is behind them. Only visible where a colour's opacity is below 100% — turn a surface's opacity down first, then tune the frost here."
+      resetAction={
+        glassBlur === null ? null : (
+          <SettingResetButton
+            label="glass blur"
+            onClick={() => updateSettings({ glassBlur: null })}
+          />
+        )
+      }
+      control={
+        <div className="flex w-full items-center gap-3 sm:w-52">
+          <output
+            className="min-w-12 rounded-md bg-muted px-2 py-1 text-center font-mono text-(length:--text-caption) font-medium tabular-nums text-foreground"
+            htmlFor="glass-blur"
+          >
+            {glassBlur === null ? `${String(effective)}px` : `${String(glassBlur)}px`}
+          </output>
+          <input
+            aria-label="Glass blur"
+            className="settings-slider min-w-0 flex-1"
+            id="glass-blur"
+            max={MAX_GLASS_BLUR}
+            min={MIN_GLASS_BLUR}
+            onChange={(event) => {
+              const next = Number(event.currentTarget.value);
+              if (next >= MIN_GLASS_BLUR && next <= MAX_GLASS_BLUR) {
+                updateSettings({ glassBlur: next });
+              }
+            }}
+            step={GLASS_BLUR_STEP}
+            style={sliderStyle}
+            type="range"
+            value={effective}
+          />
+        </div>
+      }
+    />
+  );
+}
+
+/**
+ * A miniature of the app, floating on a fixed wallpaper.
  *
- * It deliberately does not override the scale locally. A `--text-scale` set on
- * this element would do nothing: the six roles are substituted at `:root`, so
- * what inherits down here is already a resolved pixel value. The preview shows
- * the live setting instead, which is also the honest thing — what you see is
- * what the app is doing right now.
+ * It is not a mock: every surface here reads the same custom property the real
+ * surface paints — the sidebar its `--sidebar-surface` and sidebar frost, the
+ * composer its `--panel-surface` and panel frost, the menu the real
+ * `dropdown-glass` class — so it cannot drift from the app, and a colour with
+ * opacity shows the same glass here that it will show over the transcript.
  *
- * What it earns is the part of the app you cannot see from the settings screen:
- * a sidebar row, a paragraph of an answer, a timestamp and a line of code, at
- * one glance and at the same moment.
+ * The wallpaper is the part the settings page cannot otherwise provide: glass
+ * is invisible over a page painted in the same greys it is mixed from, which
+ * is why the old preview looked broken the moment anyone touched opacity.
+ * A static, colourful backdrop — deliberately not a theme colour — stands in
+ * for the desktop behind the window, so transparency and blur are shown
+ * rather than described. It never changes with the theme; only the window
+ * floating on it does.
+ *
+ * It deliberately does not override the text scale locally: the six roles are
+ * substituted at `:root`, so what inherits down here is already the live
+ * setting — which is also the honest thing to show.
  */
 export function ThemePreview() {
+  const glassFilter = (variable: string): CSSProperties => ({
+    backdropFilter: `var(${variable}, var(--chrome-backdrop-filter))`,
+    WebkitBackdropFilter: `var(${variable}, var(--chrome-backdrop-filter))`,
+  });
+
   return (
     <div
       aria-hidden
       className="mt-1 overflow-hidden rounded-xl border border-border"
-      /* Its own stacking context, so the popup's blur samples the preview
+      /* Its own stacking context, so every pane's blur samples the wallpaper
          rather than the settings page behind it. */
       style={{ isolation: "isolate" }}
     >
-      <div className="flex h-36 bg-(--surface-content)">
-        <div className="flex w-28 shrink-0 flex-col gap-1 border-r border-border bg-(--surface-chrome) p-2">
-          <span className="text-(length:--text-caption) font-medium text-(--ink-tertiary)">
-            Projects
-          </span>
-          <span className="truncate rounded-md bg-(--wash-selected) px-1.5 py-0.5 text-(length:--text-ui) text-(--ink)">
-            vide
-          </span>
-          <span className="truncate px-1.5 text-(length:--text-ui) text-(--ink-secondary)">
-            relay
-          </span>
-        </div>
+      <div
+        className="relative p-4"
+        /* The stand-in desktop. Static on purpose: the point is contrast
+           behind the glass, not another themeable surface. */
+        style={{
+          background:
+            "radial-gradient(52% 78% at 16% 18%, rgb(96 132 216 / 85%), transparent 70%)," +
+            "radial-gradient(44% 64% at 84% 24%, rgb(214 138 110 / 75%), transparent 70%)," +
+            "radial-gradient(60% 54% at 58% 88%, rgb(104 176 144 / 70%), transparent 72%)," +
+            "linear-gradient(160deg, #2c3550, #171c2a)",
+        }}
+      >
+        {/* The app window. */}
+        <div className="relative flex h-44 overflow-hidden rounded-lg border border-black/20 shadow-[0_18px_40px_-18px_rgb(0_0_0/60%)]">
+          {/* Sidebar — its own fill and frost, exactly like the real one. */}
+          <div
+            className="flex w-28 shrink-0 flex-col gap-1 border-r border-(--edge) bg-(--sidebar-surface) p-2"
+            style={glassFilter("--sidebar-backdrop-filter")}
+          >
+            <span className="text-(length:--text-micro) font-medium tracking-wide text-(--ink-tertiary) uppercase">
+              Sidebar
+            </span>
+            <span className="truncate rounded-md bg-(--wash-selected) px-1.5 py-0.5 text-(length:--text-ui) text-(--ink)">
+              vide
+            </span>
+            <span className="truncate px-1.5 text-(length:--text-ui) text-(--ink-secondary)">
+              relay
+            </span>
+          </div>
 
-        <div className="relative flex min-w-0 flex-1 flex-col gap-1.5 p-3">
-          <p className="text-(length:--text-chat) leading-[1.5] text-(--ink)">
-            The transcript runs a step larger than the rest, because it is the one thing here that
-            is read rather than scanned.
-          </p>
-          <p className="font-mono text-(length:--code-font-size) text-(--ink-secondary)">
-            const scale = 1;
-          </p>
-          <p className="text-(length:--text-caption) tabular-nums text-(--ink-tertiary)">
-            14:32 · 1,204 tokens
-          </p>
+          {/* Chat pane — the content floor. */}
+          <div className="relative flex min-w-0 flex-1 flex-col bg-(--content-surface)">
+            <div className="flex min-w-0 flex-1 flex-col gap-1 p-3 pb-0">
+              <span className="text-(length:--text-micro) font-medium tracking-wide text-(--ink-tertiary) uppercase">
+                Chat background
+              </span>
+              <p className="text-(length:--text-chat) leading-[1.5] text-(--ink)">
+                The transcript is read rather than scanned, so it runs a step larger.
+              </p>
+              <p className="text-(length:--text-caption) tabular-nums text-(--ink-tertiary)">
+                14:32 · 1,204 tokens
+              </p>
+            </div>
 
-          {/* The real popup surface, so opacity and blur are shown, not described. */}
-          <div className="dropdown-glass absolute right-3 bottom-3 rounded-(--popup-radius) px-2 py-1.5">
-            <span className="text-(length:--text-ui) text-(--ink)">gpt-5</span>
+            {/* The real popup surface: fill, frost, edge and shadow all come
+                from dropdown-glass, so this is what every menu will look like. */}
+            <div className="dropdown-glass absolute top-2 right-2 z-10 rounded-(--popup-radius) px-2 py-1.5">
+              <div className="text-(length:--text-micro) tracking-wide text-(--ink-tertiary) uppercase">
+                Menu
+              </div>
+              <div className="text-(length:--text-ui) text-(--ink)">gpt-5</div>
+              <div className="text-(length:--text-ui) text-(--ink-secondary)">claude</div>
+            </div>
+
+            {/* Composer — the panel rung, floating over the chat floor the way
+                the real one floats over the transcript. */}
+            <div className="px-3 pb-2">
+              <div
+                className="rounded-lg border border-(--edge) bg-(--panel-surface) px-2 py-1.5"
+                style={glassFilter("--panel-backdrop-filter")}
+              >
+                <span className="text-(length:--text-micro) font-medium tracking-wide text-(--ink-tertiary) uppercase">
+                  Chat input
+                </span>
+                <div className="text-(length:--text-ui) text-(--ink-tertiary)">
+                  Describe a change…
+                </div>
+              </div>
+            </div>
+
+            {/* Context bar — the recessed rung. */}
+            <div className="border-t border-(--edge) bg-(--recessed-surface) px-3 py-1">
+              <span className="text-(length:--text-micro) text-(--ink-tertiary)">
+                Context bar · main · 2 changed
+              </span>
+            </div>
           </div>
         </div>
-      </div>
-
-      <div className="border-t border-border bg-(--surface-recessed) px-3 py-1.5">
-        <span className="text-(length:--text-micro) text-(--ink-tertiary)">main · 2 changed</span>
       </div>
     </div>
   );

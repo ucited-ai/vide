@@ -44,9 +44,6 @@ interface ChatEnvironmentColumnProps {
   /** The panel stays mounted at all times, so both directions animate. */
   open: boolean;
   fullAreaHidden: boolean;
-  /** With the right panel open there is no width to spare — the panel floats
-   *  over the chat instead of claiming a column of its own. */
-  rightPanelOpen: boolean;
   onClose: () => void;
   /** Opens the review surface in the right panel, or `null` where review is not
    *  available — a draft thread, or a workspace that is not a Git repository. */
@@ -313,7 +310,6 @@ export const ChatEnvironmentColumn = memo(function ChatEnvironmentColumn({
   gitCwd,
   open,
   fullAreaHidden,
-  rightPanelOpen,
   onClose,
   onOpenReview,
 }: ChatEnvironmentColumnProps) {
@@ -441,15 +437,14 @@ export const ChatEnvironmentColumn = memo(function ChatEnvironmentColumn({
   return (
     <>
       {/*
-        A column when there is room, a layer when there is not. With the right
-        panel closed the wrapper claims `--envcol-width` and the chat yields it,
-        so reading the environment does not cover the conversation; with the
-        right panel open the same wrapper is zero-wide and the surface floats
-        over the chat, because two reserved columns would starve it.
+        Always a layer, never a column. The room the panel needs is ceded by the
+        chat as its own end padding (`--chat-column-end-reserve` in ChatView),
+        so the timeline's scroller — and its native scrollbar — keeps the full
+        pane width. This zero-wide wrapper only marks the right edge the
+        surface hangs from.
       */}
       <div
-        className="relative z-40 h-full min-h-0 min-w-0 self-stretch overflow-visible transition-[width] duration-(--duration-base) ease-(--ease-soft)"
-        style={{ width: visibleOpen && !rightPanelOpen ? "var(--envcol-width)" : 0 }}
+        className="relative z-40 h-full min-h-0 w-0 min-w-0 self-stretch overflow-visible"
         // Collapsed but mounted, it must not be reachable: without this, Tab
         // walks into a panel nobody can see.
         {...(!visibleOpen ? { inert: true } : {})}

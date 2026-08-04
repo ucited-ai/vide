@@ -9,6 +9,7 @@ function timing(): ChatStreamWordTiming & { readonly counts: number[] } {
   const counts: number[] = [];
   return {
     styleOf: (index) => `--chat-stream-delay:${String(index * 10)}ms`,
+    blockStyleOf: (index) => `--chat-stream-delay:${String(index * 10)}ms`,
     reportWordCount: (count) => counts.push(count),
     counts,
   };
@@ -49,6 +50,7 @@ describe("rehypeChatStreamWords", () => {
   it("wraps a word at rest as a bare span, so a remounted row cannot animate it", () => {
     const html = renderMarkdown("one two", {
       styleOf: () => null,
+      blockStyleOf: () => null,
       reportWordCount: () => {},
     });
 
@@ -88,11 +90,39 @@ describe("rehypeChatStreamWords", () => {
     );
   });
 
-  it("leaves a fenced block alone", () => {
+  it("leaves a fenced block's insides alone, but reveals the fence as a block", () => {
     const html = renderMarkdown("```ts\nconst value = 1;\n```", timing());
 
     expect(html).toContain("<code");
     expect(html).not.toContain('class="chat-stream-word"');
+    // The fence itself joins the clock as one block, on the current index.
+    expect(html).toContain('<pre class="chat-stream-block" style="--chat-stream-delay:0ms">');
+  });
+
+  it("reveals a paragraph as a block on its first word's delay", () => {
+    const html = renderMarkdown("one two\n\nthree four", timing());
+
+    expect(html).toContain('<p class="chat-stream-block" style="--chat-stream-delay:0ms">');
+    expect(html).toContain('<p class="chat-stream-block" style="--chat-stream-delay:20ms">');
+  });
+
+  it("reveals each list item as its own block, so the marker arrives with its words", () => {
+    const html = renderMarkdown("- one\n- two", timing());
+
+    expect(html).toContain('<li class="chat-stream-block" style="--chat-stream-delay:0ms">');
+    expect(html).toContain('<li class="chat-stream-block" style="--chat-stream-delay:10ms">');
+    // The list itself stays bare: its items stagger individually.
+    expect(html).not.toContain('<ul class="chat-stream-block"');
+  });
+
+  it("leaves a block at rest as bare markup", () => {
+    const html = renderMarkdown("one two", {
+      styleOf: (index) => `--chat-stream-delay:${String(index * 10)}ms`,
+      blockStyleOf: () => null,
+      reportWordCount: () => {},
+    });
+
+    expect(html).not.toContain("chat-stream-block");
   });
 
   it("reports how many words the tree holds, counting a whole element as one", () => {

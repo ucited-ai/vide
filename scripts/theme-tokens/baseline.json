@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-08-01",
+  "generatedAt": "2026-08-04",
   "findings": {
     "hardcoded-text-size:apps/web/src/components/chat/ModelPickerSidebar.tsx:text-[7px]": {
       "since": "2026-08-01",
@@ -101,46 +101,6 @@
     "raw-color:apps/web/src/components/PullRequestThreadDialog.tsx:#123": {
       "since": "2026-08-01",
       "count": 2
-    },
-    "raw-color:apps/web/src/components/settings/ThemeAppearanceControls.tsx:#1b1c20": {
-      "since": "2026-08-01",
-      "count": 1
-    },
-    "raw-color:apps/web/src/components/settings/ThemeAppearanceControls.tsx:#20242b": {
-      "since": "2026-08-01",
-      "count": 1
-    },
-    "raw-color:apps/web/src/components/settings/ThemeAppearanceControls.tsx:#232429": {
-      "since": "2026-08-01",
-      "count": 1
-    },
-    "raw-color:apps/web/src/components/settings/ThemeAppearanceControls.tsx:#262429": {
-      "since": "2026-08-01",
-      "count": 1
-    },
-    "raw-color:apps/web/src/components/settings/ThemeAppearanceControls.tsx:#2b2c32": {
-      "since": "2026-08-01",
-      "count": 1
-    },
-    "raw-color:apps/web/src/components/settings/ThemeAppearanceControls.tsx:#33343a": {
-      "since": "2026-08-01",
-      "count": 1
-    },
-    "raw-color:apps/web/src/components/settings/ThemeAppearanceControls.tsx:#f7f7f8": {
-      "since": "2026-08-01",
-      "count": 1
-    },
-    "raw-color:apps/web/src/components/settings/ThemeAppearanceControls.tsx:#fafbfd": {
-      "since": "2026-08-01",
-      "count": 1
-    },
-    "raw-color:apps/web/src/components/settings/ThemeAppearanceControls.tsx:#fdfcfa": {
-      "since": "2026-08-01",
-      "count": 1
-    },
-    "raw-color:apps/web/src/components/settings/ThemeAppearanceControls.tsx:#ffffff": {
-      "since": "2026-08-01",
-      "count": 1
     },
     "raw-color:apps/web/src/components/ThreadTerminalDrawer.tsx:rgb(110, 120, 136)": {
       "since": "2026-08-01",
@@ -389,10 +349,6 @@
     "raw-color:apps/web/src/components/ui/qr-code.tsx:#fff": {
       "since": "2026-08-01",
       "count": 1
-    },
-    "raw-color:apps/web/src/contextMenuFallback.ts:rgb(0 0 0 / 0.05)": {
-      "since": "2026-08-01",
-      "count": 2
     },
     "raw-color:apps/web/src/hooks/useTheme.ts:rgba(0 0 0 / 0)": {
       "since": "2026-08-01",

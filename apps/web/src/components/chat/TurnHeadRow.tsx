@@ -2,22 +2,21 @@ import { ChevronRightIcon } from "lucide-react";
 import { memo, use, useEffect, useRef } from "react";
 
 import { cn } from "~/lib/utils";
-import { ChatSwapText } from "./ChatSwapText";
 import { type MessagesTimelineRow } from "./MessagesTimeline.logic";
-import { ThinkingIndicator } from "./ThinkingIndicator";
 import { TimelineRowCtx } from "./timelineRowContext";
 
 /**
- * The turn's status line, and the line its work folds behind — one row.
+ * The turn's static frame, and the line its work folds behind — one row.
  *
- * While the turn runs it carries the indicator, the phrase the turn is on and a
- * timer; when the turn ends the phrase swaps to "Worked for", the timer stops at
- * the total, the indicator freezes on a still frame and the work underneath
- * collapses into it. Nothing about the row moves as that happens, which is what
- * makes the end of a turn read as settling rather than as a replacement: the two
- * states are the same element, keyed by the turn.
+ * Deliberately quiet: "Working for" plus a counting timer while the turn runs,
+ * "Worked for" plus the total when it ends — same words, same column, the
+ * timer simply stops. No indicator, no shimmer, no swapping phrase; the
+ * animated reading of the turn (`TurnTailRow`) lives at the bottom, where the
+ * writing actually happens. A frame that danced pulled the eye to the top of
+ * the turn every time the phrase changed, away from the text arriving below.
  *
- * Clicking it once the turn is over brings the work back.
+ * Clicking it once the turn is over brings the folded work back — when there
+ * is any: a text-only turn keeps the line and loses only the chevron.
  */
 
 type TurnHeadRowData = Extract<MessagesTimelineRow, { kind: "turn-head" }>;
@@ -26,7 +25,7 @@ export const TurnHeadRow = memo(function TurnHeadRow({ row }: { row: TurnHeadRow
   const ctx = use(TimelineRowCtx);
   const live = row.state === "live";
   const turnId = row.turnId;
-  const canToggle = !live && turnId !== null;
+  const canToggle = !live && turnId !== null && row.collapsible;
 
   return (
     <button
@@ -41,24 +40,17 @@ export const TurnHeadRow = memo(function TurnHeadRow({ row }: { row: TurnHeadRow
       data-turn-head-state={row.state}
       disabled={!canToggle}
       onClick={() => {
-        if (turnId !== null) {
+        if (canToggle && turnId !== null) {
           ctx.onToggleTurnFold(turnId);
         }
       }}
       type="button"
     >
-      <span className="flex items-center justify-start">
-        <ThinkingIndicator
-          color={ctx.chatAppearance.indicatorColor}
-          frozen={!live}
-          variant={ctx.chatAppearance.thinkingIndicator}
-        />
-      </span>
-      <span className="flex min-w-0 items-center gap-1.5 text-left">
-        <ChatSwapText morphWidth shimmer={live} text={row.label} />
-        {/* The separator belongs to the running state: "Worked for · 8m 38s" is
-            not a sentence, and "Reading 8m 38s" is not one either. */}
-        {live ? <span aria-hidden="true">·</span> : null}
+      {/* Spans the gutter instead of leaving it empty: the head carries no
+          icon, and a label indented behind a blank gutter sat visibly right of
+          the prose and the status line it frames. Same x as everything else. */}
+      <span className="col-span-2 flex min-w-0 items-center gap-1.5 text-left">
+        <span>{row.label}</span>
         {live ? (
           <TurnElapsed startedAt={row.startedAt} />
         ) : row.duration !== null ? (

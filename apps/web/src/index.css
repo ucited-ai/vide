@@ -344,7 +344,7 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(vide-mob
   }
 
   .surface-subheader {
-    @apply flex shrink-0 items-center bg-background;
+    @apply flex shrink-0 items-center bg-(--content-surface);
     height: var(--panel-subheader-height);
     min-height: var(--panel-subheader-height);
   }
@@ -354,33 +354,21 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(vide-mob
     padding-inline-end: calc(env(safe-area-inset-right) + 0.75rem);
   }
 
-  .chat-composer-glass {
-    background: color-mix(in srgb, var(--background) var(--surface-chrome-alpha), transparent);
-    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
-    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
-  }
-
   .chat-composer-glass-shell {
-    --chat-composer-glass-surface: var(--card);
     --chat-composer-outline: rgb(0 0 0 / 8%);
 
     position: relative;
     isolation: isolate;
   }
 
+  /* Geometry only — the fill and the (alpha-gated) frost are painted by
+     vide-theme.css, the one owner of every glass surface. */
   .chat-composer-glass-shell::before {
     pointer-events: none;
     position: absolute;
     z-index: 0;
     inset: 0;
     border-radius: 22px;
-    background: color-mix(
-      in srgb,
-      var(--chat-composer-glass-surface) var(--surface-chrome-alpha),
-      transparent
-    );
-    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
-    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
     content: "";
   }
 
@@ -400,7 +388,6 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(vide-mob
   }
 
   .dark .chat-composer-glass-shell {
-    --chat-composer-glass-surface: color-mix(in srgb, var(--background) 96%, var(--color-white));
     --chat-composer-outline: color-mix(in srgb, var(--color-white) 5%, transparent);
     --chat-composer-highlight: rgb(255 255 255 / 3%);
   }
@@ -428,9 +415,9 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(vide-mob
         color-mix(in srgb, var(--alert-glass-tint) 4%, transparent),
         color-mix(in srgb, var(--alert-glass-tint) 4%, transparent)
       ),
-      color-mix(in srgb, var(--surface-chrome) var(--surface-chrome-alpha), transparent) !important;
-    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
-    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
+      var(--chrome-surface) !important;
+    -webkit-backdrop-filter: var(--chrome-backdrop-filter);
+    backdrop-filter: var(--chrome-backdrop-filter);
   }
 
   .alert-glass[data-variant="error"] {
@@ -449,51 +436,15 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(vide-mob
     --alert-glass-tint: var(--warning);
   }
 
-  .dialog-glass {
-    background: color-mix(in srgb, var(--background) var(--surface-chrome-alpha), transparent);
-    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
-    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
-  }
-
   .dialog-backdrop {
     background: color-mix(in srgb, var(--background) 60%, transparent);
     -webkit-backdrop-filter: blur(4px);
     backdrop-filter: blur(4px);
   }
 
-  .dropdown-glass {
-    /*
-     * Elevated glass needs a denser tint than broad ambient surfaces. Nesting
-     * the user-controlled mix inside an 18% popover tint preserves the full
-     * opacity setting range (40% -> 51%, 80% -> 84%, 100% -> 100%) while
-     * keeping high-contrast page content from blooming through menus.
-     */
-    background: color-mix(
-      in srgb,
-      var(--popover) 18%,
-      color-mix(in srgb, var(--popover) var(--surface-chrome-alpha), transparent)
-    );
-    -webkit-backdrop-filter: blur(var(--glass-blur));
-    backdrop-filter: blur(var(--glass-blur));
-    border: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent);
-    box-shadow: var(--elevation-popup);
-  }
-
-  .dialog-glass {
-    border-color: color-mix(in srgb, var(--foreground) 10%, transparent);
-    box-shadow: var(--elevation-dialog);
-  }
-
-  .dark .dropdown-glass {
-    box-shadow: 0 18px 44px -18px rgb(0 0 0 / 80%);
-  }
-
-  .dark .dialog-glass {
-    border-color: color-mix(in srgb, var(--color-white) 8%, transparent);
-    box-shadow:
-      inset 0 1px rgb(255 255 255 / 4%),
-      0 24px 72px -20px rgb(0 0 0 / 90%);
-  }
+  /* .dropdown-glass and .dialog-glass are painted entirely by vide-theme.css —
+     fill, frost, edge and elevation in one place, so a popup cannot end up on
+     a different material than the menu beside it. */
 
   .dark .dialog-backdrop {
     background: color-mix(in srgb, var(--background) 64%, transparent);
@@ -627,18 +578,19 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(vide-mob
   }
 
   @supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
-    .chat-composer-glass,
     .alert-glass {
-      background: var(--background) !important;
+      background: var(--surface-chrome) !important;
     }
 
     .chat-composer-glass-shell::before {
-      background: var(--chat-composer-glass-surface);
+      /* !important so this outranks vide-theme's unlayered translucent fill:
+         without backdrop-filter a see-through pane has no frost to sell it. */
+      background: var(--surface-panel) !important;
     }
 
     .dialog-glass,
     .dropdown-glass {
-      background: var(--popover) !important;
+      background: var(--surface-chrome) !important;
     }
   }
 }
@@ -659,11 +611,24 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(vide-mob
   padding-right: max(env(safe-area-inset-right), 0px);
 }
 
-/* Grain texture for chrome surfaces that float above the body (see the
+/* Grain texture for surfaces that float above the body (see the
    --surface-grain note). Layered over the element's background-color, so it
-   composes with bg-* utilities. */
-@utility surface-grain {
-  background-image: var(--surface-grain);
+   composes with bg-* utilities. Split by surface role so each grain rides
+   the same gate as its fill: ThemeVariableSync sets --chrome-grain /
+   --content-grain to `none` when that surface's alpha hits 0 — a texture on
+   a fully transparent fill would otherwise paint a ghost pane. */
+@utility surface-grain-chrome {
+  background-image: var(--chrome-grain, var(--surface-grain));
+  background-repeat: repeat;
+  background-size: 256px 256px;
+}
+@utility surface-grain-sidebar {
+  background-image: var(--sidebar-grain, var(--chrome-grain, var(--surface-grain)));
+  background-repeat: repeat;
+  background-size: 256px 256px;
+}
+@utility surface-grain-content {
+  background-image: var(--content-grain, var(--surface-grain));
   background-repeat: repeat;
   background-size: 256px 256px;
 }
@@ -1321,37 +1286,69 @@ label:has(> select#reasoning-effort) select {
 }
 
 /*
- * The chat column settling after the right panel changes its width.
+ * The chat column re-wrapping while a chrome panel changes its width.
  *
- * Messages are centred at `max-w-3xl`, so nothing moves while the column is
- * wider than that. Once the panel squeezes it past 48rem the prose re-wraps on
- * every frame of the eased width — words jumping between lines for the whole
- * transition, which is what reads as chaotic. Flexbox re-solves the width each
+ * Messages are centred at `--chat-column-width`, so nothing moves while the
+ * column is wider than that. Once a panel squeezes it past the cap the prose
+ * re-wraps on every frame of the eased width — flexbox re-solves the row each
  * frame, so there is no way to lay the text out once while the box is moving.
  *
- * So cover the re-wrap instead of fighting it: the column goes soft as the
- * width starts moving and comes back sharp as it lands, over the same
- * `--duration-base` the panel itself uses. Restarting is free — the two
- * attribute values are two selectors, so flipping open/closed re-triggers it.
+ * Cover the re-wrap instead of fighting it: the column goes soft the moment
+ * the panel starts moving, stays soft for the whole slide — the eye reads a
+ * surface scaling, not words jumping between lines — and comes back sharp just
+ * after the panel lands. This replaced an earlier freeze-then-jump approach
+ * (hold the row at its old width, re-wrap once on release), whose single
+ * released re-wrap read as the whole screen flickering.
+ *
+ * Restarting is free — the two attribute values are two selectors, so flipping
+ * open/closed re-triggers it. The tail past --duration-base is the settle: the
+ * blur lifts after the motion has finished, never before.
  */
 @keyframes chat-column-settle {
-  from {
+  0% {
+    filter: blur(0);
+  }
+  18% {
     filter: blur(var(--chat-reflow-blur));
   }
-  to {
+  70% {
+    filter: blur(var(--chat-reflow-blur));
+  }
+  100% {
     filter: blur(0);
   }
 }
 
 .chat-column-reflow[data-chat-column-reflowing="open"],
 .chat-column-reflow[data-chat-column-reflowing="closed"] {
-  animation: chat-column-settle var(--duration-base) var(--ease-soft);
+  animation: chat-column-settle calc(var(--duration-base) + 200ms) var(--ease-in-out);
+}
+
+/*
+ * The room the environment overview takes out of the chat is a custom
+ * property, so it can only glide if the property itself is registered and
+ * transitioned — an unregistered custom property flips discretely. With it
+ * gliding, the chat text tracks the panel's slide frame by frame (under the
+ * settle blur above) instead of jumping the full reserve at once.
+ */
+@property --chat-column-end-reserve {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
+}
+
+.chat-column-reserve-transition {
+  transition: --chat-column-end-reserve var(--duration-base) var(--ease-soft);
 }
 
 @media (prefers-reduced-motion: reduce) {
   .chat-column-reflow[data-chat-column-reflowing="open"],
   .chat-column-reflow[data-chat-column-reflowing="closed"] {
     animation: none;
+  }
+
+  .chat-column-reserve-transition {
+    transition: none;
   }
 }
 

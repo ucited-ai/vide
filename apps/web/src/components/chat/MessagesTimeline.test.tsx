@@ -404,10 +404,13 @@ describe("MessagesTimeline", () => {
     expect(markup).not.toContain("data-anchor-max-size=");
     expect(markup).toContain('data-content-inset-end="144"');
     expect(markup).toContain("[overflow-anchor:none]");
-    expect(markup).not.toContain('data-maintain-scroll-at-end="enabled"');
+    /* Follow armed is the only scroll authority now — the end pin stays on
+       even while an anchored end-space is present, covering layout growth the
+       spacer has already run out of. */
+    expect(markup).toContain('data-maintain-scroll-at-end="enabled"');
     expect(markup).toContain('data-maintain-visible-content-position="object"');
     expect(markup).toContain('data-maintain-visible-content-position-data="true"');
-    expect(markup).toContain('data-maintain-visible-content-position-size="false"');
+    expect(markup).toContain('data-maintain-visible-content-position-size="true"');
     expect(onAnchorReady).toHaveBeenCalledOnce();
     expect(onAnchorReady).toHaveBeenCalledWith(secondEntry.message.id, 1);
     expect(onAnchorSizeChanged).toHaveBeenCalledWith(secondEntry.message.id, 240);
@@ -679,9 +682,9 @@ describe("MessagesTimeline", () => {
     expect(markup).toContain('data-turn-head-state="live"');
     expect(markup).toContain("Searching for API endpoints");
     expect(markup).toContain("chat-thinking-indicator");
-    /* The live group has nothing to open: its label is already reading the calls
-       out one at a time. */
-    expect(markup).toContain('data-work-group-state="live"');
+    /* The live call lives on the status line alone — it does not also stand
+       in a work row of its own above it. */
+    expect(markup).not.toContain('data-work-group-state="live"');
     expect(markup).toContain("chat-shimmer");
   });
 

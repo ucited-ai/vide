@@ -129,8 +129,19 @@ function getWindowMaterialOptions(
   if (platform === "darwin") {
     return {
       backgroundColor: "#00000000",
-      vibrancy: "under-window",
-      visualEffectState: "followWindow",
+      // "hud", not "under-window": under-window is the most light-blocking
+      // material macOS has — behind a 0%-opacity surface it reads as a solid
+      // grey wall, not as glass. HUD is the same material family the system
+      // uses for overlay panels: windows behind genuinely shimmer through,
+      // which is the entire point of turning a surface's opacity down. This
+      // matches the in-app glass (menus, dialogs), which blurs app content
+      // via backdrop-filter — the window material is that same idea, one
+      // level further out.
+      vibrancy: "hud",
+      // "active", not "followWindow": the material's whole purpose here is to
+      // show what is behind the window, and the moment the user looks — by
+      // focusing another window — followWindow flattens it to an opaque grey.
+      visualEffectState: "active",
     };
   }
   return { backgroundColor: getInitialWindowBackgroundColor(shouldUseDarkColors) };

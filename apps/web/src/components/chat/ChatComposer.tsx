@@ -662,7 +662,7 @@ export interface ChatComposerProps {
   composerRef: React.RefObject<ChatComposerHandle | null>;
 
   // Callbacks
-  onSend: (e?: { preventDefault: () => void }) => void;
+  onSend: (e?: { preventDefault: () => void }, sendOptions?: { readonly steer?: boolean }) => void;
   onInterrupt: () => void;
   onImplementPlanInNewThread: () => void;
   onRespondToApproval: (
@@ -1840,12 +1840,12 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   ]);
 
   const submitComposer = useCallback(
-    (event?: { preventDefault: () => void }) => {
+    (event?: { preventDefault: () => void }, sendOptions?: { readonly steer?: boolean }) => {
       if (noProviderAvailable) {
         event?.preventDefault();
         return;
       }
-      onSend(event);
+      onSend(event, sendOptions);
       if (shouldBlurMobileComposerOnSubmit()) {
         blurMobileComposerAfterSend();
       }
@@ -1904,7 +1904,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       key === "Enter" &&
       shouldSubmitComposerOnEnter({ isMobileViewport, shiftKey: event.shiftKey })
     ) {
-      submitComposer();
+      // ⌘⏎ (or Ctrl⏎) steers a running turn instead of queueing behind it.
+      // With no turn running the flag is inert, so both chords just send.
+      submitComposer(undefined, { steer: event.metaKey || event.ctrlKey });
       return true;
     }
     return false;

@@ -51,6 +51,7 @@ import {
   type TimelineRowSharedState,
 } from "./timelineRowContext";
 import { TurnHeadRow } from "./TurnHeadRow";
+import { TurnTailRow } from "./TurnTailRow";
 import { WorkGroupRow } from "./WorkGroupRow";
 import { TerminalContextInlineChip } from "./TerminalContextInlineChip";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
@@ -305,7 +306,10 @@ export const MessagesTimeline = memo(function MessagesTimeline({
         rowTop < scrollBottom &&
         rowTop + Math.max(1, rowHeight ?? 1) > scrollTop;
 
-      strip.dataset.inView = inView ? "true" : "false";
+      const nextInView = inView ? "true" : "false";
+      if (strip.dataset.inView !== nextInView) {
+        strip.dataset.inView = nextInView;
+      }
     }
   }, [listRef, minimapItems, minimapStripMap, onIsAtEndChange]);
 
@@ -445,8 +449,15 @@ export const MessagesTimeline = memo(function MessagesTimeline({
             initialScrollAtEnd
             {...(anchoredEndSpace ? { anchoredEndSpace } : {})}
             contentInsetEndAdjustment={contentInsetEndAdjustment}
+            /*
+             * Follow armed is the only authority — an unarmed list never moves
+             * the scroll itself. While armed, layout growth below the fold
+             * (an expanded tool group streaming output, a disclosure opening)
+             * re-pins the end; the anchored end-space absorbs what it can and
+             * the pin covers the growth the spacer has already run out of.
+             */
             maintainScrollAtEnd={
-              anchoredEndSpace || !followEnabled
+              !followEnabled
                 ? false
                 : {
                     animated: false,
@@ -457,15 +468,28 @@ export const MessagesTimeline = memo(function MessagesTimeline({
                     },
                   }
             }
+            /*
+             * `size: true` is what compensates the scroll when a row above the
+             * viewport resolves from its 90px estimate to its real height —
+             * without it, scrolling up through never-measured rows shifted the
+             * content under the reader (browser anchoring is off below).
+             */
             maintainVisibleContentPosition={{
               data: true,
-              size: false,
+              size: true,
             }}
             onScroll={handleScroll}
             className={cn(
               // The inset is the composer's, from the same token, so the text and
-              // the input it answers sit in one column.
-              "scrollbar-gutter-both h-full min-h-0 overflow-x-hidden overscroll-y-contain px-(--chat-column-inset) [overflow-anchor:none]",
+              // the input it answers sit in one column. The end reserve is the
+              // environment panel's room, taken as padding inside the scroller
+              // so the native scrollbar keeps the window edge.
+              // No padding transition: the end reserve is held for a panel's
+              // slide and snaps once at release (see ChatView's freeze block).
+              // Easing it here resized the scroller's content box on every
+              // frame, which rewrapped the prose and had the list re-pinning
+              // the scroll per frame — the environment column's stutter.
+              "scrollbar-gutter-both h-full min-h-0 overflow-x-hidden overscroll-y-contain ps-(--chat-column-inset) pe-[calc(var(--chat-column-inset)+var(--chat-column-end-reserve))] [overflow-anchor:none]",
               topFadeEnabled && "chat-timeline-scroll-fade",
             )}
             ListHeaderComponent={topFadeEnabled ? TIMELINE_LIST_FADE_HEADER : TIMELINE_LIST_HEADER}
@@ -795,7 +819,8 @@ const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: Time
         // tight; a settled answer ends the turn and takes the air after it.
         (row.kind === "message" && row.message.role === "assistant" && !row.showAssistantMeta) ||
           row.kind === "work" ||
-          row.kind === "turn-head"
+          row.kind === "turn-head" ||
+          row.kind === "turn-tail"
           ? "pb-2"
           : "pb-4",
         row.kind === "message" && row.message.role === "assistant" ? "group/assistant" : null,
@@ -807,6 +832,7 @@ const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: Time
     >
       {row.kind === "work" ? <WorkGroupRow row={row} /> : null}
       {row.kind === "turn-head" ? <TurnHeadRow row={row} /> : null}
+      {row.kind === "turn-tail" ? <TurnTailRow row={row} /> : null}
       {row.kind === "message" && row.message.role === "user" ? <UserTimelineRow row={row} /> : null}
       {row.kind === "message" && row.message.role === "assistant" ? (
         <AssistantTimelineRow row={row} />

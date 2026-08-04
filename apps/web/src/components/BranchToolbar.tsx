@@ -326,7 +326,7 @@ export const BranchToolbar = memo(function BranchToolbar({
   // composer's flat top instead of landing on its rounded corners.
   return (
     <div
-      className="-mb-px mx-auto w-[calc(100%-var(--composer-context-strip-width-offset))] overflow-hidden rounded-t-2xl bg-(--surface-recessed) px-2.5 pt-1.5 pb-2"
+      className="-mb-px mx-auto w-[calc(100%-var(--composer-context-strip-width-offset))] overflow-hidden rounded-t-2xl bg-(--recessed-surface) px-2.5 pt-1.5 pb-2"
       data-composer-context-strip=""
     >
       <div

@@ -177,6 +177,10 @@ export function syncBrowserChromeTheme() {
    */
   const root = document.documentElement;
   if (root.classList.contains("electron") && !root.classList.contains("electron-windows")) {
+    // Clear, don't just skip: a fill written before the `electron` class landed
+    // would otherwise stick as an inline opaque floor over the vibrancy glass.
+    root.style.removeProperty("background-color");
+    document.body.style.removeProperty("background-color");
     return;
   }
   root.style.backgroundColor = backgroundColor;

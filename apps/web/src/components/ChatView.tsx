@@ -155,7 +155,7 @@ import {
   WifiOffIcon,
 } from "lucide-react";
 import { readCssTimeMs } from "~/lib/cssTime";
-import { cn, randomHex } from "~/lib/utils";
+import { cn, randomHex, randomUUID } from "~/lib/utils";
 import { COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS } from "~/workspaceTitlebar";
 import { stackedThreadToast, toastManager } from "./ui/toast";
 import { decodeProjectScriptKeybindingRule } from "~/lib/projectScriptKeybindings";
@@ -186,6 +186,11 @@ import {
   useComposerDraftStore,
   type DraftId,
 } from "../composerDraftStore";
+import {
+  type QueuedPromptEntry,
+  selectThreadQueue,
+  usePromptQueueStore,
+} from "../promptQueueStore";
 import {
   appendTerminalContextsToPrompt,
   formatTerminalContextLabel,
@@ -254,6 +259,7 @@ import {
 import { ThreadErrorBanner } from "./chat/ThreadErrorBanner";
 import { resolveThreadPr } from "./ThreadStatusIndicators";
 import { ChatGrow } from "./chat/ChatGrow";
+import { QueuedPromptsOverChat } from "./chat/QueuedPromptsOverChat";
 import { TasksOverChat } from "./chat/TasksOverChat";
 import { ComposerBannerStack, type ComposerBannerStackItem } from "./chat/ComposerBannerStack";
 import {
@@ -310,6 +316,7 @@ import {
   AlertDialogTitle,
 } from "./ui/alert-dialog";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
+import { useSidebar } from "./ui/sidebar";
 import { ServerUpdateAction } from "./ServerUpdateAction";
 import {
   buildVersionMismatchDismissalKey,
@@ -338,8 +345,11 @@ const EMPTY_PENDING_USER_INPUT_ANSWERS: Record<string, PendingUserInputDraftAnsw
  * keep in sync, and the hero headline and suggestions hang above the composer
  * rather than displacing it.
  */
+/* No padding transition: the end reserve is held for the panel's slide and
+   snaps once at release, under the chat column's settle blur. Easing it here
+   rewrapped the composer on every frame of the slide. */
 const COMPOSER_DOCK_CLASS_NAME =
-  "pointer-events-none absolute inset-x-0 bottom-0 z-20 pt-1.5 sm:pt-2";
+  "pointer-events-none absolute inset-x-0 bottom-0 z-20 pt-1.5 sm:pt-2 pe-(--chat-column-end-reserve)";
 
 /*
  * Air between the draft suggestions and the composer.
@@ -1565,6 +1575,22 @@ function ChatViewContent(props: ChatViewProps) {
     [activeThread],
   );
   const activeThreadKey = activeThreadRef ? scopedThreadKey(activeThreadRef) : null;
+  /*
+   * Prompts submitted while a turn was still running. They wait here — visible
+   * above the composer, editable, removable — and dispatch one by one as the
+   * thread settles, each as its own turn. See promptQueueStore for why nothing
+   * mid-turn is allowed to fake a sent bubble.
+   */
+  const enqueueQueuedPrompt = usePromptQueueStore((state) => state.enqueue);
+  const requeueQueuedPromptFront = usePromptQueueStore((state) => state.requeueFront);
+  const takeFirstQueuedPrompt = usePromptQueueStore((state) => state.takeFirst);
+  const removeQueuedPromptEntry = usePromptQueueStore((state) => state.removeEntry);
+  const activeQueuedPrompts = usePromptQueueStore((state) =>
+    selectThreadQueue(state, activeThreadKey),
+  );
+  const activeQueueDispatchHold = usePromptQueueStore((state) =>
+    activeThreadKey === null ? null : (state.dispatchHoldByThreadKey[activeThreadKey] ?? null),
+  );
   const [timelineAnchor, setTimelineAnchor] = useState<{
     readonly threadKey: string | null;
     readonly messageId: MessageId | null;
@@ -3643,52 +3669,49 @@ function ChatViewContent(props: ChatViewProps) {
     new Debouncer(() => setShowScrollToBottom(true), { wait: 150 }),
   );
   /*
-   * The chat row's width, frozen for the length of the right panel's open or
-   * close transition (see the row itself for why), then released in the same
-   * moment the settle blur starts — the blur exists to cover exactly one
-   * re-wrap, and that re-wrap now happens at release, not during the slide.
+   * The chat column scales with the panels around it — continuously, like a
+   * page being narrowed in a word processor — and the settle blur in index.css
+   * covers the re-wrap for the whole slide. An earlier version froze the row
+   * at its pre-toggle width and re-wrapped once on release; that single jump
+   * read as the whole screen flickering, which is exactly what the blur was
+   * meant to prevent.
+   *
+   * The sidebar is a second trigger of the same reflow: expanding it narrows
+   * the chat by the same mechanism the right panel does. Mobile is exempt —
+   * the sheet overlays the chat there and never changes its width.
    */
-  const chatColumnFreezeRef = useRef<HTMLDivElement | null>(null);
-  const [frozenChatColumnWidth, setFrozenChatColumnWidth] = useState<number | null>(null);
+  const { open: sidebarOpen, isMobile: sidebarIsMobile } = useSidebar();
   const [chatColumnSettleDirection, setChatColumnSettleDirection] = useState<"open" | "closed">(
     rightPanelOpen ? "open" : "closed",
   );
-  const chatColumnFreezeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const previousRightPanelOpenRef = useRef(rightPanelOpen);
+  const previousSidebarOpenRef = useRef(sidebarOpen);
+  const previousEnvironmentColumnOpenRef = useRef(environmentColumnOpen);
+  /*
+   * The room the environment column takes is padding inside the chat (see the
+   * style block below). The reserve is a registered custom property that the
+   * row transitions (`chat-column-reserve-transition`), so it glides on the
+   * panel's own duration and curve instead of flipping the full width at once.
+   */
+  const showEnvironmentColumn = Boolean(activeProject?.title);
+  const liveChatColumnEndReserve =
+    showEnvironmentColumn && environmentColumnOpen && !rightPanelOpen
+      ? "var(--envcol-width)"
+      : "0px";
   useLayoutEffect(() => {
-    if (previousRightPanelOpenRef.current === rightPanelOpen) return;
+    const rightPanelChanged = previousRightPanelOpenRef.current !== rightPanelOpen;
+    const sidebarChanged = !sidebarIsMobile && previousSidebarOpenRef.current !== sidebarOpen;
+    const environmentColumnChanged =
+      previousEnvironmentColumnOpenRef.current !== environmentColumnOpen;
     previousRightPanelOpenRef.current = rightPanelOpen;
-    const row = chatColumnFreezeRef.current;
-    if (!row) return;
-    // Measured now, before the panel's width transition has advanced.
-    setFrozenChatColumnWidth(row.getBoundingClientRect().width);
-    if (chatColumnFreezeTimerRef.current !== null) {
-      clearTimeout(chatColumnFreezeTimerRef.current);
-    }
-    /* The hold lasts as long as the panel's slide — same token, read back so
-       the two cannot drift apart. */
-    const durationToken = getComputedStyle(row).getPropertyValue("--duration-base").trim();
-    const holdMs = durationToken.endsWith("ms")
-      ? Number.parseFloat(durationToken)
-      : Number.parseFloat(durationToken) * 1000;
-    const nextDirection: "open" | "closed" = rightPanelOpen ? "open" : "closed";
-    chatColumnFreezeTimerRef.current = setTimeout(
-      () => {
-        chatColumnFreezeTimerRef.current = null;
-        setFrozenChatColumnWidth(null);
-        setChatColumnSettleDirection(nextDirection);
-      },
-      Number.isFinite(holdMs) && holdMs > 0 ? holdMs : 300,
-    );
-  }, [rightPanelOpen]);
-  useEffect(
-    () => () => {
-      if (chatColumnFreezeTimerRef.current !== null) {
-        clearTimeout(chatColumnFreezeTimerRef.current);
-      }
-    },
-    [],
-  );
+    previousSidebarOpenRef.current = sidebarOpen;
+    previousEnvironmentColumnOpenRef.current = environmentColumnOpen;
+    if (!rightPanelChanged && !sidebarChanged && !environmentColumnChanged) return;
+    /* Flipped rather than derived: the two attribute values exist so the
+       settle animation restarts, and a second toggle that lands on the
+       same value would otherwise not restart it. */
+    setChatColumnSettleDirection((previous) => (previous === "open" ? "closed" : "open"));
+  }, [environmentColumnOpen, rightPanelOpen, sidebarIsMobile, sidebarOpen]);
 
   const timelineScrollModeRef = useRef<TimelineScrollMode>("following-end");
   /*
@@ -3869,7 +3892,14 @@ function ChatViewContent(props: ChatViewProps) {
         scrollNode.addEventListener("scrollend", finishAnimatedPositioning, { once: true });
         void list.scrollToIndex({
           index: anchorIndex,
-          animated: true,
+          /*
+           * Instant, not glided: the smooth variant kept the just-sent message
+           * and the thinking row below the composer mask for the length of the
+           * animation — the send read as a beat of nothing happening. The
+           * scrollend listener still fires for an instant programmatic scroll,
+           * and the fallback timer covers where it does not.
+           */
+          animated: false,
           viewPosition: 0,
           viewOffset: CHAT_LIST_ANCHOR_OFFSET,
         });
@@ -4774,35 +4804,69 @@ function ChatViewContent(props: ChatViewProps) {
     ],
   );
 
-  const onSend = async (e?: { preventDefault: () => void }) => {
+  const onSend = async (
+    e?: { preventDefault: () => void },
+    sendOptions?: {
+      /** Feed the running turn now (⌘⏎) instead of queueing behind it. */
+      readonly steer?: boolean;
+      /** Dispatch this queued entry through the normal pipeline. */
+      readonly queued?: QueuedPromptEntry;
+    },
+  ) => {
     e?.preventDefault();
+    const queuedEntry = sendOptions?.queued ?? null;
+    /* A queued entry that cannot be sent right now goes back to the front of
+       its queue, held out of auto-dispatch so a persistent failure cannot
+       retry in a loop. It stays visible instead of vanishing. */
+    const requeueQueuedEntry = () => {
+      if (queuedEntry && activeThreadKey) {
+        requeueQueuedPromptFront(activeThreadKey, queuedEntry);
+      }
+    };
     if (
       !activeThread ||
       isSendBusy ||
       isConnecting ||
       activeEnvironmentUnavailable ||
       sendInFlightRef.current
-    )
+    ) {
+      requeueQueuedEntry();
       return;
+    }
     if (activePendingProgress) {
+      if (queuedEntry) {
+        requeueQueuedEntry();
+        return;
+      }
       onAdvanceActivePendingUserInput();
       return;
     }
     const sendCtx = composerRef.current?.getSendContext();
-    if (!sendCtx?.providerAvailable) return;
+    if (!sendCtx?.providerAvailable) {
+      requeueQueuedEntry();
+      return;
+    }
     const {
-      images: composerImages,
-      terminalContexts: composerTerminalContexts,
-      elementContexts: composerElementContexts,
-      previewAnnotations: composerPreviewAnnotations,
-      reviewComments: composerReviewComments,
+      images: liveComposerImages,
+      terminalContexts: liveComposerTerminalContexts,
+      elementContexts: liveComposerElementContexts,
+      previewAnnotations: livePreviewAnnotations,
+      reviewComments: liveReviewComments,
       selectedProvider: ctxSelectedProvider,
       selectedModel: ctxSelectedModel,
       selectedProviderModels: ctxSelectedProviderModels,
       selectedPromptEffort: ctxSelectedPromptEffort,
       selectedModelSelection: ctxSelectedModelSelection,
     } = sendCtx;
-    const promptForSend = promptRef.current;
+    /* A queued entry replaces the composer's content wholesale: its contexts
+       were baked into its text when it was queued, and the user's in-progress
+       draft must stay untouched by the dispatch running underneath it. */
+    const composerImages = queuedEntry ? [...queuedEntry.images] : liveComposerImages;
+    const composerTerminalContexts = queuedEntry ? [] : liveComposerTerminalContexts;
+    const composerElementContexts = queuedEntry ? [] : liveComposerElementContexts;
+    const composerPreviewAnnotations = queuedEntry ? [] : livePreviewAnnotations;
+    const composerReviewComments = queuedEntry ? [] : liveReviewComments;
+    const promptForSend = queuedEntry ? queuedEntry.prompt : promptRef.current;
     const {
       trimmedPrompt: trimmed,
       sendableTerminalContexts: sendableComposerTerminalContexts,
@@ -4817,7 +4881,7 @@ function ChatViewContent(props: ChatViewProps) {
         composerPreviewAnnotations.length +
         composerReviewComments.length,
     });
-    if (showPlanFollowUpPrompt && activeProposedPlan) {
+    if (showPlanFollowUpPrompt && activeProposedPlan && queuedEntry === null) {
       const followUp = resolvePlanFollowUpSubmission({
         draftText: trimmed,
         planMarkdown: activeProposedPlan.planMarkdown,
@@ -4832,6 +4896,7 @@ function ChatViewContent(props: ChatViewProps) {
       return;
     }
     const standaloneSlashCommand =
+      queuedEntry === null &&
       composerImages.length === 0 &&
       sendableComposerTerminalContexts.length === 0 &&
       composerElementContexts.length === 0 &&
@@ -4862,7 +4927,54 @@ function ChatViewContent(props: ChatViewProps) {
       }
       return;
     }
+    /*
+     * Mid-turn submits queue by default. Nothing is dispatched and no bubble
+     * appears — the prompt waits above the composer, demonstrably unread,
+     * until the running turn finishes and it starts the next one. ⌘⏎ opts
+     * into steering instead, which sends into the running turn immediately.
+     * Contexts are baked into the text here, exactly as the send itself
+     * would, so what the queue shows is what will be sent.
+     */
+    if (phase === "running" && sendOptions?.steer !== true && queuedEntry === null) {
+      if (!activeThreadKey) return;
+      const queuedTextWithContexts = appendElementContextsToPrompt(
+        appendTerminalContextsToPrompt(promptForSend, sendableComposerTerminalContexts),
+        composerElementContexts,
+      );
+      const queuedTextWithAnnotations = composerPreviewAnnotations.reduce(
+        (text, annotation) => appendPreviewAnnotationPrompt(text, annotation),
+        queuedTextWithContexts,
+      );
+      const queuedText = appendReviewCommentsToPrompt(
+        queuedTextWithAnnotations,
+        composerReviewComments,
+      );
+      enqueueQueuedPrompt(activeThreadKey, {
+        id: randomUUID(),
+        prompt: queuedText,
+        images: composerImages.map(cloneComposerImageForRetry),
+        queuedAt: new Date().toISOString(),
+      });
+      if (expiredTerminalContextCount > 0) {
+        const toastCopy = buildExpiredTerminalContextToastCopy(
+          expiredTerminalContextCount,
+          "omitted",
+        );
+        toastManager.add(
+          stackedThreadToast({
+            type: "warning",
+            title: toastCopy.title,
+            description: toastCopy.description,
+          }),
+        );
+      }
+      promptRef.current = "";
+      clearComposerDraftContent(composerDraftTarget);
+      composerRef.current?.resetCursorState();
+      return;
+    }
     if (!activeProject) {
+      requeueQueuedEntry();
       toastManager.add(
         stackedThreadToast({
           type: "warning",
@@ -4885,10 +4997,19 @@ function ChatViewContent(props: ChatViewProps) {
       isFirstMessage && sendEnvMode === "worktree" && !activeThread.worktreePath;
     if (shouldCreateWorktree && !activeThreadBranch) {
       setThreadError(threadIdForSend, "Select a base branch before sending in New worktree mode.");
+      requeueQueuedEntry();
       return;
     }
 
     sendInFlightRef.current = true;
+    /*
+     * Working state before the draft-hero dock, not after: the dock awaits a
+     * view transition, and everything keyed on `isWorking` — the "Working for"
+     * frame, the thinking indicator — was waiting behind it on the first
+     * message of every draft. The indicator being late precisely on a
+     * thread's first send was this line's old position.
+     */
+    beginLocalDispatch({ preparingWorktree: Boolean(baseBranchForWorktree) });
     if (isDraftHeroState && activeThreadKey) {
       let resolveDockStarted: (() => void) | undefined;
       const dockStarted = new Promise<void>((resolve) => {
@@ -4904,7 +5025,6 @@ function ChatViewContent(props: ChatViewProps) {
       void dockTransition.catch(() => resolveDockStarted?.());
       await dockStarted;
     }
-    beginLocalDispatch({ preparingWorktree: Boolean(baseBranchForWorktree) });
 
     const composerImagesSnapshot = [...composerImages];
     const composerTerminalContextsSnapshot = [...sendableComposerTerminalContexts];
@@ -4990,9 +5110,11 @@ function ChatViewContent(props: ChatViewProps) {
         }),
       );
     }
-    promptRef.current = "";
-    clearComposerDraftContent(composerDraftTarget);
-    composerRef.current?.resetCursorState();
+    if (queuedEntry === null) {
+      promptRef.current = "";
+      clearComposerDraftContent(composerDraftTarget);
+      composerRef.current?.resetCursorState();
+    }
 
     let firstComposerImageName: string | null = null;
     if (composerImagesSnapshot.length > 0) {
@@ -5115,7 +5237,20 @@ function ChatViewContent(props: ChatViewProps) {
     }
 
     if (failure !== null) {
-      if (
+      if (queuedEntry !== null) {
+        /* The bubble was optimistic and the send failed: take it back and put
+           the entry back at the head of the queue, held for the user to retry,
+           edit or drop — never silently lost, never falsely "sent". */
+        setOptimisticUserMessages((existing) => {
+          const removed = existing.filter((message) => message.id === messageIdForSend);
+          for (const message of removed) {
+            revokeUserMessagePreviewUrls(message);
+          }
+          const next = existing.filter((message) => message.id !== messageIdForSend);
+          return next.length === existing.length ? existing : next;
+        });
+        requeueQueuedEntry();
+      } else if (
         promptRef.current.length === 0 &&
         composerImagesRef.current.length === 0 &&
         composerTerminalContextsRef.current.length === 0 &&
@@ -5164,6 +5299,59 @@ function ChatViewContent(props: ChatViewProps) {
         currentThreadKey === activeThreadKey ? null : currentThreadKey,
       );
       resetLocalDispatch();
+    }
+  };
+
+  /*
+   * The queue's dispatcher: the moment the thread settles back to ready, the
+   * head of its queue becomes the next turn. Deliberately without a dependency
+   * list — every guard is cheap, `takeFirst` only fires once they all pass,
+   * and the send flips the thread straight back to running, so entries leave
+   * one at a time, in order. A held head (its last dispatch failed) waits for
+   * the user to retry, edit or remove it.
+   */
+  useEffect(() => {
+    if (!activeThreadKey || phase !== "ready") return;
+    if (isSendBusy || isConnecting || sendInFlightRef.current) return;
+    if (activeEnvironmentUnavailable || activePendingProgress) return;
+    const head = activeQueuedPrompts[0];
+    if (!head || head.id === activeQueueDispatchHold) return;
+    const entry = takeFirstQueuedPrompt(activeThreadKey);
+    if (!entry) return;
+    void onSend(undefined, { queued: entry });
+  });
+
+  /** Take a queued prompt back into the composer; an existing draft keeps its
+      place and the queued text joins it below. */
+  const onEditQueuedPrompt = (entry: QueuedPromptEntry) => {
+    if (!activeThreadKey) return;
+    const taken = removeQueuedPromptEntry(activeThreadKey, entry.id);
+    if (!taken) return;
+    const existingPrompt = promptRef.current;
+    const mergedPrompt =
+      existingPrompt.trim().length > 0
+        ? `${existingPrompt.trimEnd()}\n\n${taken.prompt}`
+        : taken.prompt;
+    const takenImages = [...taken.images];
+    promptRef.current = mergedPrompt;
+    composerImagesRef.current = [...composerImagesRef.current, ...takenImages];
+    setComposerDraftPrompt(composerDraftTarget, mergedPrompt);
+    addComposerDraftImages(composerDraftTarget, takenImages);
+    composerRef.current?.resetCursorState({
+      cursor: collapseExpandedComposerCursor(mergedPrompt, mergedPrompt.length),
+      prompt: mergedPrompt,
+      detectTrigger: true,
+    });
+  };
+
+  const onRemoveQueuedPrompt = (entryId: string) => {
+    if (!activeThreadKey) return;
+    const removed = removeQueuedPromptEntry(activeThreadKey, entryId);
+    if (!removed) return;
+    for (const image of removed.images) {
+      if (image.previewUrl.startsWith("blob:")) {
+        URL.revokeObjectURL(image.previewUrl);
+      }
     }
   };
 
@@ -5850,7 +6038,6 @@ function ChatViewContent(props: ChatViewProps) {
   // Mirrors ChatHeader's project gate exactly. Draft threads need the column
   // before their first message too: repository initialisation is one of the
   // actions exposed here.
-  const showEnvironmentColumn = Boolean(activeProject?.title);
 
   const panelToggleControls = (
     <PanelLayoutControls
@@ -5988,7 +6175,13 @@ function ChatViewContent(props: ChatViewProps) {
             // The header's inset follows the sidebar, so it has to travel on the
             // sidebar's duration and curve. A linear 200ms against the panel's
             // soft 220ms let the two separate visibly mid-slide.
-            "bg-(--content-surface) transition-[padding-left] duration-(--duration-base) ease-(--ease-soft) motion-reduce:transition-none",
+            //
+            // No fill of its own: the pane behind (sidebar-inset) already
+            // paints --content-surface, and nothing scrolls under the header.
+            // Painting the token again here stacked two translucent layers the
+            // moment the content opacity left 100%, so the header read darker
+            // than the floor it sits on.
+            "transition-[padding-left] duration-(--duration-base) ease-(--ease-soft) motion-reduce:transition-none",
             isElectron
               ? cn(
                   "workspace-topbar drag-region relative px-3 sm:px-5",
@@ -6022,27 +6215,25 @@ function ChatViewContent(props: ChatViewProps) {
         />
         {/* Main content area with optional plan sidebar */}
         <div
-          className="flex min-h-0 min-w-0 flex-1"
-          /*
-           * Frozen at its pre-transition width while the right panel eases open
-           * or closed. Flexbox re-solves this row every frame of the panel's
-           * width transition, and prose re-wrapping thirty times in a quarter
-           * second is the chaos the settle blur used to only cover. Held still,
-           * the panel slides over (or away from) text that does not move, and
-           * the one real re-wrap happens on release — under the same blur.
-           * Pointer-driven resizes never freeze: a drag wants live feedback.
-           */
-          ref={chatColumnFreezeRef}
+          className="chat-column-reserve-transition flex min-h-0 min-w-0 flex-1"
           style={
-            frozenChatColumnWidth !== null
-              ? { width: `${String(frozenChatColumnWidth)}px`, flex: "none", overflow: "hidden" }
-              : undefined
+            {
+              /*
+               * The room the environment overview takes is padding inside the
+               * chat's own surfaces, not a sibling column: the timeline's
+               * scroller keeps the full pane width, so its scrollbar stays on
+               * the window edge instead of between conversation and panel.
+               * The registered property transitions (see index.css), so the
+               * padding rides the panel's slide instead of jumping.
+               */
+              "--chat-column-end-reserve": liveChatColumnEndReserve,
+            } as CSSProperties
           }
         >
           {/* Chat column */}
           <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
             {/* Provider status overlays the timeline without changing its content height. */}
-            <div className="pointer-events-none absolute inset-x-0 top-0 z-20">
+            <div className="pointer-events-none absolute inset-x-0 top-0 z-20 pe-(--chat-column-end-reserve)">
               <ProviderStatusBanner
                 status={visibleProviderStatus}
                 onDismiss={() => setDismissedProviderStatusBannerKey(providerStatusBannerKey)}
@@ -6091,7 +6282,7 @@ function ChatViewContent(props: ChatViewProps) {
               {/* scroll to end pill — shown when user has scrolled away from the live edge */}
               {showScrollToBottom && (
                 <div
-                  className="pointer-events-none absolute left-1/2 z-30 flex -translate-x-1/2 justify-center py-1.5"
+                  className="pointer-events-none absolute left-[calc(50%-var(--chat-column-end-reserve)/2)] z-30 flex -translate-x-1/2 justify-center py-1.5"
                   style={{ bottom: composerOverlayHeight + 4 }}
                 >
                   <button
@@ -6151,6 +6342,18 @@ function ChatViewContent(props: ChatViewProps) {
                           </div>
                         </ChatGrow>
                       ) : null}
+                      {/* Prompts waiting for the running turn to finish — the
+                          honest counterpart of a sent bubble. Same grow, same
+                          surface, same column as the task list. */}
+                      <ChatGrow open={activeQueuedPrompts.length > 0}>
+                        <div className="mb-2">
+                          <QueuedPromptsOverChat
+                            entries={activeQueuedPrompts}
+                            onEditEntry={onEditQueuedPrompt}
+                            onRemoveEntry={onRemoveQueuedPrompt}
+                          />
+                        </div>
+                      </ChatGrow>
                       <ComposerBannerStack className="relative z-0" items={composerBannerItems} />
                     </>
                   )}
@@ -6348,7 +6551,6 @@ function ChatViewContent(props: ChatViewProps) {
               gitCwd={gitCwd}
               open={environmentColumnOpen}
               fullAreaHidden={rightPanelMaximized}
-              rightPanelOpen={rightPanelOpen}
               onClose={closeEnvironmentColumn}
               onOpenReview={isGitRepo && gitCwd !== null ? addDiffSurface : null}
             />

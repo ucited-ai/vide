@@ -51,6 +51,26 @@ describe("ClientSettings text scale", () => {
   });
 });
 
+describe("ClientSettings glass blur", () => {
+  it("defaults to null so the stylesheet's per-theme value stays in charge", () => {
+    expect(decodeClientSettings({}).glassBlur).toBeNull();
+  });
+
+  it.each([-1, 41, 400])("rejects a blur outside the supported range: %s", (value) => {
+    expect(() => decodeClientSettings({ glassBlur: value })).toThrow();
+    expect(() => decodeClientSettingsPatch({ glassBlur: value })).toThrow();
+  });
+
+  it.each([0, 12, 40])("accepts a blur within the supported range: %s", (value) => {
+    expect(decodeClientSettings({ glassBlur: value }).glassBlur).toBe(value);
+    expect(decodeClientSettingsPatch({ glassBlur: value }).glassBlur).toBe(value);
+  });
+
+  it("accepts an explicit null to hand the value back to the stylesheet", () => {
+    expect(decodeClientSettingsPatch({ glassBlur: null }).glassBlur).toBeNull();
+  });
+});
+
 describe("ClientSettings palette", () => {
   it("defaults to leaving every slot to the stylesheet", () => {
     expect(decodeClientSettings({}).palette).toEqual({

@@ -108,7 +108,7 @@ function DraftStartError({ onRetry }: { readonly onRetry: () => void }) {
 function NoProjectsHero() {
   return (
     <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none text-foreground">
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden bg-background">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden">
         <Empty className="flex-1">
           <div className="w-full max-w-lg px-8 py-12">
             <EmptyHeader className="max-w-none">
@@ -143,7 +143,7 @@ function HostedStaticOnboardingState() {
 
   return (
     <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none text-foreground">
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden bg-background">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden">
         <header
           className={cn(
             "border-b border-border px-3 py-2 transition-[padding-left] duration-(--duration-base) ease-linear motion-reduce:transition-none sm:px-5 sm:py-3",

@@ -1,5 +1,5 @@
 import { type ChatThinkingIndicator } from "@vide/contracts/settings";
-import { useEffect, useState } from "react";
+import { useLayoutEffect, useState } from "react";
 
 import { useMediaQuery } from "../../hooks/useMediaQuery";
 import { useTheme } from "../../hooks/useTheme";
@@ -55,7 +55,7 @@ export function ThinkingIndicator({
   const { resolvedTheme } = useTheme();
   const prefersReducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!canvas) return;
 
     const context = canvas.getContext("2d");
@@ -112,10 +112,14 @@ export function ThinkingIndicator({
       step();
     };
 
-    // ResizeObserver reports the first box on observe, so this both starts the
-    // loop and re-measures it whenever the type around it changes size.
+    // Painted synchronously, before the row's first frame reaches the screen —
+    // a layout effect, because the ResizeObserver's initial delivery is
+    // asynchronous and the send-to-indicator hitch was exactly the frames spent
+    // waiting for it. The observer stays on for re-measures only; its first
+    // delivery re-running `start` is idempotent.
     const observer = new ResizeObserver(start);
     observer.observe(canvas);
+    start();
 
     return () => {
       cancelAnimationFrame(frame);

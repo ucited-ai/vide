@@ -1,4 +1,0 @@
-interface:
-  display_name: "Vide App Testing"
-  short_description: "Launch and retain isolated Vide test environments"
-  default_prompt: "Use $test-vide-app to launch an isolated Vide environment and iteratively test it in the browser while preserving state."

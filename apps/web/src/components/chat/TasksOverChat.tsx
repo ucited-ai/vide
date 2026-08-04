@@ -16,7 +16,7 @@ export function TasksOverChat({ plan }: { readonly plan: ActivePlanState }) {
   const done = plan.steps.filter((step) => step.status === "completed").length;
 
   return (
-    <div className="flex max-h-[min(40vh,20rem)] w-full max-w-90 min-h-0 flex-col overflow-hidden rounded-[var(--envcol-radius)] border border-(--envcol-edge) bg-(--envcol-surface) shadow-[var(--envcol-shadow)]">
+    <div className="mx-auto flex max-h-[min(40vh,20rem)] w-full max-w-(--chat-column-width) min-h-0 flex-col overflow-hidden rounded-[var(--envcol-radius)] border border-(--envcol-edge) bg-(--envcol-surface) shadow-[var(--envcol-shadow)]">
       <div className="flex shrink-0 items-baseline justify-between px-3 pt-2 pb-1 text-(length:--text-caption) text-(--ink-tertiary)">
         <span>Tasks</span>
         <span className="tabular-nums">

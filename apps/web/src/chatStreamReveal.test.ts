@@ -72,6 +72,7 @@ describe("wrapping words for the reveal", () => {
     const tree = paragraph("one two three");
     rehypeChatStreamWords({
       styleOf: (index) => `--chat-stream-delay:${String(index * 40)}ms`,
+      blockStyleOf: () => null,
       reportWordCount: () => {},
     })(tree);
 
@@ -88,6 +89,7 @@ describe("wrapping words for the reveal", () => {
     const tree = paragraph("one two three four");
     rehypeChatStreamWords({
       styleOf: (index) => (index < 2 ? null : `--chat-stream-delay:${String((index - 2) * 40)}ms`),
+      blockStyleOf: () => null,
       reportWordCount: () => {},
     })(tree);
 
@@ -121,6 +123,7 @@ describe("wrapping words for the reveal", () => {
     const counts: number[] = [];
     rehypeChatStreamWords({
       styleOf: () => null,
+      blockStyleOf: () => null,
       reportWordCount: (count) => counts.push(count),
     })(tree);
 

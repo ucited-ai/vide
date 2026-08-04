@@ -33,9 +33,23 @@ interface HastNode {
 /** The class the stylesheet animates. One word, one element. */
 const STREAM_WORD_CLASS_NAME = "chat-stream-word";
 
+/** The class a still-arriving block carries. The block reveals on its first
+ * word's delay, growing from nothing instead of standing as reserved empty
+ * height the words then fill — and it is the only thing that can carry a
+ * `::marker` or a fence into the reveal, since neither is a text node. */
+const STREAM_BLOCK_CLASS_NAME = "chat-stream-block";
+
 /** A fence arrives as a block, not as words — revealing source word by word
  * would tear its lines apart, and its header is chrome rather than prose. */
 const SKIPPED_TAGS = new Set(["pre"]);
+
+/**
+ * Blocks that reveal as a unit on their first word's clock. Lists and
+ * blockquotes are absent on purpose: their `li`/`p` children stagger
+ * individually, which reads as the writing continuing rather than a box
+ * arriving.
+ */
+const BLOCK_TAGS = new Set(["p", "li", "h1", "h2", "h3", "h4", "h5", "h6", "pre", "table", "hr"]);
 
 /**
  * Elements the reveal treats as one word. Their insides stay untouched —
@@ -54,6 +68,13 @@ export interface ChatStreamWordTiming {
    * keeps its DOM node, and with it the animation that already ran.
    */
   readonly styleOf: (index: number) => string | null;
+  /**
+   * Inline style for a block whose first word sits at this absolute tree
+   * index — the delay alone, no travel — or null for a block already at rest.
+   * Same contract as `styleOf`: a stable answer per index while the reveal is
+   * active, so a block's markup re-renders byte-identical.
+   */
+  readonly blockStyleOf: (index: number) => string | null;
   /** Handed the tree's word count after the walk: the next delta's baseline. */
   readonly reportWordCount: (count: number) => void;
 }
@@ -98,6 +119,23 @@ export function rehypeChatStreamWords(timing: ChatStreamWordTiming) {
       return nodes;
     };
 
+    /** A block at rest stays bare markup, exactly like a word at rest. */
+    const stampBlock = (node: HastNode, firstWordIndex: number): void => {
+      const style = timing.blockStyleOf(firstWordIndex);
+      if (style === null) return;
+      const properties = node.properties ?? (node.properties = {});
+      const className = properties.className;
+      properties.className = Array.isArray(className)
+        ? [...className, STREAM_BLOCK_CLASS_NAME]
+        : typeof className === "string"
+          ? [className, STREAM_BLOCK_CLASS_NAME]
+          : [STREAM_BLOCK_CLASS_NAME];
+      properties.style =
+        typeof properties.style === "string" && properties.style.length > 0
+          ? `${properties.style};${style}`
+          : style;
+    };
+
     const wrapWords = (node: HastNode): void => {
       if (!node.children) return;
 
@@ -107,10 +145,20 @@ export function rehypeChatStreamWords(timing: ChatStreamWordTiming) {
         }
         if (child.type === "element" && child.tagName) {
           if (SKIPPED_TAGS.has(child.tagName)) {
+            /* Untouched inside, but the fence itself still joins the clock:
+               it takes one index so what follows it queues behind it. */
+            stampBlock(child, wordCount);
+            wordCount += 1;
             return [child];
           }
           if (WHOLE_TAGS.has(child.tagName)) {
             return [wrapAsWord([child])];
+          }
+          if (BLOCK_TAGS.has(child.tagName)) {
+            const firstWordIndex = wordCount;
+            wrapWords(child);
+            stampBlock(child, firstWordIndex);
+            return [child];
           }
         }
         wrapWords(child);

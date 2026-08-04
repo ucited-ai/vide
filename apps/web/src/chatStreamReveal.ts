@@ -64,14 +64,20 @@ function noise(index: number): number {
 
 /**
  * The step for a delta of `wordCount` words — the natural one until a long delta
- * would outrun its own budget.
+ * would outrun its own budget. `pendingMs` is reveal time the previous delta has
+ * already claimed: the budget covers the whole backlog, so a delta arriving into
+ * a long queue compresses instead of stretching the sweep past the cap.
  */
-export function chatStreamStepMs(wordCount: number, animation: ChatStreamAnimation): number {
+export function chatStreamStepMs(
+  wordCount: number,
+  animation: ChatStreamAnimation,
+  pendingMs = 0,
+): number {
   const groups =
     animation === "phrase" ? Math.max(1, Math.ceil(wordCount / PHRASE_WORDS)) : wordCount;
   const spans = Math.max(1, groups - 1);
   const factor = animation === "phrase" ? PHRASE_STEP_FACTOR : 1;
-  return Math.min(WORD_STEP_MS, MAX_DELTA_REVEAL_MS / (spans * factor));
+  return Math.min(WORD_STEP_MS, Math.max(0, MAX_DELTA_REVEAL_MS - pendingMs) / (spans * factor));
 }
 
 export function chatStreamDelayMs(
@@ -102,6 +108,7 @@ const NO_REVEAL: ChatStreamRevealState = {
   active: false,
   timing: {
     styleOf: () => null,
+    blockStyleOf: () => null,
     reportWordCount: () => {},
   },
 };
@@ -129,6 +136,16 @@ interface ChatStreamRevealMemory {
   /** The current delta's step, frozen when the delta arrives. */
   step: number;
   /**
+   * How much of the previous delta's sweep was still unrevealed when this one
+   * arrived. Every delay of the current delta is offset by it, so deltas queue
+   * behind one write head instead of each starting a second front at "now" —
+   * two fronts in the same prose is exactly the "first sentence streams twice"
+   * artefact.
+   */
+  pendingMs: number;
+  /** When the current delta's last word starts revealing, in wall-clock ms. */
+  revealEndsAtMs: number;
+  /**
    * What each word was born with, by absolute tree index. While a word's
    * animation may still be running it keeps its exact style, so its markup
    * re-renders byte-identical and React never touches its DOM; once its
@@ -137,6 +154,8 @@ interface ChatStreamRevealMemory {
    * a CSS animation fires on any first paint, not only the first ever.
    */
   wordsByIndex: Map<number, { style: string | null; restAtMs: number }>;
+  /** Same bookkeeping for blocks, keyed by their first word's tree index. */
+  blocksByIndex: Map<number, { style: string | null; restAtMs: number }>;
 }
 
 const REVEAL_MEMORY_CAP = 64;
@@ -144,7 +163,14 @@ const revealMemoryByKey = new Map<string, ChatStreamRevealMemory>();
 
 function acquireRevealMemory(key: string): ChatStreamRevealMemory {
   const existing = revealMemoryByKey.get(key);
-  if (existing) return existing;
+  if (existing) {
+    /* Re-insert on hit, so the cap below evicts the least recently *touched*
+       entry. Insertion order alone would make the longest-lived entry — the
+       message that is still streaming — the first to go. */
+    revealMemoryByKey.delete(key);
+    revealMemoryByKey.set(key, existing);
+    return existing;
+  }
   const fresh: ChatStreamRevealMemory = {
     text: "",
     sourceWordCount: 0,
@@ -152,7 +178,10 @@ function acquireRevealMemory(key: string): ChatStreamRevealMemory {
     treeWordCount: 0,
     baseline: 0,
     step: WORD_STEP_MS,
+    pendingMs: 0,
+    revealEndsAtMs: 0,
     wordsByIndex: new Map(),
+    blocksByIndex: new Map(),
   };
   revealMemoryByKey.set(key, fresh);
   if (revealMemoryByKey.size > REVEAL_MEMORY_CAP) {
@@ -179,7 +208,15 @@ export function useChatStreamReveal(input: {
 
   const instanceKey = useId();
   const memoryKey = input.memoryKey ?? instanceKey;
-  const memory = acquireRevealMemory(memoryKey);
+  const [settling, setSettling] = useState(false);
+
+  /*
+   * Acquired only while the reveal is live. A settled message that acquired on
+   * every render would refill the map right after the cleanup effect below
+   * emptied it — dead entries whose eviction eventually hit the one message
+   * still streaming, replaying it from word zero mid-answer.
+   */
+  const memory = reveals || settling ? acquireRevealMemory(memoryKey) : null;
 
   /*
    * Advance the delta during render — the words animate on the render that
@@ -188,25 +225,38 @@ export function useChatStreamReveal(input: {
    * buffered case work: a message that mounts with its text already whole
    * reveals all of it.
    */
-  if (memory.text !== input.text && reveals) {
+  if (memory !== null && memory.text !== input.text && reveals) {
     const sourceWordCount = countStreamWords(input.text);
     memory.lastDeltaWordCount = Math.max(1, sourceWordCount - memory.sourceWordCount);
-    memory.step = chatStreamStepMs(memory.lastDeltaWordCount, animation);
+    /*
+     * Queue this delta behind whatever the previous one has not yet revealed.
+     * Without the offset every delta starts at "now", opening a second reveal
+     * front at the tail while the head is still sweeping the first sentence.
+     */
+    const now = Date.now();
+    memory.pendingMs = Math.min(MAX_DELTA_REVEAL_MS, Math.max(0, memory.revealEndsAtMs - now));
+    memory.step = chatStreamStepMs(memory.lastDeltaWordCount, animation, memory.pendingMs);
+    memory.revealEndsAtMs =
+      now +
+      memory.pendingMs +
+      chatStreamDelayMs(memory.lastDeltaWordCount - 1, memory.step, animation);
     memory.baseline = memory.treeWordCount;
     memory.text = input.text;
     memory.sourceWordCount = sourceWordCount;
   }
 
-  const deltaRevealMs =
-    animation === undefined || animation === "instant"
-      ? 0
-      : chatStreamRevealMs(memory.lastDeltaWordCount, animation);
-
   /*
-   * Wrapping outlives `reveals` by one delta's worth of time, so the last thing
-   * a turn writes still arrives word by word after the turn is marked complete.
+   * Wrapping outlives `reveals` by the backlog plus one delta's worth of time,
+   * so the last thing a turn writes still arrives word by word after the turn
+   * is marked complete.
    */
-  const [settling, setSettling] = useState(false);
+  const deltaRevealMs =
+    memory === null || animation === undefined || animation === "instant"
+      ? 0
+      : Math.round(
+          memory.pendingMs +
+            chatStreamDelayMs(Math.max(0, memory.lastDeltaWordCount - 1), memory.step, animation),
+        ) + WORD_MOTION_MS;
   useEffect(() => {
     if (reveals) {
       setSettling(true);
@@ -229,7 +279,7 @@ export function useChatStreamReveal(input: {
   }, [active, memoryKey]);
 
   return useMemo(() => {
-    if (!active || animation === undefined) return NO_REVEAL;
+    if (!active || animation === undefined || memory === null) return NO_REVEAL;
     return {
       active: true,
       timing: {
@@ -254,7 +304,9 @@ export function useChatStreamReveal(input: {
             return null;
           }
           const indexInDelta = index - memory.baseline;
-          const delayMs = Math.round(chatStreamDelayMs(indexInDelta, memory.step, animation));
+          const delayMs = Math.round(
+            memory.pendingMs + chatStreamDelayMs(indexInDelta, memory.step, animation),
+          );
           const angle = noise(index) * Math.PI * 2;
           const style = [
             `--chat-stream-delay:${String(delayMs)}ms`,
@@ -262,6 +314,31 @@ export function useChatStreamReveal(input: {
             `--chat-stream-dy:${(Math.sin(angle) * 5).toFixed(1)}px`,
           ].join(";");
           memory.wordsByIndex.set(index, {
+            style,
+            restAtMs: Date.now() + delayMs + WORD_MOTION_MS,
+          });
+          return style;
+        },
+        blockStyleOf: (index: number): string | null => {
+          const known = memory.blocksByIndex.get(index);
+          if (known !== undefined) {
+            if (known.style !== null && Date.now() >= known.restAtMs) {
+              known.style = null;
+            }
+            return known.style;
+          }
+          if (index < memory.baseline) {
+            /* The block was on screen before this delta — a paragraph still
+               being appended to must not fold back to nothing. */
+            memory.blocksByIndex.set(index, { style: null, restAtMs: 0 });
+            return null;
+          }
+          const indexInDelta = index - memory.baseline;
+          const delayMs = Math.round(
+            memory.pendingMs + chatStreamDelayMs(indexInDelta, memory.step, animation),
+          );
+          const style = `--chat-stream-delay:${String(delayMs)}ms`;
+          memory.blocksByIndex.set(index, {
             style,
             restAtMs: Date.now() + delayMs + WORD_MOTION_MS,
           });

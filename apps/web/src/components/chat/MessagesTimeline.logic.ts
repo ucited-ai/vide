@@ -6,7 +6,12 @@ import {
   type WorkLogEntry,
 } from "../../session-logic";
 import { type ChatMessage, type ProposedPlan, type TurnDiffSummary } from "../../types";
-import { type MessageId, type OrchestrationLatestTurn, type TurnId } from "@vide/contracts";
+import {
+  type MessageId,
+  type OrchestrationLatestTurn,
+  type ToolLifecycleItemType,
+  type TurnId,
+} from "@vide/contracts";
 
 export const TIMELINE_MINIMAP_ITEM_SPACING = 8;
 export const TIMELINE_MINIMAP_MIN_ITEMS = 2;
@@ -171,25 +176,42 @@ export type MessagesTimelineRow =
     }
   | {
       /**
-       * The turn's one status line, at the top of its own work.
+       * The turn's one status line, at the top of its own work — static.
        *
-       * While the turn runs it carries the indicator, the phrase the turn is on
-       * and a running timer; when the turn settles the same row becomes the line
-       * its work folds behind. One row for both, because they are one thing: the
-       * work collapses upward into the line that was watching it.
+       * While the turn runs it reads "Working for" plus a running timer; when
+       * the turn settles the same row becomes "Worked for" plus the total, and
+       * the work folds behind it. No indicator, no shimmer, no swapping phrase
+       * — the animated reading of the turn lives at the bottom, in the
+       * `turn-tail` row, where the writing actually happens.
        */
       kind: "turn-head";
       id: string;
       createdAt: string | null;
       turnId: TurnId | null;
       state: "live" | "done";
-      /** "Worked for", "You stopped after", or the phrase a running turn is on. */
+      /** "Working for", "Worked for", "You stopped after" — the static frame. */
       label: string;
       /** How long the turn took, once it is over. */
       duration: string | null;
       /** What a running turn's timer counts from. */
       startedAt: string | null;
       expanded: boolean;
+      /** Whether there is any folded work to reopen. A text-only turn still
+          gets its "Worked for" line; it just has no chevron. */
+      collapsible: boolean;
+    }
+  | {
+      /**
+       * The bottom of a running turn: the indicator and the phrase the turn is
+       * on ("Thinking", "Working", "Writing"), under the newest content —
+       * where the reader's eye already is. Exactly one exists at a time; its
+       * constant id is what keeps it from remounting when the server assigns
+       * the turn its real id.
+       */
+      kind: "turn-tail";
+      id: "turn-tail:live";
+      createdAt: string | null;
+      label: string;
     }
   | {
       kind: "message";
@@ -315,14 +337,53 @@ export function workEntryHeading(entry: Pick<WorkLogEntry, "label" | "toolTitle"
 }
 
 /**
- * The state a running turn is in — one calm word, read off the newest thing
- * the turn has produced.
+ * What a tool call reads as on the status line while nothing more specific is
+ * known about it — keyed by the runtime's item type, so a provider that sends
+ * no title still gets a sentence rather than a shrug.
+ */
+const LIVE_WORK_ITEM_TYPE_LABELS: Readonly<Record<ToolLifecycleItemType, string>> = {
+  command_execution: "Running command",
+  file_change: "Editing files",
+  mcp_tool_call: "Calling tool",
+  dynamic_tool_call: "Calling tool",
+  collab_agent_tool_call: "Delegating work",
+  web_search: "Searching the web",
+  image_view: "Viewing image",
+};
+
+/**
+ * What the status line says while the turn's newest tool call is on the table.
  *
- * Deliberately generic: naming the tool call here put two lines in a race to
- * describe the same call (the live work group already names it), and a status
- * line that flips between "Thinking" and "Ran 2 commands" reads as two
- * different instruments. Tools running is "Working", text arriving is
- * "Writing", a plan on the table is "Planning", anything else is "Thinking".
+ * The call in flight names itself — "Read file", "Command run", "Listed
+ * directory" — the same heading its settled row will carry, so the line and
+ * the trace never disagree about what happened. The moment the call lands
+ * (completed, failed, declined, stopped) the line falls back to "Working":
+ * the beat between one call finishing and the next thing starting.
+ */
+function deriveLiveWorkLabel(entry: WorkLogEntry): string {
+  const status = entry.toolLifecycleStatus;
+  if (status !== undefined && status !== "inProgress") {
+    return "Working";
+  }
+  const heading = workEntryHeading(entry);
+  if (heading.length > 0) {
+    return heading;
+  }
+  if (entry.itemType !== undefined) {
+    return LIVE_WORK_ITEM_TYPE_LABELS[entry.itemType];
+  }
+  return "Working";
+}
+
+/**
+ * The state a running turn is in, read off the newest thing the turn has
+ * produced.
+ *
+ * The one status line the running turn has: tool calls swap through it by
+ * name (see `deriveLiveWorkLabel`) instead of standing in their own row above
+ * it — one line that shuffles "Read file" → "Working" → "Command run", the
+ * way Codex reads. Text arriving is "Writing", a plan on the table is
+ * "Planning", anything else is "Thinking".
  */
 function deriveLiveTurnLabel(
   timelineEntries: ReadonlyArray<TimelineEntry>,
@@ -336,7 +397,7 @@ function deriveLiveTurnLabel(
     if (!entry) continue;
     if (entry.kind === "work") {
       if (entry.entry.turnId !== turnId) continue;
-      return "Working";
+      return deriveLiveWorkLabel(entry.entry);
     }
     if (entry.kind === "message") {
       if (entry.message.role !== "assistant" || entry.message.turnId !== turnId) continue;
@@ -388,7 +449,7 @@ function deriveTurnFolds(input: {
   terminalAssistantMessageIds: ReadonlySet<string>;
   latestTurn: TimelineLatestTurn | null;
   unsettledTurnId: TurnId | null;
-  liveTurnAnchor: { entryId: string | null };
+  liveTurnAnchor: { entryId: string | null; startBoundary: string | null };
 }): ReadonlyMap<string, TurnFold> {
   interface ExchangeRegion {
     entries: Array<TimelineEntry>;
@@ -453,6 +514,7 @@ function deriveTurnFolds(input: {
     if (input.unsettledTurnId !== null && region.turnIds.has(input.unsettledTurnId)) {
       // The whole exchange is the live head's, earlier sibling turns included.
       input.liveTurnAnchor.entryId = firstEntry.id;
+      input.liveTurnAnchor.startBoundary = region.startBoundary;
       continue;
     }
     if (region.hasStreamingMessage) {
@@ -475,9 +537,10 @@ function deriveTurnFolds(input: {
         hiddenEntryIds.add(entry.id);
       }
     }
-    if (hiddenEntryIds.size === 0) {
-      continue;
-    }
+    /* An empty set is not a reason to skip: a text-only exchange still gets
+       its "Worked for" line — it just has nothing to fold, which the head row
+       carries as `collapsible: false`. Skipping here was why a plain answer
+       showed no status line at all. */
 
     const isLatestInterrupted =
       input.latestTurn?.state === "interrupted" && region.turnIds.has(input.latestTurn.turnId);
@@ -545,7 +608,10 @@ export function deriveMessagesTimelineRows(input: {
     input.latestTurn ?? null,
     input.runningTurnId ?? null,
   );
-  const liveTurnAnchor: { entryId: string | null } = { entryId: null };
+  const liveTurnAnchor: { entryId: string | null; startBoundary: string | null } = {
+    entryId: null,
+    startBoundary: null,
+  };
   const foldsByAnchorEntryId = deriveTurnFolds({
     timelineEntries: input.timelineEntries,
     terminalAssistantMessageIds,
@@ -578,10 +644,13 @@ export function deriveMessagesTimelineRows(input: {
     createdAt,
     turnId: liveHead?.turnId ?? null,
     state: "live",
-    label: liveHead?.label ?? "Thinking",
+    label: "Working for",
     duration: null,
-    startedAt: input.activeTurnStartedAt,
+    /* From the user's message when known — the settled "Worked for" measures
+       from the same instant, so the number never jumps at settle. */
+    startedAt: liveTurnAnchor.startBoundary ?? input.activeTurnStartedAt,
     expanded: true,
+    collapsible: false,
   });
 
   for (let index = 0; index < input.timelineEntries.length; index += 1) {
@@ -602,6 +671,7 @@ export function deriveMessagesTimelineRows(input: {
         duration: turnFold.duration,
         startedAt: null,
         expanded: input.expandedTurnIds?.has(turnFold.turnId) ?? false,
+        collapsible: turnFold.hiddenEntryIds.size > 0,
       });
     }
 
@@ -698,7 +768,37 @@ export function deriveMessagesTimelineRows(input: {
     nextRows.push(buildLiveHeadRow(input.activeTurnStartedAt));
   }
 
-  return settleWorkRows(markLiveTail(nextRows, liveHead !== null));
+  const settled = settleWorkRows(markLiveTail(nextRows, liveHead !== null));
+  if (liveHead === null) {
+    return settled;
+  }
+  /*
+   * The live work group does not render as a row of its own: the status line
+   * below carries the call it is on by name (see `deriveLiveWorkLabel`), and
+   * two lines describing the same call — one stacked above the other — is
+   * exactly what made a running turn read as a log. The group's entries are
+   * still in the timeline; they surface as one settled row the moment the
+   * group stops being the tail (next thought, or turn end).
+   */
+  const lastRow = settled.at(-1);
+  const visible =
+    lastRow !== undefined && lastRow.kind === "work" && lastRow.live
+      ? settled.slice(0, -1)
+      : settled;
+  /*
+   * The animated reading of the turn, at its bottom. One constant id: exactly
+   * one exists at a time, and a constant id is what stops it remounting when
+   * the server assigns the turn its real id mid-flight.
+   */
+  return [
+    ...visible,
+    {
+      kind: "turn-tail",
+      id: "turn-tail:live",
+      createdAt: input.activeTurnStartedAt,
+      label: liveHead.label,
+    },
+  ];
 }
 
 /**
@@ -789,8 +889,14 @@ function isRowUnchanged(a: MessagesTimelineRow, b: MessagesTimelineRow): boolean
         a.label === bh.label &&
         a.duration === bh.duration &&
         a.startedAt === bh.startedAt &&
-        a.expanded === bh.expanded
+        a.expanded === bh.expanded &&
+        a.collapsible === bh.collapsible
       );
+    }
+
+    case "turn-tail": {
+      const bt = b as typeof a;
+      return a.createdAt === bt.createdAt && a.label === bt.label;
     }
 
     case "proposed-plan":

@@ -168,12 +168,12 @@ export function showContextMenuFallback<T extends string>(
 
       const menu = document.createElement("div");
       menu.className =
-        "fixed z-[10000] min-w-(--popup-min-width) max-w-sm overflow-hidden rounded-(--popup-radius) border border-border bg-popover bg-clip-padding text-popover-foreground shadow-lg/5 outline-none";
+        "dropdown-glass fixed z-[10000] min-w-(--popup-min-width) max-w-sm overflow-hidden rounded-(--popup-radius) bg-clip-padding text-popover-foreground outline-none";
       /* --popover is the chrome surface (through the user's chrome alpha), so
          the fallback menu matches the real menus — including the blur that
          makes translucency read as glass rather than as a bug. */
       menu.style.cssText =
-        "position:fixed;z-index:10000;min-width:var(--popup-min-width);max-width:24rem;overflow:hidden;border-radius:var(--popup-radius);border:1px solid var(--border);background:var(--popover);background-clip:padding-box;color:var(--popover-foreground);-webkit-backdrop-filter:var(--chrome-backdrop-filter,none);backdrop-filter:var(--chrome-backdrop-filter,none);box-shadow:0 10px 15px -3px rgb(0 0 0 / 0.05),0 4px 6px -4px rgb(0 0 0 / 0.05);outline:none;pointer-events:auto;";
+        "position:fixed;z-index:10000;min-width:var(--popup-min-width);max-width:24rem;overflow:hidden;border-radius:var(--popup-radius);border:1px solid var(--edge);background:var(--chrome-surface);background-clip:padding-box;color:var(--popover-foreground);-webkit-backdrop-filter:var(--chrome-backdrop-filter,none);backdrop-filter:var(--chrome-backdrop-filter,none);box-shadow:var(--elevation-popup);outline:none;pointer-events:auto;";
       menu.style.left = `${preferredLeft}px`;
       menu.style.top = `${preferredTop}px`;
       menu.dataset.level = String(level);

@@ -153,7 +153,8 @@ import {
   NumberFieldInput,
 } from "./ui/number-field";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "./ui/select";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
+import { Tooltip, TooltipPopup, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
+import { SidebarMarqueeTitle, SidebarThreadTooltipContent } from "./sidebar/SidebarThreadTooltip";
 import {
   SidebarContent,
   SidebarGroup,
@@ -669,7 +670,11 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
     },
     [attemptArchiveThread, threadRef],
   );
-  const rowButtonRender = useMemo(() => <div role="button" tabIndex={0} />, []);
+  /* The hover card anchors to the row, not to the (truncated) title span —
+     anchored to the span, "right of the anchor" is wherever the title happens
+     to end, which put the card mid-sidebar instead of beside it. */
+  const rowElementRef = useRef<HTMLDivElement | null>(null);
+  const rowButtonRender = useMemo(() => <div role="button" tabIndex={0} ref={rowElementRef} />, []);
 
   return (
     <SidebarMenuSubItem
@@ -734,17 +739,14 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
             <Tooltip>
               <TooltipTrigger
                 render={
-                  <span
+                  <SidebarMarqueeTitle
+                    title={thread.title}
                     className={SIDEBAR_ROW_LABEL_CLASS}
                     data-testid={`thread-title-${thread.id}`}
-                  >
-                    {thread.title}
-                  </span>
+                  />
                 }
               />
-              <TooltipPopup side="top" className="max-w-80 whitespace-normal leading-tight">
-                {thread.title}
-              </TooltipPopup>
+              <SidebarThreadTooltipContent thread={thread} anchor={rowElementRef} />
             </Tooltip>
           )}
         </div>
@@ -2330,7 +2332,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
               >
                 <SidebarStatusMark status={projectStatus} />
               </TooltipTrigger>
-              <TooltipPopup side="top">{projectStatus.label}</TooltipPopup>
+              <TooltipPopup side="right">{projectStatus.label}</TooltipPopup>
             </Tooltip>
           ) : (
             <span className={SIDEBAR_STATUS_SLOT_CLASS}>
@@ -2369,7 +2371,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
                 <CloudIcon className="size-3" />
               )}
             </TooltipTrigger>
-            <TooltipPopup side="top">
+            <TooltipPopup side="right">
               {project.allRemoteMembersAreDesktopLocal
                 ? `Local sandbox: ${project.remoteEnvironmentLabels.join(", ")}`
                 : `Remote environment: ${project.remoteEnvironmentLabels.join(", ")}`}
@@ -2392,7 +2394,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
               </div>
             }
           />
-          <TooltipPopup side="top">
+          <TooltipPopup side="right">
             {newThreadShortcutLabel ? `New thread (${newThreadShortcutLabel})` : "New thread"}
           </TooltipPopup>
         </Tooltip>
@@ -2918,175 +2920,181 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
   );
 
   return (
-    <SidebarContent className="gap-0">
-      <SidebarGroup className="px-2 pt-2 pb-1">
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <CommandDialogTrigger
-              render={
-                <SidebarMenuButton
-                  size="sm"
-                  className="h-8 gap-2 rounded-md px-2 py-1.5 text-sidebar-muted-foreground/80 hover:bg-sidebar-row-hover hover:text-sidebar-foreground focus-visible:ring-0"
-                  data-testid="command-palette-trigger"
-                />
-              }
-            >
-              <SearchIcon className="size-4 shrink-0 text-sidebar-muted-foreground/80" />
-              <span className="flex-1 truncate text-left text-(length:--text-ui) font-medium">
-                Search
-              </span>
-              {commandPaletteShortcutLabel ? (
-                <Kbd className="h-4 min-w-0 rounded-sm px-1.5 text-(length:--text-micro)">
-                  {commandPaletteShortcutLabel}
-                </Kbd>
-              ) : null}
-            </CommandDialogTrigger>
-          </SidebarMenuItem>
-        </SidebarMenu>
-      </SidebarGroup>
-      <SidebarPrimaryNav entries={primaryNavEntries} />
-      {showArm64IntelBuildWarning && arm64IntelBuildWarningDescription ? (
-        <SidebarGroup className="px-2 pt-2 pb-0">
-          <Alert variant="warning" className="rounded-2xl border-warning/40 bg-warning/8">
-            <TriangleAlertIcon />
-            <AlertTitle>Intel build on Apple Silicon</AlertTitle>
-            <AlertDescription>{arm64IntelBuildWarningDescription}</AlertDescription>
-            {desktopUpdateButtonAction !== "none" ? (
-              <AlertAction>
-                <Button
-                  size="xs"
-                  variant="outline"
-                  disabled={desktopUpdateButtonDisabled}
-                  onClick={handleDesktopUpdateButtonClick}
-                >
-                  {desktopUpdateButtonAction === "download"
-                    ? "Download ARM build"
-                    : "Install ARM build"}
-                </Button>
-              </AlertAction>
-            ) : null}
-          </Alert>
+    /* One provider over the whole index: hovering row to row cross-fades one
+       card into the next instead of re-waiting the default open delay. */
+    <TooltipProvider delay={150} closeDelay={0} timeout={400}>
+      <SidebarContent className="gap-0">
+        <SidebarGroup className="px-2 pt-2 pb-1">
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <CommandDialogTrigger
+                render={
+                  <SidebarMenuButton
+                    size="sm"
+                    className="h-8 gap-2 rounded-md px-2 py-1.5 text-sidebar-muted-foreground/80 hover:bg-sidebar-row-hover hover:text-sidebar-foreground focus-visible:ring-0"
+                    data-testid="command-palette-trigger"
+                  />
+                }
+              >
+                <SearchIcon className="size-4 shrink-0 text-sidebar-muted-foreground/80" />
+                <span className="flex-1 truncate text-left text-(length:--text-ui) font-medium">
+                  Search
+                </span>
+                {commandPaletteShortcutLabel ? (
+                  <Kbd className="h-4 min-w-0 rounded-sm px-1.5 text-(length:--text-micro)">
+                    {commandPaletteShortcutLabel}
+                  </Kbd>
+                ) : null}
+              </CommandDialogTrigger>
+            </SidebarMenuItem>
+          </SidebarMenu>
         </SidebarGroup>
-      ) : null}
-      <LocalSecondaryStatus />
-      <SidebarGroup className="px-2 py-2">
-        {/* The section's controls are held back until you are actually at the
+        <SidebarPrimaryNav entries={primaryNavEntries} />
+        {showArm64IntelBuildWarning && arm64IntelBuildWarningDescription ? (
+          <SidebarGroup className="px-2 pt-2 pb-0">
+            <Alert variant="warning" className="rounded-2xl border-warning/40 bg-warning/8">
+              <TriangleAlertIcon />
+              <AlertTitle>Intel build on Apple Silicon</AlertTitle>
+              <AlertDescription>{arm64IntelBuildWarningDescription}</AlertDescription>
+              {desktopUpdateButtonAction !== "none" ? (
+                <AlertAction>
+                  <Button
+                    size="xs"
+                    variant="outline"
+                    disabled={desktopUpdateButtonDisabled}
+                    onClick={handleDesktopUpdateButtonClick}
+                  >
+                    {desktopUpdateButtonAction === "download"
+                      ? "Download ARM build"
+                      : "Install ARM build"}
+                  </Button>
+                </AlertAction>
+              ) : null}
+            </Alert>
+          </SidebarGroup>
+        ) : null}
+        <LocalSecondaryStatus />
+        <SidebarGroup className="px-2 py-2">
+          {/* The section's controls are held back until you are actually at the
             section: at rest this is a signpost and nothing else. They centre on
             the label and are scaled to it rather than to the rows below. */}
-        <div className="group/sidebar-section mb-1 flex h-6 items-center justify-between pl-2 pr-1.5">
-          <SidebarSectionLabel>Projects</SidebarSectionLabel>
-          <div className={SIDEBAR_SECTION_ACTIONS_CLASS}>
-            <ProjectSortMenu
-              projectSortOrder={projectSortOrder}
-              threadSortOrder={threadSortOrder}
-              threadPreviewCount={threadPreviewCount}
-              onProjectSortOrderChange={handleProjectSortOrderChange}
-              onThreadSortOrderChange={handleThreadSortOrderChange}
-              onThreadPreviewCountChange={handleThreadPreviewCountChange}
-            />
-            <AddProjectMenu align="end">
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <MenuTrigger
-                      aria-label="Add project"
-                      data-testid="sidebar-add-project-trigger"
-                      className={`${SIDEBAR_SECTION_ACTION_BUTTON_CLASS} ${SIDEBAR_ROW_MOTION_CLASS}`}
-                    />
-                  }
-                >
-                  <FolderPlusIcon />
-                </TooltipTrigger>
-                <TooltipPopup side="right">Add project</TooltipPopup>
-              </Tooltip>
-            </AddProjectMenu>
-          </div>
-        </div>
-
-        {isManualProjectSorting ? (
-          <DndContext
-            sensors={projectDnDSensors}
-            collisionDetection={projectCollisionDetection}
-            modifiers={[restrictToVerticalAxis, restrictToFirstScrollableAncestor]}
-            onDragStart={handleProjectDragStart}
-            onDragEnd={handleProjectDragEnd}
-            onDragCancel={handleProjectDragCancel}
-          >
-            <SidebarMenu>
-              <SortableContext
-                items={sortedProjects.map((project) => project.projectKey)}
-                strategy={verticalListSortingStrategy}
-              >
-                {sortedProjects.map((project) => (
-                  <SortableProjectItem key={project.projectKey} projectId={project.projectKey}>
-                    {(dragHandleProps) => (
-                      <SidebarProjectItem
-                        project={project}
-                        isThreadListExpanded={expandedThreadListsByProject.has(project.projectKey)}
-                        activeRouteThreadKey={
-                          activeRouteProjectKey === project.projectKey ? routeThreadKey : null
-                        }
-                        newThreadShortcutLabel={newThreadShortcutLabel}
-                        handleNewThread={handleNewThread}
-                        archiveThread={archiveThread}
-                        pinThread={pinThread}
-                        unpinThread={unpinThread}
-                        deleteThread={deleteThread}
-                        threadJumpLabelByKey={threadJumpLabelByKey}
-                        attachThreadListAutoAnimateRef={attachThreadListAutoAnimateRef}
-                        expandThreadListForProject={expandThreadListForProject}
-                        collapseThreadListForProject={collapseThreadListForProject}
-                        dragInProgressRef={dragInProgressRef}
-                        suppressProjectClickAfterDragRef={suppressProjectClickAfterDragRef}
-                        suppressProjectClickForContextMenuRef={
-                          suppressProjectClickForContextMenuRef
-                        }
-                        isManualProjectSorting={isManualProjectSorting}
-                        dragHandleProps={dragHandleProps}
-                      />
-                    )}
-                  </SortableProjectItem>
-                ))}
-              </SortableContext>
-            </SidebarMenu>
-          </DndContext>
-        ) : (
-          <SidebarMenu ref={attachProjectListAutoAnimateRef}>
-            {sortedProjects.map((project) => (
-              <SidebarProjectListRow
-                key={project.projectKey}
-                project={project}
-                isThreadListExpanded={expandedThreadListsByProject.has(project.projectKey)}
-                activeRouteThreadKey={
-                  activeRouteProjectKey === project.projectKey ? routeThreadKey : null
-                }
-                newThreadShortcutLabel={newThreadShortcutLabel}
-                handleNewThread={handleNewThread}
-                archiveThread={archiveThread}
-                pinThread={pinThread}
-                unpinThread={unpinThread}
-                deleteThread={deleteThread}
-                threadJumpLabelByKey={threadJumpLabelByKey}
-                attachThreadListAutoAnimateRef={attachThreadListAutoAnimateRef}
-                expandThreadListForProject={expandThreadListForProject}
-                collapseThreadListForProject={collapseThreadListForProject}
-                dragInProgressRef={dragInProgressRef}
-                suppressProjectClickAfterDragRef={suppressProjectClickAfterDragRef}
-                suppressProjectClickForContextMenuRef={suppressProjectClickForContextMenuRef}
-                isManualProjectSorting={isManualProjectSorting}
-                dragHandleProps={null}
+          <div className="group/sidebar-section mb-1 flex h-6 items-center justify-between pl-2 pr-1.5">
+            <SidebarSectionLabel>Projects</SidebarSectionLabel>
+            <div className={SIDEBAR_SECTION_ACTIONS_CLASS}>
+              <ProjectSortMenu
+                projectSortOrder={projectSortOrder}
+                threadSortOrder={threadSortOrder}
+                threadPreviewCount={threadPreviewCount}
+                onProjectSortOrderChange={handleProjectSortOrderChange}
+                onThreadSortOrderChange={handleThreadSortOrderChange}
+                onThreadPreviewCountChange={handleThreadPreviewCountChange}
               />
-            ))}
-          </SidebarMenu>
-        )}
-
-        {projectsLength === 0 && (
-          <div className="px-2 pt-4 text-center text-(length:--text-ui) text-muted-foreground/60">
-            No projects yet
+              <AddProjectMenu align="end">
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <MenuTrigger
+                        aria-label="Add project"
+                        data-testid="sidebar-add-project-trigger"
+                        className={`${SIDEBAR_SECTION_ACTION_BUTTON_CLASS} ${SIDEBAR_ROW_MOTION_CLASS}`}
+                      />
+                    }
+                  >
+                    <FolderPlusIcon />
+                  </TooltipTrigger>
+                  <TooltipPopup side="right">Add project</TooltipPopup>
+                </Tooltip>
+              </AddProjectMenu>
+            </div>
           </div>
-        )}
-      </SidebarGroup>
-    </SidebarContent>
+
+          {isManualProjectSorting ? (
+            <DndContext
+              sensors={projectDnDSensors}
+              collisionDetection={projectCollisionDetection}
+              modifiers={[restrictToVerticalAxis, restrictToFirstScrollableAncestor]}
+              onDragStart={handleProjectDragStart}
+              onDragEnd={handleProjectDragEnd}
+              onDragCancel={handleProjectDragCancel}
+            >
+              <SidebarMenu>
+                <SortableContext
+                  items={sortedProjects.map((project) => project.projectKey)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  {sortedProjects.map((project) => (
+                    <SortableProjectItem key={project.projectKey} projectId={project.projectKey}>
+                      {(dragHandleProps) => (
+                        <SidebarProjectItem
+                          project={project}
+                          isThreadListExpanded={expandedThreadListsByProject.has(
+                            project.projectKey,
+                          )}
+                          activeRouteThreadKey={
+                            activeRouteProjectKey === project.projectKey ? routeThreadKey : null
+                          }
+                          newThreadShortcutLabel={newThreadShortcutLabel}
+                          handleNewThread={handleNewThread}
+                          archiveThread={archiveThread}
+                          pinThread={pinThread}
+                          unpinThread={unpinThread}
+                          deleteThread={deleteThread}
+                          threadJumpLabelByKey={threadJumpLabelByKey}
+                          attachThreadListAutoAnimateRef={attachThreadListAutoAnimateRef}
+                          expandThreadListForProject={expandThreadListForProject}
+                          collapseThreadListForProject={collapseThreadListForProject}
+                          dragInProgressRef={dragInProgressRef}
+                          suppressProjectClickAfterDragRef={suppressProjectClickAfterDragRef}
+                          suppressProjectClickForContextMenuRef={
+                            suppressProjectClickForContextMenuRef
+                          }
+                          isManualProjectSorting={isManualProjectSorting}
+                          dragHandleProps={dragHandleProps}
+                        />
+                      )}
+                    </SortableProjectItem>
+                  ))}
+                </SortableContext>
+              </SidebarMenu>
+            </DndContext>
+          ) : (
+            <SidebarMenu ref={attachProjectListAutoAnimateRef}>
+              {sortedProjects.map((project) => (
+                <SidebarProjectListRow
+                  key={project.projectKey}
+                  project={project}
+                  isThreadListExpanded={expandedThreadListsByProject.has(project.projectKey)}
+                  activeRouteThreadKey={
+                    activeRouteProjectKey === project.projectKey ? routeThreadKey : null
+                  }
+                  newThreadShortcutLabel={newThreadShortcutLabel}
+                  handleNewThread={handleNewThread}
+                  archiveThread={archiveThread}
+                  pinThread={pinThread}
+                  unpinThread={unpinThread}
+                  deleteThread={deleteThread}
+                  threadJumpLabelByKey={threadJumpLabelByKey}
+                  attachThreadListAutoAnimateRef={attachThreadListAutoAnimateRef}
+                  expandThreadListForProject={expandThreadListForProject}
+                  collapseThreadListForProject={collapseThreadListForProject}
+                  dragInProgressRef={dragInProgressRef}
+                  suppressProjectClickAfterDragRef={suppressProjectClickAfterDragRef}
+                  suppressProjectClickForContextMenuRef={suppressProjectClickForContextMenuRef}
+                  isManualProjectSorting={isManualProjectSorting}
+                  dragHandleProps={null}
+                />
+              ))}
+            </SidebarMenu>
+          )}
+
+          {projectsLength === 0 && (
+            <div className="px-2 pt-4 text-center text-(length:--text-ui) text-muted-foreground/60">
+              No projects yet
+            </div>
+          )}
+        </SidebarGroup>
+      </SidebarContent>
+    </TooltipProvider>
   );
 });
 

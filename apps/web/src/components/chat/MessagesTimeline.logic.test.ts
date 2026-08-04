@@ -742,12 +742,14 @@ describe("deriveMessagesTimelineRows", () => {
     });
 
     // The new turn has no entries of its own yet, so its head waits at the end of
-    // the list — which is where its first entry is about to appear.
+    // the list — which is where its first entry is about to appear — and the
+    // animated tail sits under it.
     expect(rows.map((row) => row.id)).toEqual([
       "turn-head:turn-1",
       "assistant-final-entry",
       "user-followup-entry",
       "turn-head:live",
+      "turn-tail:live",
     ]);
     const finalRow = rows.find((row) => row.id === "assistant-final-entry");
     expect(finalRow?.kind === "message" && finalRow.showAssistantMeta).toBe(true);
@@ -796,11 +798,14 @@ describe("deriveMessagesTimelineRows", () => {
     });
 
     expect(rows.some((row) => row.kind === "turn-head" && row.state === "done")).toBe(false);
+    // The live work group is not a row of its own — the tail names the call.
     expect(rows.map((row) => row.id)).toEqual([
       "turn-head:turn-1",
       "assistant-thought-entry",
-      "work-entry-1",
+      "turn-tail:live",
     ]);
+    const tail = rows.find((row) => row.kind === "turn-tail");
+    expect(tail?.kind === "turn-tail" && tail.label).toBe("Ran command");
   });
 
   it("does not fold the session's running turn when latestTurn regresses", () => {
@@ -863,7 +868,11 @@ describe("deriveMessagesTimelineRows", () => {
         .filter((row) => row.kind === "turn-head" && row.state === "done")
         .map((row) => (row.kind === "turn-head" ? row.turnId : null)),
     ).toEqual(["turn-1"]);
-    expect(rows.map((row) => row.id)).toContain("running-work-entry");
+    // turn-2's work is not folded into turn-1 — it is the live tail, so its
+    // call is carried by the status line rather than a row of its own.
+    expect(rows.map((row) => row.id)).not.toContain("running-work-entry");
+    const tail = rows.find((row) => row.kind === "turn-tail");
+    expect(tail?.kind === "turn-tail" && tail.label).toBe("Searched files");
   });
 
   it("only shows assistant metadata on the terminal assistant message", () => {
@@ -1055,24 +1064,26 @@ describe("deriveMessagesTimelineRows", () => {
     });
 
     // The head sits at the turn's first entry, not at the end of the list: it is
-    // where the work will fold into once the turn is over.
+    // where the work will fold into once the turn is over. The animated tail is
+    // always the last row of a running turn — and it carries the live call by
+    // name, so the call does not also stand in a work row of its own.
     expect(rows.map((row) => row.id)).toEqual([
       "turn-head:turn-1",
       "assistant-thought-entry",
-      "work-entry-1",
+      "turn-tail:live",
     ]);
     const head = rows.find((row) => row.kind === "turn-head");
     expect(head?.kind === "turn-head" && head.state).toBe("live");
-    // Tools are running, so the head says so — generically. Naming the call is
-    // the live work group's job; the status line stays one calm word.
-    expect(head?.kind === "turn-head" && head.label).toBe("Working");
+    // The head is the static frame: it counts time and nothing else. The
+    // phrase for what the turn is doing lives on the tail.
+    expect(head?.kind === "turn-head" && head.label).toBe("Working for");
     expect(head?.kind === "turn-head" && head.startedAt).toBe("2026-01-01T00:00:00Z");
+    const tail = rows.find((row) => row.kind === "turn-tail");
+    expect(tail?.kind === "turn-tail" && tail.label).toBe("Read");
 
     const thought = rows.find((row) => row.id === "assistant-thought-entry");
     expect(thought?.kind === "message" && thought.isLiveThought).toBe(true);
     expect(thought?.kind === "message" && thought.isLiveTurnMessage).toBe(true);
-    const work = rows.find((row) => row.kind === "work");
-    expect(work?.kind === "work" && work.live).toBe(true);
   });
 
   it("reads the live phrase off what the turn is doing", () => {
@@ -1108,8 +1119,8 @@ describe("deriveMessagesTimelineRows", () => {
       });
 
     const label = (rows: ReturnType<typeof deriveMessagesTimelineRows>) => {
-      const head = rows.find((row) => row.kind === "turn-head");
-      return head?.kind === "turn-head" ? head.label : null;
+      const tail = rows.find((row) => row.kind === "turn-tail");
+      return tail?.kind === "turn-tail" ? tail.label : null;
     };
 
     expect(label(buildRows("Half a sen", true))).toBe("Writing");
@@ -1140,9 +1151,11 @@ describe("deriveMessagesTimelineRows", () => {
       revertTurnCountByUserMessageId: new Map(),
     });
 
-    expect(rows.map((row) => row.id)).toEqual(["user-entry", "turn-head:live"]);
+    expect(rows.map((row) => row.id)).toEqual(["user-entry", "turn-head:live", "turn-tail:live"]);
     const head = rows.find((row) => row.kind === "turn-head");
-    expect(head?.kind === "turn-head" && head.label).toBe("Thinking");
+    expect(head?.kind === "turn-head" && head.label).toBe("Working for");
+    const tail = rows.find((row) => row.kind === "turn-tail");
+    expect(tail?.kind === "turn-tail" && tail.label).toBe("Thinking");
   });
 });
 

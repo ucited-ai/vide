@@ -160,12 +160,29 @@ function splitPaletteColor(color: string): { readonly rgb: string; readonly alph
 function ThemeVariableSync() {
   const textScale = useClientSettings((settings) => settings.textScale);
   const palette = useClientSettings((settings) => settings.palette);
+  const glassBlur = useClientSettings((settings) => settings.glassBlur);
   const { resolvedTheme } = useTheme();
 
   /* One factor, six roles. The stylesheet does the arithmetic. */
   useEffect(() => {
     document.documentElement.style.setProperty("--text-scale", String(textScale));
   }, [textScale]);
+
+  /*
+   * One frost strength for every pane of glass. Removed rather than set at the
+   * default, so the stylesheet's per-theme values (12px light, 16px dark) stay
+   * in charge until the user actually chooses. The armed/disarmed decision
+   * stays with the alpha gates below — this is only how strong the blur is
+   * where a gate has armed it.
+   */
+  useEffect(() => {
+    const root = document.documentElement;
+    if (glassBlur === null) {
+      root.style.removeProperty("--glass-blur");
+    } else {
+      root.style.setProperty("--glass-blur", `${String(glassBlur)}px`);
+    }
+  }, [glassBlur]);
 
   /*
    * The palette the user owns. Every surface they act through — sidebar,
@@ -205,12 +222,71 @@ function ThemeVariableSync() {
     const chromeAlpha = chrome === null ? 100 : splitPaletteColor(chrome).alpha;
     if (chromeAlpha >= 100) {
       root.style.removeProperty("--surface-chrome-alpha");
-      root.style.removeProperty("--chrome-backdrop-filter");
     } else {
       root.style.setProperty("--surface-chrome-alpha", `${chromeAlpha}%`);
+    }
+    /*
+     * Blur and grain exist to sell a *fill*: frost behind a translucent pane,
+     * texture on an opaque one. At 0% there is no pane — a lingering
+     * backdrop-filter or noise tile would paint a ghost surface over the
+     * window material, which is exactly the "layer that never clears" bug.
+     * So both are armed only in the open interval (0, 100).
+     */
+    if (chromeAlpha < 100 && chromeAlpha > 0) {
       root.style.setProperty(
         "--chrome-backdrop-filter",
         "blur(var(--glass-blur)) saturate(var(--glass-saturation))",
+      );
+    } else {
+      root.style.removeProperty("--chrome-backdrop-filter");
+    }
+    if (chromeAlpha <= 0) {
+      root.style.setProperty("--chrome-grain", "none");
+    } else {
+      root.style.removeProperty("--chrome-grain");
+    }
+
+    /*
+     * Sidebar and panel (composer, environment column) split off the chrome
+     * rung. Gated on nullness rather than on the alpha value: unset, the
+     * stylesheet aliases them back to chrome — removing the properties is what
+     * keeps them following a chrome choice, alpha, blur and grain included.
+     * Once the user picks a value, the rung stands on its own and its blur and
+     * grain must be answered explicitly, or they would fall back to chrome's
+     * gates and disagree with the fill they decorate.
+     */
+    const sidebar = themePalette["surface-sidebar"];
+    if (sidebar === null) {
+      root.style.removeProperty("--surface-sidebar-alpha");
+      root.style.removeProperty("--sidebar-backdrop-filter");
+      root.style.removeProperty("--sidebar-grain");
+    } else {
+      const sidebarAlpha = splitPaletteColor(sidebar).alpha;
+      root.style.setProperty("--surface-sidebar-alpha", `${sidebarAlpha}%`);
+      root.style.setProperty(
+        "--sidebar-backdrop-filter",
+        sidebarAlpha < 100 && sidebarAlpha > 0
+          ? "blur(var(--glass-blur)) saturate(var(--glass-saturation))"
+          : "none",
+      );
+      root.style.setProperty(
+        "--sidebar-grain",
+        sidebarAlpha <= 0 ? "none" : "var(--surface-grain)",
+      );
+    }
+
+    const panel = themePalette["surface-panel"];
+    if (panel === null) {
+      root.style.removeProperty("--surface-panel-alpha");
+      root.style.removeProperty("--panel-backdrop-filter");
+    } else {
+      const panelAlpha = splitPaletteColor(panel).alpha;
+      root.style.setProperty("--surface-panel-alpha", `${panelAlpha}%`);
+      root.style.setProperty(
+        "--panel-backdrop-filter",
+        panelAlpha < 100 && panelAlpha > 0
+          ? "blur(var(--glass-blur)) saturate(var(--glass-saturation))"
+          : "none",
       );
     }
 
@@ -220,6 +296,19 @@ function ThemeVariableSync() {
       root.style.removeProperty("--surface-content-alpha");
     } else {
       root.style.setProperty("--surface-content-alpha", `${contentAlpha}%`);
+    }
+    if (contentAlpha <= 0) {
+      root.style.setProperty("--content-grain", "none");
+    } else {
+      root.style.removeProperty("--content-grain");
+    }
+
+    const recessed = themePalette["surface-recessed"];
+    const recessedAlpha = recessed === null ? 100 : splitPaletteColor(recessed).alpha;
+    if (recessedAlpha >= 100) {
+      root.style.removeProperty("--surface-recessed-alpha");
+    } else {
+      root.style.setProperty("--surface-recessed-alpha", `${recessedAlpha}%`);
     }
   }, [palette, resolvedTheme]);
 

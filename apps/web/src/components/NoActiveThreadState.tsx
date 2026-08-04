@@ -6,8 +6,8 @@ import { COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS } from "~/workspaceTitlebar";
 
 export function NoActiveThreadState() {
   return (
-    <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none bg-background text-foreground">
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden bg-background">
+    <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none text-foreground">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden">
         <header
           className={cn(
             "border-b border-border px-3 transition-[padding-left] duration-(--duration-base) ease-(--ease-soft) motion-reduce:transition-none sm:px-5",

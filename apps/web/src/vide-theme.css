@@ -106,6 +106,33 @@
     transparent
   );
 
+  /* The recessed rung, same construction, so all the surfaces of the ladder
+     answer their swatch's opacity the same way. */
+  --surface-recessed-alpha: 100%;
+  --recessed-surface: color-mix(
+    in srgb,
+    var(--surface-recessed) var(--surface-recessed-alpha),
+    transparent
+  );
+
+  /*
+   * The sidebar and the panel rungs (composer, environment column) are split
+   * off the chrome rung so each can carry its own colour and opacity. Unset —
+   * the default — they alias chrome and follow its alpha, so a palette that
+   * never chose them paints exactly as before the split. ThemeVariableSync
+   * overrides the aliases only when the user picks a value.
+   */
+  --surface-sidebar: var(--surface-chrome);
+  --surface-sidebar-alpha: var(--surface-chrome-alpha);
+  --sidebar-surface: color-mix(
+    in srgb,
+    var(--surface-sidebar) var(--surface-sidebar-alpha),
+    transparent
+  );
+  --surface-panel: var(--surface-chrome);
+  --surface-panel-alpha: var(--surface-chrome-alpha);
+  --panel-surface: color-mix(in srgb, var(--surface-panel) var(--surface-panel-alpha), transparent);
+
   /*
    * Not derived from --ink, on purpose. An edge and a wash are light and shade,
    * not ink, so they stay neutral even when someone tints the text. This is a
@@ -386,7 +413,7 @@
    * ladder covers only the subtree someone happened to scope it to. That is the
    * rule the theme-token gate now enforces.
    */
-  --sidebar: var(--chrome-surface);
+  --sidebar: var(--sidebar-surface);
   --sidebar-foreground: var(--ink);
   --sidebar-muted-foreground: var(--ink-secondary);
   --sidebar-border: var(--edge);
@@ -394,10 +421,10 @@
   --sidebar-row-hover: var(--wash-hover);
   --sidebar-row-active: var(--wash-active);
   --sidebar-row-selected: var(--wash-selected);
-  /* Through the chrome alpha: the stage art fades into the sidebar's actual
-     fill. Fading into the opaque rung painted a solid gradient over a sidebar
-     that was otherwise translucent. */
-  --sidebar-stage-fade: var(--chrome-surface);
+  /* Through the sidebar's own alpha: the stage art fades into the sidebar's
+     actual fill. Fading into the opaque rung painted a solid gradient over a
+     sidebar that was otherwise translucent. */
+  --sidebar-stage-fade: var(--sidebar-surface);
 }
 
 /*
@@ -410,8 +437,14 @@
 :root:root:root [data-sidebar-version="v2"],
 .dark.dark.dark [data-sidebar-version="v1"],
 .dark.dark.dark [data-sidebar-version="v2"] {
-  --background: var(--surface-chrome);
-  --card: var(--surface-chrome);
+  /*
+   * Through the sidebar's alpha, like the sidebar's own fill: a row or input
+   * that painted the raw rung stayed a solid slab inside an otherwise
+   * translucent sidebar. At the default alpha of 100% the two are
+   * pixel-identical.
+   */
+  --background: var(--sidebar-surface);
+  --card: var(--sidebar-surface);
   --card-foreground: var(--ink);
   --foreground: var(--ink);
   --muted: var(--wash-hover);
@@ -422,6 +455,58 @@
   --input: var(--edge-strong);
 }
 
+/* ------------------------------------------------------------ title marquee */
+
+/*
+ * A truncated thread title walks its overflow past the reader while its row is
+ * hovered. Ellipsis at rest, clip in motion — an ellipsis standing over moving
+ * text reads as a smear. The travel and duration are written per title by the
+ * component, since only it knows how far its text hangs out.
+ */
+:root:root:root {
+  --sidebar-marquee-distance: 0px;
+  --sidebar-marquee-duration: 2s;
+}
+
+.sidebar-marquee {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.sidebar-marquee-inner {
+  display: inline-block;
+}
+
+[data-thread-item]:hover .sidebar-marquee[data-overflowing="true"] {
+  text-overflow: clip;
+}
+
+[data-thread-item]:hover .sidebar-marquee[data-overflowing="true"] .sidebar-marquee-inner {
+  animation: sidebar-marquee var(--sidebar-marquee-duration) ease-in-out 0.6s infinite alternate;
+}
+
+/* Dwell at each end, so the reader gets the head and the tail of the title. */
+@keyframes sidebar-marquee {
+  0%,
+  10% {
+    transform: translateX(0);
+  }
+
+  90%,
+  100% {
+    transform: translateX(var(--sidebar-marquee-distance));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root:root:root .sidebar-marquee-inner {
+    animation: none;
+  }
+}
+
 /* ------------------------------------------------------- sidebar typography */
 
 /*
@@ -430,8 +515,10 @@
  * which inverts the usual web instinct to shrink navigation.
  */
 :root:root:root [data-app-sidebar] [data-slot="sidebar-inner"] {
-  -webkit-backdrop-filter: var(--chrome-backdrop-filter);
-  backdrop-filter: var(--chrome-backdrop-filter);
+  /* The sidebar's own gate first; unset, it follows the chrome rung it was
+     split from. */
+  -webkit-backdrop-filter: var(--sidebar-backdrop-filter, var(--chrome-backdrop-filter));
+  backdrop-filter: var(--sidebar-backdrop-filter, var(--chrome-backdrop-filter));
 }
 
 :root:root:root [data-app-sidebar] {
@@ -543,32 +630,52 @@
   --chrome-backdrop-filter: none;
 }
 
-:root:root:root .chat-composer-glass,
 :root:root:root .chat-composer-glass-shell::before {
-  background: var(--chrome-surface);
-  -webkit-backdrop-filter: var(--chrome-backdrop-filter);
-  backdrop-filter: var(--chrome-backdrop-filter);
+  background: var(--panel-surface);
+  -webkit-backdrop-filter: var(--panel-backdrop-filter, var(--chrome-backdrop-filter));
+  backdrop-filter: var(--panel-backdrop-filter, var(--chrome-backdrop-filter));
 }
 
 /* The environment panel floats over the chat: translucent without blur there
    reads as a rendering bug, not as glass. */
 :root:root:root [data-environment-column-surface] {
-  -webkit-backdrop-filter: var(--chrome-backdrop-filter);
-  backdrop-filter: var(--chrome-backdrop-filter);
+  -webkit-backdrop-filter: var(--panel-backdrop-filter, var(--chrome-backdrop-filter));
+  backdrop-filter: var(--panel-backdrop-filter, var(--chrome-backdrop-filter));
 }
 
-/* Upstream's glass is replaced rather than tuned: these surfaces take the one
-   chrome opacity, not a denser mix of their own on top of it. */
+/*
+ * The one definition of popup glass. Every popup in the app — menus, selects,
+ * comboboxes, popovers, tooltips, toasts, dialogs — carries one of these two
+ * classes, and everything they paint is decided here: the fill is the chrome
+ * rung through the user's one chrome opacity, the frost is the same alpha-gated
+ * filter every other glass surface reads, and the edge is the ladder's. Nothing
+ * else in the app may paint a popup surface, which is what keeps the branch
+ * picker, the model picker and a tooltip on one material by construction.
+ */
 :root:root:root .dropdown-glass,
 :root:root:root .dialog-glass {
   background: var(--chrome-surface);
   -webkit-backdrop-filter: var(--chrome-backdrop-filter);
   backdrop-filter: var(--chrome-backdrop-filter);
-  border-color: var(--edge);
+  border: 1px solid var(--edge);
 }
 
-:root:root:root .chat-composer-glass-shell {
-  --chat-composer-glass-surface: var(--surface-chrome);
+:root:root:root .dropdown-glass {
+  box-shadow: var(--elevation-popup);
+}
+
+:root:root:root .dialog-glass {
+  box-shadow: var(--elevation-dialog);
+}
+
+.dark.dark.dark .dropdown-glass {
+  box-shadow: 0 18px 44px -18px rgb(0 0 0 / 80%);
+}
+
+.dark.dark.dark .dialog-glass {
+  box-shadow:
+    inset 0 1px rgb(255 255 255 / 4%),
+    0 24px 72px -20px rgb(0 0 0 / 90%);
 }
 
 /* ---------------------------------------------------------------- utilities */
@@ -651,17 +758,25 @@
   }
 
   /*
-   * The fade hides row reflow during the sidebar width transition. Its asymmetric
-   * timing removes content before collapse and restores it after layout settles.
+   * The sidebar slides off-canvas at full width, so its rows never reflow —
+   * the content can ride the slide instead of being blanked. A soft blur and
+   * fade over the whole travel reads as motion, not as a switch: the text is
+   * still there while the panel leaves, and resolves as it arrives.
    */
   [data-slot="sidebar"][data-state="expanded"] [data-slot="sidebar-inner"] {
     opacity: 1;
-    transition: opacity var(--duration-fast) var(--ease-out) 130ms;
+    filter: blur(0);
+    transition:
+      opacity var(--duration-base) var(--ease-soft),
+      filter var(--duration-base) var(--ease-soft);
   }
 
   [data-slot="sidebar"][data-state="collapsed"] [data-slot="sidebar-inner"] {
-    opacity: 0;
-    transition: opacity 80ms var(--ease-out);
+    opacity: 0.35;
+    filter: blur(5px);
+    transition:
+      opacity var(--duration-base) var(--ease-soft),
+      filter var(--duration-base) var(--ease-soft);
   }
 }
 
@@ -701,6 +816,14 @@ html.electron:not(.electron-windows) body {
 [data-slot="sidebar-container"],
 [data-slot="sidebar-gap"],
 [data-slot="sidebar-inset"] {
+  /*
+   * Property named explicitly: sidebar-inset carries no transition-* utility
+   * of its own, so a bare duration would fall back to `all` and ease the
+   * pane's background-color for 260ms — visibly trailing the header, which
+   * paints the same token but only transitions padding. Only the collapse
+   * geometry is meant to move.
+   */
+  transition-property: width, left, right, margin !important;
   transition-duration: var(--duration-base) !important;
   transition-timing-function: var(--ease-soft) !important;
 }
@@ -755,6 +878,7 @@ html.electron:not(.electron-windows) body {
   :root:root:root [data-slot="preview-panel-inner"] {
     transition: none;
     opacity: 1;
+    filter: none;
   }
 
   [data-slot="sidebar-container"],
@@ -990,6 +1114,15 @@ html.electron:not(.electron-windows) body {
   --envcol-inset-start: 0.25rem;
   --envcol-radius: 0.875rem;
 
+  /*
+   * What the chat pane cedes to the environment overview — as padding inside
+   * the chat's own scroller rather than as a sibling column, so the scroller
+   * (and its native scrollbar) keeps the full pane width and the bar stays on
+   * the window edge instead of landing between conversation and panel.
+   * ChatView sets it to --envcol-width while the panel has a column's room.
+   */
+  --chat-column-end-reserve: 0px;
+
   --chat-picker-width: 18rem;
   --chat-ref-picker-width: 20rem;
   --chat-picker-list-max-height: 16rem;
@@ -1027,7 +1160,7 @@ html.electron:not(.electron-windows) body {
    */
   --envcol-edge: var(--edge);
   /* Through the chrome alpha, like every other floating chrome surface. */
-  --envcol-surface: var(--chrome-surface);
+  --envcol-surface: var(--panel-surface);
   --envcol-shadow: var(--elevation-popup);
 
   --envcol-enter-offset: 1.5rem;
@@ -1297,6 +1430,11 @@ html.electron:not(.electron-windows) body {
 :root:root:root {
   --chat-thinking-indicator-size: 1.25em;
 
+  /* How long a still-arriving block takes to grow to its own height once its
+     first word's delay is up. Shorter than the slowest word variant, so the
+     box is never still moving after its words have settled. */
+  --chat-stream-block-duration: 360ms;
+
   /*
    * Somewhere to start when choosing the indicator's colour.
    *
@@ -1351,6 +1489,51 @@ html.electron:not(.electron-windows) body {
  * contract. `instant` needs no rule at all: it is the absence of this whole
  * block.
  */
+/*
+ * A block still arriving takes no height until its first word's delay is up,
+ * then grows to its own size as the words land in it. This is what removes the
+ * reserved empty slab a buffered answer used to stand up before its text — and
+ * the only path by which a list marker or a code fence, neither of which is a
+ * text node, joins the reveal at all.
+ *
+ * `interpolate-size` makes the 0 → auto height genuinely glide in Chromium;
+ * elsewhere the pair is non-interpolable and flips mid-animation, which still
+ * reads as the block arriving on its clock. The class exists only while the
+ * block's window is open — at rest it is bare markup again.
+ */
+.chat-markdown {
+  interpolate-size: allow-keywords;
+}
+
+.chat-stream-block {
+  animation-name: chat-stream-block;
+  animation-delay: var(--chat-stream-delay, 0ms);
+  animation-duration: var(--chat-stream-block-duration);
+  animation-timing-function: var(--ease-out);
+  animation-fill-mode: backwards;
+  /*
+   * On the class, not in the keyframe: `overflow` animates discretely, so a
+   * `clip` in the `from` frame reverts to `visible` at the midpoint — a block
+   * whose height is still growing then paints its overflow on top of the
+   * following block, prose over prose. The class is gone once the block is at
+   * rest, and clipping a block already at its own size changes nothing.
+   */
+  overflow: clip;
+}
+
+@keyframes chat-stream-block {
+  from {
+    opacity: 0;
+    block-size: 0;
+    margin-block: 0;
+  }
+
+  to {
+    opacity: 1;
+    block-size: auto;
+  }
+}
+
 .chat-stream-word {
   display: inline-block;
   /* Words hold their own baseline, so a reveal that moves or scales one cannot
@@ -1517,6 +1700,12 @@ html.electron:not(.electron-windows) body {
     mask-image: none;
     -webkit-mask-image: none;
     transform: none;
+  }
+
+  :root:root:root .chat-stream-block {
+    animation-name: none;
+    animation-delay: 0ms;
+    opacity: 1;
   }
 
   /*

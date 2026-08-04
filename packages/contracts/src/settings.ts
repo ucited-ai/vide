@@ -122,15 +122,21 @@ export const DEFAULT_CHAT_CHANGED_FILES_LAYOUT: ChatChangedFilesLayout = "tree";
 /*
  * The palette the user owns, and the whole of it.
  *
- * Three surfaces and three ink weights. Everything else the app paints with —
+ * Five surfaces and three ink weights. Everything else the app paints with —
  * borders, hovers, popovers, cards, the focus ring, the accent — is derived
- * from these six in the stylesheet, so a chosen palette stays internally
+ * from these in the stylesheet, so a chosen palette stays internally
  * consistent and the monochrome direction cannot be edited away one control at
  * a time.
+ *
+ * `surface-sidebar` and `surface-panel` are split off the chrome rung: unset,
+ * the stylesheet aliases them back to chrome, so a palette that never chose
+ * them behaves exactly as before the split.
  */
 export const PALETTE_SLOTS = [
   "surface-content",
   "surface-recessed",
+  "surface-sidebar",
+  "surface-panel",
   "surface-chrome",
   "ink",
   "ink-secondary",
@@ -164,6 +170,8 @@ const PaletteSlotColor = Schema.NullOr(PaletteColor).pipe(
 export const ThemePalette = Schema.Struct({
   "surface-content": PaletteSlotColor,
   "surface-recessed": PaletteSlotColor,
+  "surface-sidebar": PaletteSlotColor,
+  "surface-panel": PaletteSlotColor,
   "surface-chrome": PaletteSlotColor,
   ink: PaletteSlotColor,
   "ink-secondary": PaletteSlotColor,
@@ -173,6 +181,8 @@ export type ThemePalette = typeof ThemePalette.Type;
 export const DEFAULT_THEME_PALETTE: ThemePalette = {
   "surface-content": null,
   "surface-recessed": null,
+  "surface-sidebar": null,
+  "surface-panel": null,
   "surface-chrome": null,
   ink: null,
   "ink-secondary": null,
@@ -193,6 +203,27 @@ export const DEFAULT_PALETTE: Palette = {
   light: DEFAULT_THEME_PALETTE,
   dark: DEFAULT_THEME_PALETTE,
 };
+
+/*
+ * How strongly a translucent surface frosts what is behind it, in pixels of
+ * backdrop blur.
+ *
+ * One number rather than one per surface: the blur exists to sell "this pane
+ * is glass", and two panes of the same window frosted differently read as two
+ * materials. `null` means the stylesheet keeps its per-theme default (12px
+ * light, 16px dark). The value only shows at all where a surface's opacity is
+ * below 100% — an opaque fill has nothing behind it to frost.
+ */
+export const MIN_GLASS_BLUR = 0;
+export const MAX_GLASS_BLUR = 40;
+export const GLASS_BLUR_STEP = 1;
+export const GlassBlur = Schema.Number.check(
+  Schema.isBetween({
+    minimum: MIN_GLASS_BLUR,
+    maximum: MAX_GLASS_BLUR,
+  }),
+);
+export type GlassBlur = typeof GlassBlur.Type;
 
 /*
  * What colour the live indicator is painted in, per theme.
@@ -248,6 +279,7 @@ const clientSettingsFields = {
     Schema.withDecodingDefault(Effect.succeed([])),
   ),
   diffIgnoreWhitespace: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  glassBlur: Schema.NullOr(GlassBlur).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
   palette: Palette.pipe(Schema.withDecodingDefault(Effect.succeed(DEFAULT_PALETTE))),
   textScale: TextScale.pipe(Schema.withDecodingDefault(Effect.succeed(DEFAULT_TEXT_SCALE))),
   // Model favorites. Historically keyed by provider kind, now
@@ -836,6 +868,7 @@ export const ClientSettingsPatch = Schema.Struct({
   confirmThreadArchive: Schema.optionalKey(Schema.Boolean),
   confirmThreadDelete: Schema.optionalKey(Schema.Boolean),
   diffIgnoreWhitespace: Schema.optionalKey(Schema.Boolean),
+  glassBlur: Schema.optionalKey(Schema.NullOr(GlassBlur)),
   // Whole-palette replacement, like `providerInstances` above: the slots of one
   // theme are chosen against each other, so patching them individually would
   // let a half-applied palette exist. The UI sends both themes every time.

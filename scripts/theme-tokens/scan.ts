@@ -79,6 +79,13 @@ export const defaultScanConfig: ScanConfig = {
     /* A decorative gradient whose stops are the artwork. */
     ["apps/web/src/components/SidebarStageBackdrop.tsx", ["raw-color"]],
     /*
+     * The theme preview's stand-in desktop wallpaper. Its colours are
+     * deliberately not the ladder's: glass is invisible over a page painted in
+     * the same greys it is mixed from, so the backdrop must contrast with any
+     * theme the user picks. Everything else in the preview reads real tokens.
+     */
+    ["apps/web/src/components/settings/ThemeAppearanceControls.tsx", ["raw-color"]],
+    /*
      * The pre-launch splash is a data-URL document with no stylesheet to read,
      * the same boundary as the injected preview overlay.
      */

@@ -11,6 +11,7 @@ import {
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import {
   ChatIndicatorColorRow,
+  GlassBlurRow,
   TextSizeRow,
   ThemeColorsRow,
   ThemePreview,
@@ -200,8 +201,9 @@ export function ThemeSettingsPanel() {
 
         <TextSizeRow />
         <ThemeColorsRow />
+        <GlassBlurRow />
 
-        {/* One picture for both controls above, rather than one each. */}
+        {/* One picture for the controls above, rather than one each. */}
         <div className="px-3 pb-1 sm:px-4">
           <ThemePreview />
         </div>
