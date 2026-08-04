@@ -52,6 +52,9 @@ with `VIDE_PORT` set to the running server's port.
 | `vp run dist:desktop:dmg` \| `:win` \| `:linux` | installers            |
 | `vp run start` / `start:desktop`                | run what was built    |
 
+"App bauen" / "Prod-App bauen" means the packaged desktop app, built from the current branch and
+replacing `/Applications/Vide.app` in place — follow `.claude/skills/build-prod-app/SKILL.md`.
+
 ## Verifying a change
 
 Keep verification to what the change touched. **CI owns the full suite** — do not run repo-wide
