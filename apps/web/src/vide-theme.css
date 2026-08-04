@@ -1733,3 +1733,20 @@ html.electron:not(.electron-windows) body {
     -webkit-text-fill-color: currentcolor;
   }
 }
+
+/* ------------------------------------------------------- thread status */
+
+/*
+ * The sidebar's three temperatures, on the ink ladder rather than on hues —
+ * the monochrome direction: a state reads through its word and its motion,
+ * not through a colour of its own. Attention is the model waiting for the
+ * human (approval, input, a plan to confirm, a wake), active is the machine
+ * busy on its own (working, connecting — the pulse carries the liveliness),
+ * done is news standing quietly until it is seen. PR states keep their forge
+ * colours; they are vocabulary, not status.
+ */
+:root:root:root {
+  --thread-status-attention: var(--ink);
+  --thread-status-active: var(--ink-secondary);
+  --thread-status-done: var(--ink-tertiary);
+}

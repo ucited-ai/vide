@@ -313,7 +313,7 @@ function SidebarV2ThreadTooltip({
             </div>
           ) : null}
           {thread.session?.lastError ? (
-            <div className="flex min-w-0 items-center gap-2 text-red-600 dark:text-red-400">
+            <div className="flex min-w-0 items-center gap-2 text-destructive">
               <CircleAlertIcon className="size-4 shrink-0 stroke-current" />
               <div className="min-w-0 wrap-break-word">{thread.session.lastError}</div>
             </div>
@@ -485,7 +485,7 @@ const SidebarV2Row = memo(function SidebarV2Row(props: {
         ? {
             label: "Approval",
             icon: null,
-            className: "text-amber-700 dark:text-amber-300",
+            className: "text-(--thread-status-attention)",
           }
         : status === "input"
           ? {
@@ -499,19 +499,19 @@ const SidebarV2Row = memo(function SidebarV2Row(props: {
             ? {
                 label: "Failed",
                 icon: null,
-                className: "text-red-700 dark:text-red-300",
+                className: "text-destructive",
               }
             : isWoke
               ? {
                   label: "Woke",
                   icon: "woke" as const,
-                  className: "text-amber-700 dark:text-amber-300",
+                  className: "text-(--thread-status-attention)",
                 }
               : isUnread
                 ? {
                     label: "Done",
                     icon: "done" as const,
-                    className: "text-emerald-700 dark:text-emerald-300",
+                    className: "text-(--thread-status-done)",
                   }
                 : null;
 
@@ -808,7 +808,7 @@ const SidebarV2Row = memo(function SidebarV2Row(props: {
                   <span
                     role="status"
                     aria-label="Woke from snooze"
-                    className="inline-flex items-center gap-1 font-medium text-amber-700 dark:text-amber-300"
+                    className="inline-flex items-center gap-1 font-medium text-(--thread-status-attention)"
                   >
                     <AlarmClockIcon aria-hidden className="size-3" />
                     Woke
@@ -986,8 +986,8 @@ const SidebarV2Row = memo(function SidebarV2Row(props: {
               {prBadge}
               {diff ? (
                 <span className="shrink-0 font-mono">
-                  <span className="text-emerald-600 dark:text-emerald-400">+{diff.insertions}</span>{" "}
-                  <span className="text-red-600 dark:text-red-400">−{diff.deletions}</span>
+                  <span className="text-success">+{diff.insertions}</span>{" "}
+                  <span className="text-destructive">−{diff.deletions}</span>
                 </span>
               ) : null}
               <span
