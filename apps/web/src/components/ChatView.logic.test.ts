@@ -13,6 +13,7 @@ import {
   MAX_HIDDEN_MOUNTED_PREVIEW_THREADS,
   MAX_HIDDEN_MOUNTED_TERMINAL_THREADS,
   branchMismatchKey,
+  providerSteersMidTurn,
   buildExpiredTerminalContextToastCopy,
   buildThreadTurnInterruptInput,
   createLocalDispatchSnapshot,
@@ -625,5 +626,18 @@ describe("hasServerAcknowledgedLocalDispatch", () => {
     expect(hasServerAcknowledgedLocalDispatch({ ...common, hasPendingApproval: true })).toBe(true);
     expect(hasServerAcknowledgedLocalDispatch({ ...common, hasPendingUserInput: true })).toBe(true);
     expect(hasServerAcknowledgedLocalDispatch({ ...common, threadError: "failed" })).toBe(true);
+  });
+});
+
+describe("providerSteersMidTurn", () => {
+  it("steers only drivers whose runtime injects prompts into a running turn", () => {
+    expect(providerSteersMidTurn("codex")).toBe(true);
+    // Claude's Agent SDK consumes queued input at the turn boundary only —
+    // auto-steering would hide an editable queued prompt in an invisible
+    // queue, so the client keeps it queued until the turn settles.
+    expect(providerSteersMidTurn("claude")).toBe(false);
+    expect(providerSteersMidTurn(null)).toBe(false);
+    expect(providerSteersMidTurn(undefined)).toBe(false);
+    expect(providerSteersMidTurn("opencode")).toBe(false);
   });
 });

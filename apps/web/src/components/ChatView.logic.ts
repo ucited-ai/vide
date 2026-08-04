@@ -553,3 +553,17 @@ export function hasServerAcknowledgedLocalDispatch(input: {
     input.localDispatch.sessionUpdatedAt !== (session?.updatedAt ?? null)
   );
 }
+
+/*
+ * Whether a driver's runtime delivers a prompt sent into a RUNNING turn at the
+ * turn's next step, the way the Claude CLI injects typed messages between tool
+ * calls. Codex turns are natively steerable (only `review`/`compact` turns are
+ * not), so queued prompts can feed the running turn instead of waiting for it
+ * to settle. Claude's Agent SDK only consumes queued input at the turn
+ * boundary — auto-steering there would hide an editable queued prompt inside
+ * an invisible SDK queue for no gain, so Claude keeps queue-until-settled and
+ * steering stays an explicit user action.
+ */
+export function providerSteersMidTurn(driver: string | null | undefined): boolean {
+  return driver === "codex";
+}

@@ -290,6 +290,7 @@ import {
   PullRequestDialogState,
   cloneComposerImageForRetry,
   deriveLockedProvider,
+  providerSteersMidTurn,
   readFileAsDataUrl,
   reconcileMountedTerminalThreadIds,
   resolveThreadMetadataUpdateForNextTurn,
@@ -5303,22 +5304,32 @@ function ChatViewContent(props: ChatViewProps) {
   };
 
   /*
-   * The queue's dispatcher: the moment the thread settles back to ready, the
-   * head of its queue becomes the next turn. Deliberately without a dependency
-   * list — every guard is cheap, `takeFirst` only fires once they all pass,
-   * and the send flips the thread straight back to running, so entries leave
-   * one at a time, in order. A held head (its last dispatch failed) waits for
-   * the user to retry, edit or remove it.
+   * The queue's dispatcher. Two ways out of the queue:
+   *
+   * - The thread settles back to ready → the head becomes the next turn.
+   * - The running turn's driver steers mid-turn (Codex) → the head feeds the
+   *   RUNNING turn now and the model reads it at its next step, the way the
+   *   Claude CLI eats typed messages between tool calls. Claude's SDK only
+   *   consumes input at the turn boundary, so there the queue waits — an
+   *   auto-steer would just hide the prompt in an invisible SDK queue.
+   *
+   * Deliberately without a dependency list — every guard is cheap, `takeFirst`
+   * only fires once they all pass, and the send flips `sendInFlightRef`, so
+   * entries leave one at a time, in order. A held head (its last dispatch
+   * failed) waits for the user to retry, edit or remove it.
    */
+  const activeSessionDriver = activeThread?.session?.providerName ?? null;
   useEffect(() => {
-    if (!activeThreadKey || phase !== "ready") return;
+    if (!activeThreadKey) return;
+    const steersRunningTurn = phase === "running" && providerSteersMidTurn(activeSessionDriver);
+    if (phase !== "ready" && !steersRunningTurn) return;
     if (isSendBusy || isConnecting || sendInFlightRef.current) return;
     if (activeEnvironmentUnavailable || activePendingProgress) return;
     const head = activeQueuedPrompts[0];
     if (!head || head.id === activeQueueDispatchHold) return;
     const entry = takeFirstQueuedPrompt(activeThreadKey);
     if (!entry) return;
-    void onSend(undefined, { queued: entry });
+    void onSend(undefined, { queued: entry, steer: steersRunningTurn });
   });
 
   /** Take a queued prompt back into the composer; an existing draft keeps its
@@ -5353,6 +5364,17 @@ function ChatViewContent(props: ChatViewProps) {
         URL.revokeObjectURL(image.previewUrl);
       }
     }
+  };
+
+  /** Send a queued prompt into the running turn now, out of order if need be.
+      On Codex the model reads it at its next step; on Claude the SDK holds it
+      until the turn boundary — still the same turn, but not sooner. A failed
+      steer lands back at the front of the queue, held, like any dispatch. */
+  const onSteerQueuedPrompt = (entryId: string) => {
+    if (!activeThreadKey || sendInFlightRef.current) return;
+    const entry = removeQueuedPromptEntry(activeThreadKey, entryId);
+    if (!entry) return;
+    void onSend(undefined, { queued: entry, steer: true });
   };
 
   const onInterrupt = async () => {
@@ -6351,6 +6373,10 @@ function ChatViewContent(props: ChatViewProps) {
                             entries={activeQueuedPrompts}
                             onEditEntry={onEditQueuedPrompt}
                             onRemoveEntry={onRemoveQueuedPrompt}
+                            onSteerEntry={phase === "running" ? onSteerQueuedPrompt : null}
+                            autoSteers={
+                              phase === "running" && providerSteersMidTurn(activeSessionDriver)
+                            }
                           />
                         </div>
                       </ChatGrow>
