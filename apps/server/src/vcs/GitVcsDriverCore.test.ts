@@ -857,6 +857,9 @@ it.layer(TestLayer)("GitVcsDriver core integration", (it) => {
         const status = yield* driver.statusDetails(worktreePath);
         assert.equal(status.aheadCount, 0);
         assert.equal(status.aheadOfDefaultCount, 0);
+        // The recorded merge base surfaces on the status itself, so clients
+        // can say which branch a worktree was cut from.
+        assert.equal(status.baseBranch, initialBranch);
       }),
     );
 

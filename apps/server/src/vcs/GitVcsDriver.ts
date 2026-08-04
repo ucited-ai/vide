@@ -59,6 +59,8 @@ export interface GitStatusDetails {
   hasOriginRemote: boolean;
   isDefaultBranch: boolean;
   branch: string | null;
+  /** From `branch.<name>.gh-merge-base` — the ref the branch was cut from. */
+  baseBranch: string | null;
   upstreamRef: string | null;
   hasWorkingTreeChanges: boolean;
   workingTree: VcsStatusResult["workingTree"];

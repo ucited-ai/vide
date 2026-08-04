@@ -66,6 +66,7 @@ const NON_REPOSITORY_STATUS_DETAILS = Object.freeze<GitVcsDriver.GitStatusDetail
   hasOriginRemote: false,
   isDefaultBranch: false,
   branch: null,
+  baseBranch: null,
   upstreamRef: null,
   hasWorkingTreeChanges: false,
   workingTree: { files: [], insertions: 0, deletions: 0 },
@@ -1452,11 +1453,22 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
     }
     files.sort((a, b) => a.path.localeCompare(b.path));
 
+    const configuredBaseBranch =
+      refName === null
+        ? ""
+        : yield* runGitStdout(
+            "GitVcsDriver.statusDetails.baseBranch",
+            cwd,
+            ["config", "--get", `branch.${refName}.gh-merge-base`],
+            true,
+          ).pipe(Effect.map((stdout) => stdout.trim()));
+
     return {
       isRepo: true,
       hasOriginRemote: hasPrimaryRemote,
       isDefaultBranch,
       branch: refName,
+      baseBranch: configuredBaseBranch.length > 0 ? configuredBaseBranch : null,
       upstreamRef,
       hasWorkingTreeChanges,
       workingTree: {
@@ -1511,6 +1523,7 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
         hasPrimaryRemote: details.hasOriginRemote,
         isDefaultRef: details.isDefaultBranch,
         refName: details.branch,
+        baseBranch: details.baseBranch,
         hasWorkingTreeChanges: details.hasWorkingTreeChanges,
         workingTree: details.workingTree,
         hasUpstream: details.hasUpstream,

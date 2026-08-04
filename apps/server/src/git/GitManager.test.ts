@@ -871,6 +871,7 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
         hasPrimaryRemote: false,
         isDefaultRef: false,
         refName: null,
+        baseBranch: null,
         hasWorkingTreeChanges: false,
         workingTree: {
           files: [],
@@ -901,6 +902,7 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
         hasPrimaryRemote: false,
         isDefaultRef: false,
         refName: null,
+        baseBranch: null,
         hasWorkingTreeChanges: false,
         workingTree: {
           files: [],

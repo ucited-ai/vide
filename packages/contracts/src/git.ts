@@ -204,6 +204,12 @@ const VcsStatusLocalShape = {
   hasPrimaryRemote: Schema.Boolean,
   isDefaultRef: Schema.Boolean,
   refName: Schema.NullOr(TrimmedNonEmptyStringSchema),
+  /**
+   * The branch this ref was cut from, when git records it — worktree creation
+   * writes it to `branch.<name>.gh-merge-base`. Optional so payloads from
+   * older servers and caches keep decoding.
+   */
+  baseBranch: Schema.optional(Schema.NullOr(TrimmedNonEmptyStringSchema)),
   hasWorkingTreeChanges: Schema.Boolean,
   workingTree: Schema.Struct({
     files: Schema.Array(
