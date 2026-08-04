@@ -31,41 +31,34 @@ is not on PATH, prefix with `PATH="$PWD/node_modules/.bin:$PATH"`.
    credentials needed. On an Intel Mac use `dist:desktop:dmg:x64` instead
    (check `uname -m`).
 
-2. **Verify the staged app exists** — electron-builder leaves the unpacked
-   bundle next to the DMG:
+2. **Verify the artifacts** — the build leaves only the DMG and the update ZIP
+   in `release/` (no unpacked `.app` directory survives):
 
    ```sh
-   ls -d release/mac-arm64/Vide.app
+   ls release/Vide-*-arm64.zip release/Vide-*-arm64.dmg
    ```
 
-   (The DMG lands in `release/Vide-<version>-arm64.dmg`; the `.app` is what
-   gets installed. A nightly-channel version builds as "Vide (Nightly).app" —
-   install whatever `release/mac-arm64/` actually contains.)
+   The ZIP contains exactly `Vide.app` and is what gets installed — no DMG
+   mounting needed. Check its timestamp: an old artifact from a previous build
+   sits in the same folder under the same version number.
 
-3. **Quit the running app, if any** (a busy bundle cannot be replaced
-   cleanly):
-
-   ```sh
-   osascript -e 'tell application "Vide" to quit' 2>/dev/null; sleep 2
-   ```
-
-4. **Replace it in /Applications** — remove, then copy with `ditto` (preserves
-   the bundle's metadata and ad-hoc signature; `cp -R` does not reliably):
+3. **Replace it in /Applications** — remove, then extract the ZIP with `ditto`
+   (preserves the bundle's metadata and ad-hoc signature; plain `unzip` does
+   not reliably):
 
    ```sh
    rm -rf /Applications/Vide.app
-   ditto release/mac-arm64/Vide.app /Applications/Vide.app
+   ditto -x -k release/Vide-<version>-arm64.zip /Applications/
    ```
 
-5. **Relaunch** so the user lands in the fresh build:
+   Do not force-quit a running Vide to do this: macOS keeps the old process
+   alive on its open files, the replacement still lands cleanly, and the fresh
+   build is picked up on the user's next launch.
 
-   ```sh
-   open /Applications/Vide.app
-   ```
-
-6. Report the installed version (`plutil -extract CFBundleShortVersionString
-raw /Applications/Vide.app/Contents/Info.plist`) and the branch it was
-   built from.
+4. Report the installed version (`plutil -extract CFBundleShortVersionString
+raw /Applications/Vide.app/Contents/Info.plist`), the binary's timestamp,
+   and the branch it was built from. If Vide was running during the swap, say
+   that the fresh build takes over on the next launch.
 
 ## Failure modes
 
