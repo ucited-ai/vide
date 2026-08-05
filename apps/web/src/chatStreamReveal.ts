@@ -5,23 +5,38 @@
  * meant it depended on a setting most people never turn on: with
  * `enableAssistantStreaming` off the server buffers a segment and hands over the
  * whole paragraph in one delta, so every word was new in the same frame and the
- * "streaming" animation was one flash. The turn now reveals on its own clock —
- * word n of a delta waits n steps — so it reads the same either way, and real
- * streaming just makes the deltas smaller.
+ * "streaming" animation was one flash. The turn reveals on its own clock — word
+ * n waits n steps — so it reads the same either way, and real streaming just
+ * makes the deltas smaller.
  *
- * Three rules keep it honest:
+ * One rule carries the whole thing: **a word's arrival is anchored in
+ * wall-clock time, not in paint time.** The first time a word appears in the
+ * rendered tree it is given an instant to arrive at, and every render after
+ * that writes the delay still outstanding — `arrivesAt - now`, which CSS
+ * accepts as negative. A negative delay starts an animation already advanced;
+ * one whose window has closed paints at rest.
  *
- * - only a turn that is still running reveals anything. An old message that
- *   remounts because the list recycled its row must not replay a turn from last
- *   week;
- * - a delta's reveal finishes even if the turn settles under it. The buffered
- *   case ends with the text landing and the turn completing a moment later, so a
- *   reveal tied strictly to "is the turn running" would be cut off at the second
- *   word every single time;
- * - a word keeps the style it was born with. The baseline between "already on
- *   screen" and "new this delta" is the rendered tree's own word count, and a
- *   word once styled always re-renders byte-identical — so React keeps its DOM
- *   node, and the animation that already ran is never retimed or replayed.
+ * That single property replaces the bookkeeping this file used to keep, and the
+ * bugs the bookkeeping was defending against:
+ *
+ * - a row the virtualized list remounts mid-answer resumes its words where they
+ *   were, instead of replaying them from the first sentence. A CSS animation
+ *   fires on any first paint, so the old scheme — remember which words were
+ *   handed a style, keep answering byte-identically — replayed everything still
+ *   inside its window whenever the DOM was rebuilt. An anchored word cannot
+ *   replay: the paint is not what times it;
+ * - a word already on screen cannot blink out. It used to need a baseline (the
+ *   rendered tree's own word count) to tell "new this delta" from "already
+ *   there", because a fresh delay on an old word puts it back inside its delay
+ *   phase, where `animation-fill-mode: backwards` hides it. An anchored word's
+ *   delay is simply negative by then;
+ * - a delta cannot open a second reveal front at the tail while the head is
+ *   still sweeping the first sentence — every new word queues behind one write
+ *   head by construction, so there is no backlog to carry forward by hand;
+ * - only a turn that is still running reveals anything, and a delta finishes
+ *   revealing even if the turn settles under it: wrapping outlives `live` until
+ *   the head's own clock runs out, since the buffered case lands its text a
+ *   moment before the turn completes.
  */
 
 import { type ChatStreamAnimation } from "@vide/contracts/settings";
@@ -46,9 +61,8 @@ const MAX_DELTA_REVEAL_MS = 2_400;
  * How long a word's own motion may run once its delay is up.
  *
  * An upper bound over the variants rather than any one of them — the slowest is
- * `blur` at 820ms in `vide-theme.css`. It is only used to decide how long wrapping
- * outlives the turn, so erring long costs nothing and erring short cuts the last
- * words of an answer off mid-reveal.
+ * `blur` at 820ms in `vide-theme.css`. Erring long costs nothing: it only
+ * decides when a word is treated as at rest, and when wrapping may stop.
  */
 const WORD_MOTION_MS = 900;
 
@@ -63,39 +77,86 @@ function noise(index: number): number {
 }
 
 /**
- * The step for a delta of `wordCount` words — the natural one until a long delta
- * would outrun its own budget. `pendingMs` is reveal time the previous delta has
- * already claimed: the budget covers the whole backlog, so a delta arriving into
- * a long queue compresses instead of stretching the sweep past the cap.
+ * How far apart the words of a `wordCount`-word delta arrive — the natural step
+ * until a long delta would outrun its own budget.
+ *
+ * `backlogMs` is reveal time earlier words have already claimed: the budget
+ * covers the whole queue, so a delta arriving behind a long one compresses
+ * rather than pushing the sweep past the cap.
  */
 export function chatStreamStepMs(
   wordCount: number,
   animation: ChatStreamAnimation,
-  pendingMs = 0,
+  backlogMs = 0,
 ): number {
   const groups =
     animation === "phrase" ? Math.max(1, Math.ceil(wordCount / PHRASE_WORDS)) : wordCount;
   const spans = Math.max(1, groups - 1);
   const factor = animation === "phrase" ? PHRASE_STEP_FACTOR : 1;
-  return Math.min(WORD_STEP_MS, Math.max(0, MAX_DELTA_REVEAL_MS - pendingMs) / (spans * factor));
+  return Math.min(WORD_STEP_MS, Math.max(0, MAX_DELTA_REVEAL_MS - backlogMs) / (spans * factor));
 }
 
-export function chatStreamDelayMs(
-  indexInDelta: number,
+/**
+ * How far behind the write head a word arrives, given how many words were
+ * handed an instant before it.
+ *
+ * Never negative, so the sequence stays monotone: a word can never be given an
+ * instant ahead of the word in front of it, which is what lets the head alone
+ * stand in for the whole queue. The jitter therefore lives in the spacing
+ * rather than on top of a computed delay.
+ */
+export function chatStreamAdvanceMs(
+  index: number,
+  assignedBefore: number,
   step: number,
   animation: ChatStreamAnimation,
 ): number {
   if (animation === "phrase") {
-    return Math.floor(indexInDelta / PHRASE_WORDS) * step * PHRASE_STEP_FACTOR;
+    // Three words share an instant; the group after them waits for one span.
+    return assignedBefore % PHRASE_WORDS === 0 ? step * PHRASE_STEP_FACTOR : 0;
   }
-  return indexInDelta * step + noise(indexInDelta) * step * 0.5;
+  return step * (0.75 + noise(index) * 0.5);
 }
 
-/** How long the whole of a `wordCount`-word delta needs to finish revealing. */
-export function chatStreamRevealMs(wordCount: number, animation: ChatStreamAnimation): number {
-  if (wordCount <= 0) return 0;
-  const step = chatStreamStepMs(wordCount, animation);
-  return Math.round(chatStreamDelayMs(wordCount - 1, step, animation)) + WORD_MOTION_MS;
+/**
+ * The queue words are handed their instants out of: what each index arrived
+ * at, and the head everything new lines up behind.
+ */
+export interface ChatStreamRevealQueue {
+  /** The instant the word at this tree index arrives at. Assigned once. */
+  readonly arrivesAtByIndex: Map<number, number>;
+  /** The latest instant handed out: the one write head new words queue behind. */
+  headAtMs: number;
+  /** The step the current delta is being handed out at. */
+  step: number;
+}
+
+/**
+ * The instant the word at `index` arrives at — assigned the first time the
+ * index is seen, and never revised.
+ *
+ * That is the anchor the whole reveal rests on. Because the answer for an index
+ * never changes, a row that remounts mid-answer hands its words the instants
+ * they already had: their remaining delay is negative, so they paint where they
+ * were instead of animating again. And because a new word can only be given
+ * `head + advance`, a delta arriving while the previous one is still sweeping
+ * queues behind it rather than opening a second front at the tail.
+ */
+export function chatStreamArrivesAtMs(
+  queue: ChatStreamRevealQueue,
+  index: number,
+  animation: ChatStreamAnimation,
+  nowMs: number,
+): number {
+  const known = queue.arrivesAtByIndex.get(index);
+  if (known !== undefined) return known;
+  const at = Math.max(
+    nowMs,
+    queue.headAtMs + chatStreamAdvanceMs(index, queue.arrivesAtByIndex.size, queue.step, animation),
+  );
+  queue.arrivesAtByIndex.set(index, at);
+  queue.headAtMs = at;
+  return at;
 }
 
 export interface ChatStreamRevealState {
@@ -109,7 +170,6 @@ const NO_REVEAL: ChatStreamRevealState = {
   timing: {
     styleOf: () => null,
     blockStyleOf: () => null,
-    reportWordCount: () => {},
   },
 };
 
@@ -118,44 +178,16 @@ const NO_REVEAL: ChatStreamRevealState = {
  *
  * Keyed by the message rather than held in a ref, because the component's
  * lifetime is not the message's: the virtualized list unmounts and remounts
- * rows as their heights churn, and a reveal whose bookkeeping died with the
- * component replayed the whole message on every remount. The map survives;
- * an entry is dropped when its message's reveal settles, and the cap sweeps
- * up entries whose rows unmounted mid-turn and never came back.
+ * rows as their heights churn. What survives is only the anchor — when each
+ * word arrives — plus the pacing of the delta being handed out. An entry is
+ * dropped when its message's reveal settles, and the cap sweeps up entries
+ * whose rows unmounted mid-turn and never came back.
  */
-interface ChatStreamRevealMemory {
+interface ChatStreamRevealMemory extends ChatStreamRevealQueue {
+  /** The text last rendered, so a delta is recognised without re-counting it. */
   text: string;
-  /** Source-token count of `text` — pacing only, never a baseline. */
+  /** Source-token count of that text — pacing only, never a baseline. */
   sourceWordCount: number;
-  /** Source-token size of the newest delta, for how long its reveal runs. */
-  lastDeltaWordCount: number;
-  /** What the rendered tree held after the last walk: the next delta's baseline. */
-  treeWordCount: number;
-  /** Tree index the current delta starts at. */
-  baseline: number;
-  /** The current delta's step, frozen when the delta arrives. */
-  step: number;
-  /**
-   * How much of the previous delta's sweep was still unrevealed when this one
-   * arrived. Every delay of the current delta is offset by it, so deltas queue
-   * behind one write head instead of each starting a second front at "now" —
-   * two fronts in the same prose is exactly the "first sentence streams twice"
-   * artefact.
-   */
-  pendingMs: number;
-  /** When the current delta's last word starts revealing, in wall-clock ms. */
-  revealEndsAtMs: number;
-  /**
-   * What each word was born with, by absolute tree index. While a word's
-   * animation may still be running it keeps its exact style, so its markup
-   * re-renders byte-identical and React never touches its DOM; once its
-   * window has passed (`restAtMs`) it is at rest — `style: null` — and rests
-   * are rendered as plain spans, so a remounted row cannot animate them:
-   * a CSS animation fires on any first paint, not only the first ever.
-   */
-  wordsByIndex: Map<number, { style: string | null; restAtMs: number }>;
-  /** Same bookkeeping for blocks, keyed by their first word's tree index. */
-  blocksByIndex: Map<number, { style: string | null; restAtMs: number }>;
 }
 
 const REVEAL_MEMORY_CAP = 64;
@@ -172,16 +204,11 @@ function acquireRevealMemory(key: string): ChatStreamRevealMemory {
     return existing;
   }
   const fresh: ChatStreamRevealMemory = {
+    arrivesAtByIndex: new Map(),
+    headAtMs: 0,
     text: "",
     sourceWordCount: 0,
-    lastDeltaWordCount: 0,
-    treeWordCount: 0,
-    baseline: 0,
     step: WORD_STEP_MS,
-    pendingMs: 0,
-    revealEndsAtMs: 0,
-    wordsByIndex: new Map(),
-    blocksByIndex: new Map(),
   };
   revealMemoryByKey.set(key, fresh);
   if (revealMemoryByKey.size > REVEAL_MEMORY_CAP) {
@@ -214,58 +241,39 @@ export function useChatStreamReveal(input: {
    * Acquired only while the reveal is live. A settled message that acquired on
    * every render would refill the map right after the cleanup effect below
    * emptied it — dead entries whose eviction eventually hit the one message
-   * still streaming, replaying it from word zero mid-answer.
+   * still streaming, restarting its clock mid-answer.
    */
   const memory = reveals || settling ? acquireRevealMemory(memoryKey) : null;
 
   /*
-   * Advance the delta during render — the words animate on the render that
-   * creates them, and a baseline arriving one commit later would be a baseline
-   * for the delta before. Starting from an empty `text` is what makes the
-   * buffered case work: a message that mounts with its text already whole
-   * reveals all of it.
+   * Pace the delta during render, before its words ask for their instants: how
+   * fast to hand them out is a property of how much text arrived at once and of
+   * how much is still queued ahead of it.
    */
-  if (memory !== null && memory.text !== input.text && reveals) {
+  if (memory !== null && reveals && memory.text !== input.text) {
     const sourceWordCount = countStreamWords(input.text);
-    memory.lastDeltaWordCount = Math.max(1, sourceWordCount - memory.sourceWordCount);
-    /*
-     * Queue this delta behind whatever the previous one has not yet revealed.
-     * Without the offset every delta starts at "now", opening a second reveal
-     * front at the tail while the head is still sweeping the first sentence.
-     */
-    const now = Date.now();
-    memory.pendingMs = Math.min(MAX_DELTA_REVEAL_MS, Math.max(0, memory.revealEndsAtMs - now));
-    memory.step = chatStreamStepMs(memory.lastDeltaWordCount, animation, memory.pendingMs);
-    memory.revealEndsAtMs =
-      now +
-      memory.pendingMs +
-      chatStreamDelayMs(memory.lastDeltaWordCount - 1, memory.step, animation);
-    memory.baseline = memory.treeWordCount;
+    const deltaWordCount = Math.max(1, sourceWordCount - memory.sourceWordCount);
+    const backlogMs = Math.max(0, memory.headAtMs - Date.now());
+    memory.step = chatStreamStepMs(deltaWordCount, animation, backlogMs);
     memory.text = input.text;
     memory.sourceWordCount = sourceWordCount;
   }
 
   /*
-   * Wrapping outlives `reveals` by the backlog plus one delta's worth of time,
-   * so the last thing a turn writes still arrives word by word after the turn
-   * is marked complete.
+   * Wrapping outlives `live` until the head's clock runs out, so the last thing
+   * a turn writes still arrives word by word after the turn is marked complete.
    */
-  const deltaRevealMs =
-    memory === null || animation === undefined || animation === "instant"
-      ? 0
-      : Math.round(
-          memory.pendingMs +
-            chatStreamDelayMs(Math.max(0, memory.lastDeltaWordCount - 1), memory.step, animation),
-        ) + WORD_MOTION_MS;
+  const settlesInMs =
+    memory === null ? 0 : Math.max(0, memory.headAtMs - Date.now()) + WORD_MOTION_MS;
   useEffect(() => {
     if (reveals) {
       setSettling(true);
       return;
     }
     if (!settling) return;
-    const timer = setTimeout(() => setSettling(false), deltaRevealMs);
+    const timer = setTimeout(() => setSettling(false), settlesInMs);
     return () => clearTimeout(timer);
-  }, [deltaRevealMs, reveals, settling]);
+  }, [reveals, settlesInMs, settling]);
 
   const active = (reveals || settling) && animation !== undefined && animation !== "instant";
 
@@ -280,74 +288,35 @@ export function useChatStreamReveal(input: {
 
   return useMemo(() => {
     if (!active || animation === undefined || memory === null) return NO_REVEAL;
+
+    /**
+     * What is left of a word's wait. Null once its motion is over: the tree at
+     * rest is plain markup again, which is also what keeps the churn bounded —
+     * only the words inside the reveal window carry a style that changes from
+     * render to render, and that window is a couple of seconds wide however
+     * long the answer is.
+     */
+    const delayStyleOf = (index: number): string | null => {
+      const nowMs = Date.now();
+      const delayMs = Math.round(chatStreamArrivesAtMs(memory, index, animation, nowMs) - nowMs);
+      return delayMs <= -WORD_MOTION_MS ? null : `--chat-stream-delay:${String(delayMs)}ms`;
+    };
+
     return {
       active: true,
       timing: {
         styleOf: (index: number): string | null => {
-          const known = memory.wordsByIndex.get(index);
-          if (known !== undefined) {
-            /* Its animation window has passed: from here on the word renders
-               as a plain span, so a remounted row cannot animate it again. */
-            if (known.style !== null && Date.now() >= known.restAtMs) {
-              known.style = null;
-            }
-            return known.style;
-          }
-          if (index < memory.baseline) {
-            /*
-             * On screen before this delta and never styled while we watched —
-             * at rest. A delay grown onto it now would put it back inside its
-             * own delay phase, where `animation-fill-mode: backwards` hides
-             * it: the word would blink out because a later word arrived.
-             */
-            memory.wordsByIndex.set(index, { style: null, restAtMs: 0 });
-            return null;
-          }
-          const indexInDelta = index - memory.baseline;
-          const delayMs = Math.round(
-            memory.pendingMs + chatStreamDelayMs(indexInDelta, memory.step, animation),
-          );
+          const delay = delayStyleOf(index);
+          if (delay === null) return null;
           const angle = noise(index) * Math.PI * 2;
-          const style = [
-            `--chat-stream-delay:${String(delayMs)}ms`,
+          return [
+            delay,
             `--chat-stream-dx:${(Math.cos(angle) * 8).toFixed(1)}px`,
             `--chat-stream-dy:${(Math.sin(angle) * 5).toFixed(1)}px`,
           ].join(";");
-          memory.wordsByIndex.set(index, {
-            style,
-            restAtMs: Date.now() + delayMs + WORD_MOTION_MS,
-          });
-          return style;
         },
-        blockStyleOf: (index: number): string | null => {
-          const known = memory.blocksByIndex.get(index);
-          if (known !== undefined) {
-            if (known.style !== null && Date.now() >= known.restAtMs) {
-              known.style = null;
-            }
-            return known.style;
-          }
-          if (index < memory.baseline) {
-            /* The block was on screen before this delta — a paragraph still
-               being appended to must not fold back to nothing. */
-            memory.blocksByIndex.set(index, { style: null, restAtMs: 0 });
-            return null;
-          }
-          const indexInDelta = index - memory.baseline;
-          const delayMs = Math.round(
-            memory.pendingMs + chatStreamDelayMs(indexInDelta, memory.step, animation),
-          );
-          const style = `--chat-stream-delay:${String(delayMs)}ms`;
-          memory.blocksByIndex.set(index, {
-            style,
-            restAtMs: Date.now() + delayMs + WORD_MOTION_MS,
-          });
-          return style;
-        },
-        reportWordCount: (count: number) => {
-          memory.treeWordCount = count;
-        },
+        blockStyleOf: delayStyleOf,
       },
     };
-  }, [active, animation, memory, memoryKey]);
+  }, [active, animation, memory]);
 }

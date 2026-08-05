@@ -2,19 +2,18 @@
  * Wraps each word of streamed prose in its own element, so a word can animate
  * as it arrives.
  *
- * Why the reveal is per element rather than per timer: a CSS animation runs
- * once, when the element it is on is first painted. Words already on screen
- * keep their DOM nodes across a re-render, so they stay put; only the elements
- * created by the newest delta animate. Nothing has to know when the text
- * changed, and nothing replays when the message re-renders for an unrelated
- * reason.
+ * The walk itself is the only counter, and its job is only to number the
+ * words: each one asks `styleOf` what is left of its wait, keyed by its index
+ * in this tree — not in the markdown source, which also counts list markers,
+ * emphasis asterisks and link urls that never render as words. An index that
+ * drifts between renders would hand a word the arrival time of its neighbour,
+ * so the numbering has to come from the same tree the reader sees.
  *
- * The walk itself is the only counter. Each word asks `styleOf` for the style
- * it was born with, keyed by its index in this tree — not in the markdown
- * source, which also counts list markers, emphasis asterisks and link urls
- * that never render as words. A baseline measured against the source drifts,
- * and a drifted baseline hands fresh delays to words already on screen, which
- * `animation-fill-mode: backwards` answers by blinking them out.
+ * When each word arrives is not decided here (see `chatStreamReveal`): a word
+ * is anchored to an instant the first time it is seen, and what this walk
+ * writes onto it is the remaining delay, negative once that instant has
+ * passed. So nothing here has to know when the text changed, or which words
+ * are new.
  *
  * Runs after sanitisation — a plugin ordered before it would have its spans
  * stripped. Applied only while a message is still being written: once its
@@ -61,22 +60,16 @@ const WHOLE_TAGS = new Set(["code", "a"]);
 
 export interface ChatStreamWordTiming {
   /**
-   * Inline style for the word at this absolute tree index — the delay that
-   * staggers it and the offset it travels in from — or null for a word that is
-   * already at rest. Must answer the same index with the same style for as
-   * long as the reveal is active: a word whose markup re-renders byte-identical
-   * keeps its DOM node, and with it the animation that already ran.
+   * Inline style for the word at this absolute tree index — the delay left of
+   * its wait and the offset it travels in from — or null for a word whose
+   * motion is over, which renders as bare markup.
    */
   readonly styleOf: (index: number) => string | null;
   /**
    * Inline style for a block whose first word sits at this absolute tree
-   * index — the delay alone, no travel — or null for a block already at rest.
-   * Same contract as `styleOf`: a stable answer per index while the reveal is
-   * active, so a block's markup re-renders byte-identical.
+   * index — the delay alone, no travel — or null for a block at rest.
    */
   readonly blockStyleOf: (index: number) => string | null;
-  /** Handed the tree's word count after the walk: the next delta's baseline. */
-  readonly reportWordCount: (count: number) => void;
 }
 
 /** Words as the source approximates them — pacing only, never a baseline. */
@@ -96,9 +89,10 @@ export function rehypeChatStreamWords(timing: ChatStreamWordTiming) {
         tagName: "span",
         /*
          * A word at rest is a bare span — wrapped, so the tree keeps its shape
-         * for React, but carrying neither the class nor a delay. The class is
-         * what the variant selectors animate, and a CSS animation fires on any
-         * first paint: a remounted row would replay every classed word.
+         * for React, but carrying neither the class nor a delay. Most of a long
+         * answer is at rest, so this is also what keeps the reveal cheap: only
+         * the words still inside the window carry a style that changes from one
+         * render to the next.
          */
         properties: style === null ? {} : { className: [STREAM_WORD_CLASS_NAME], style },
         children,
@@ -167,6 +161,5 @@ export function rehypeChatStreamWords(timing: ChatStreamWordTiming) {
     };
 
     wrapWords(tree);
-    timing.reportWordCount(wordCount);
   };
 }

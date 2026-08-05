@@ -5,13 +5,10 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { rehypeChatStreamWords, type ChatStreamWordTiming } from "./markdown-stream-words";
 
-function timing(): ChatStreamWordTiming & { readonly counts: number[] } {
-  const counts: number[] = [];
+function timing(): ChatStreamWordTiming {
   return {
     styleOf: (index) => `--chat-stream-delay:${String(index * 10)}ms`,
     blockStyleOf: (index) => `--chat-stream-delay:${String(index * 10)}ms`,
-    reportWordCount: (count) => counts.push(count),
-    counts,
   };
 }
 
@@ -51,7 +48,6 @@ describe("rehypeChatStreamWords", () => {
     const html = renderMarkdown("one two", {
       styleOf: () => null,
       blockStyleOf: () => null,
-      reportWordCount: () => {},
     });
 
     // Still wrapped (the tree keeps its shape for React), but carrying neither
@@ -119,17 +115,19 @@ describe("rehypeChatStreamWords", () => {
     const html = renderMarkdown("one two", {
       styleOf: (index) => `--chat-stream-delay:${String(index * 10)}ms`,
       blockStyleOf: () => null,
-      reportWordCount: () => {},
     });
 
     expect(html).not.toContain("chat-stream-block");
   });
 
-  it("reports how many words the tree holds, counting a whole element as one", () => {
-    const wordTiming = timing();
-    renderMarkdown("call `code` and [docs](https://example.com) now", wordTiming);
+  it("counts a whole element as one word, so the numbering stays the reader's", () => {
+    const html = renderMarkdown("call `code` and [docs](https://example.com) now", timing());
 
-    // call, `code`, and, [docs], now
-    expect(wordTiming.counts.at(-1)).toBe(5);
+    // call, `code`, and, [docs], now — five indices, one per rendered word,
+    // rather than one per markdown token.
+    expect(html).toContain('style="--chat-stream-delay:0ms">call</span>');
+    expect(html).toContain('style="--chat-stream-delay:10ms"><code>code</code></span>');
+    expect(html).toContain('style="--chat-stream-delay:20ms">and</span>');
+    expect(html).toContain('style="--chat-stream-delay:40ms">now</span>');
   });
 });
