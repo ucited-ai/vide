@@ -5365,6 +5365,25 @@ function ChatViewContent(props: ChatViewProps) {
     }
   };
 
+  /**
+   * A stashed prompt sent from the stash menu. It never touches the composer:
+   * it joins the queue, which either feeds the running turn (a driver that
+   * steers mid-turn) or starts the next one — so "send" means the same thing
+   * from the stash as it does from the composer.
+   */
+  const onSendStashedPrompt = (input: {
+    readonly prompt: string;
+    readonly images: ReadonlyArray<ComposerImageAttachment>;
+  }) => {
+    if (!activeThreadKey) return;
+    enqueueQueuedPrompt(activeThreadKey, {
+      id: randomUUID(),
+      prompt: input.prompt,
+      images: [...input.images],
+      queuedAt: new Date().toISOString(),
+    });
+  };
+
   /** Send a queued prompt into the running turn now, out of order if need be.
       On Codex the model reads it at its next step; on Claude the SDK holds it
       until the turn boundary — still the same turn, but not sooner. A failed
@@ -6422,6 +6441,7 @@ function ChatViewContent(props: ChatViewProps) {
                       <div className="chat-composer-glass-host relative z-10 w-full rounded-[22px]">
                         <div ref={attachDraftHeroComposerAnchorRef} className="relative z-10">
                           <ChatComposer
+                            onSendStashedPrompt={onSendStashedPrompt}
                             composerRef={composerRef}
                             composerDraftTarget={composerDraftTarget}
                             environmentId={environmentId}

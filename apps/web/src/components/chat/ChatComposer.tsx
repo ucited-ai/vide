@@ -661,6 +661,15 @@ export interface ChatComposerProps {
   onSend: (e?: { preventDefault: () => void }, sendOptions?: { readonly steer?: boolean }) => void;
   onInterrupt: () => void;
   onImplementPlanInNewThread: () => void;
+  /**
+   * Send a stashed prompt without routing it through the composer: it joins the
+   * prompt queue, and the queue's own rules decide whether it feeds the running
+   * turn now or waits for it — the same path a mid-turn submit takes.
+   */
+  onSendStashedPrompt: (input: {
+    readonly prompt: string;
+    readonly images: ReadonlyArray<ComposerImageAttachment>;
+  }) => void;
   onRespondToApproval: (
     requestId: ApprovalRequestId,
     decision: ProviderApprovalDecision,
@@ -1965,6 +1974,20 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     }, 1200);
   }, []);
 
+  const sendStashEntry = useCallback(
+    (entry: PromptStashEntry) => {
+      // Out of the stash first, so a double activation cannot send it twice.
+      const { entry: taken } = takeStashEntry(entry.id);
+      if (!taken) return;
+      setIsStashMenuOpen(false);
+      props.onSendStashedPrompt({
+        prompt: taken.prompt,
+        images: hydrateImagesFromPersisted(taken.attachments),
+      });
+    },
+    [props, takeStashEntry],
+  );
+
   const restoreStashEntry = useCallback(
     (entry: PromptStashEntry) => {
       // Remove first so a double activation (click + Enter) can't restore twice.
@@ -2914,6 +2937,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                 <ComposerStashMenu
                   entries={stashQueue}
                   onRestore={restoreStashEntry}
+                  onSend={sendStashEntry}
+                  sendLabel={phase === "running" ? "Send into the running turn" : "Send now"}
                   onDelete={deleteStashEntry}
                   onClose={() => setIsStashMenuOpen(false)}
                 />

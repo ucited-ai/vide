@@ -1,4 +1,4 @@
-import { BookmarkIcon, XIcon } from "lucide-react";
+import { BookmarkIcon, CornerRightUpIcon, XIcon } from "lucide-react";
 import { memo, useEffect, useState } from "react";
 
 import { formatRelativeTimeLabel } from "../../timestampFormat";
@@ -32,10 +32,14 @@ function stashEntrySnippet(entry: PromptStashEntry): string {
 export const ComposerStashMenu = memo(function ComposerStashMenu(props: {
   entries: ReadonlyArray<PromptStashEntry>;
   onRestore: (entry: PromptStashEntry) => void;
+  /** Send it without a trip through the composer — it joins the prompt queue. */
+  onSend: (entry: PromptStashEntry) => void;
   onDelete: (entry: PromptStashEntry) => void;
+  /** What sending means right now: straight out, or into the running turn. */
+  sendLabel: string;
   onClose: () => void;
 }) {
-  const { entries, onRestore, onDelete, onClose } = props;
+  const { entries, onRestore, onSend, onDelete, sendLabel, onClose } = props;
   const [highlightedId, setHighlightedId] = useState<string | null>(entries[0]?.id ?? null);
 
   const highlightedEntry = entries.find((entry) => entry.id === highlightedId) ?? entries[0];
@@ -96,7 +100,7 @@ export const ComposerStashMenu = memo(function ComposerStashMenu(props: {
           <CommandGroup>
             <CommandGroupLabel className="flex items-center gap-1.5 px-3 pt-2 pb-1 text-(length:--text-micro) font-semibold uppercase tracking-[0.08em] text-muted-foreground/55">
               <BookmarkIcon className="size-3" aria-hidden="true" />
-              Stashed prompts
+              Stashed · kept until you send them
             </CommandGroupLabel>
             {entries.length === 0 ? (
               <p className="px-3 pb-3 pt-1 text-muted-foreground/70 text-(length:--text-ui)">
@@ -153,6 +157,19 @@ export const ComposerStashMenu = memo(function ComposerStashMenu(props: {
                   <span className="shrink-0 text-muted-foreground/60 text-(length:--text-caption)">
                     {formatRelativeTimeLabel(entry.createdAt)}
                   </span>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    className="shrink-0 opacity-0 transition-opacity group-hover/stash:opacity-100"
+                    aria-label={sendLabel}
+                    title={sendLabel}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onSend(entry);
+                    }}
+                  >
+                    <CornerRightUpIcon />
+                  </Button>
                   <Button
                     variant="ghost"
                     size="icon-xs"
