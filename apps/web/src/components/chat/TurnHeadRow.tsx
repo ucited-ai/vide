@@ -1,7 +1,8 @@
 import { ChevronRightIcon } from "lucide-react";
-import { memo, use, useEffect, useRef } from "react";
+import { memo, use, useEffect, useRef, useState } from "react";
 
 import { cn } from "~/lib/utils";
+import { ChatGrow } from "./ChatGrow";
 import { type MessagesTimelineRow } from "./MessagesTimeline.logic";
 import { TimelineRowCtx } from "./timelineRowContext";
 
@@ -25,47 +26,79 @@ export const TurnHeadRow = memo(function TurnHeadRow({ row }: { row: TurnHeadRow
   const ctx = use(TimelineRowCtx);
   const live = row.state === "live";
   const turnId = row.turnId;
-  const canToggle = !live && turnId !== null && row.collapsible;
+  const canFold = !live && turnId !== null && row.collapsible;
+  /*
+   * The detail's own disclosure, because it must work where the fold cannot: a
+   * turn whose id the server has not assigned yet, or a send that failed before
+   * there was a turn at all. One click opens whichever the head has.
+   */
+  const [detailOpen, setDetailOpen] = useState(false);
+  const detail = row.statusDetail;
+  const canOpen = canFold || detail !== null;
+  const opened = (canFold && row.expanded) || (detail !== null && detailOpen);
 
   return (
-    <button
-      aria-expanded={canToggle ? row.expanded : undefined}
-      className={cn(
-        "chat-turn-row rounded-(--radius) py-0.5 pr-2 text-(length:--text-caption) text-(--ink-tertiary)",
-        canToggle
-          ? "cursor-pointer transition-colors hover:bg-(--wash-hover) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
-          : "cursor-default",
-      )}
-      data-scroll-anchor-ignore
-      data-turn-head-state={row.state}
-      disabled={!canToggle}
-      onClick={() => {
-        if (canToggle && turnId !== null) {
-          ctx.onToggleTurnFold(turnId);
-        }
-      }}
-      type="button"
-    >
-      {/* Spans the gutter instead of leaving it empty: the head carries no
-          icon, and a label indented behind a blank gutter sat visibly right of
-          the prose and the status line it frames. Same x as everything else. */}
-      <span className="col-span-2 flex min-w-0 items-center gap-1.5 text-left">
-        <span>{row.label}</span>
-        {live ? (
-          <TurnElapsed startedAt={row.startedAt} />
-        ) : row.duration !== null ? (
-          <span className="tabular-nums">{row.duration}</span>
-        ) : null}
-      </span>
-      <ChevronRightIcon
-        aria-hidden="true"
+    <div className="w-full">
+      <button
+        aria-expanded={canOpen ? opened : undefined}
         className={cn(
-          "size-3 shrink-0 transition-[opacity,transform]",
-          canToggle ? "opacity-100" : "opacity-0",
-          row.expanded && canToggle && "rotate-90",
+          "chat-turn-row rounded-(--radius) py-0.5 pr-2 text-(length:--text-caption) text-(--ink-tertiary)",
+          canOpen
+            ? "cursor-pointer transition-colors hover:bg-(--wash-hover) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
+            : "cursor-default",
         )}
-      />
-    </button>
+        data-scroll-anchor-ignore
+        data-turn-head-state={row.state}
+        disabled={!canOpen}
+        onClick={() => {
+          if (canFold && turnId !== null) {
+            ctx.onToggleTurnFold(turnId);
+          }
+          if (detail !== null) {
+            setDetailOpen((open) => !open);
+          }
+        }}
+        type="button"
+      >
+        {/* Spans the gutter instead of leaving it empty: the head carries no
+            icon, and a label indented behind a blank gutter sat visibly right of
+            the prose and the status line it frames. Same x as everything else. */}
+        <span className="col-span-2 flex min-w-0 items-center gap-1.5 text-left">
+          <span>{row.label}</span>
+          {live ? (
+            <TurnElapsed startedAt={row.startedAt} />
+          ) : row.duration !== null ? (
+            <span className="tabular-nums">{row.duration}</span>
+          ) : null}
+          {/* One word, one notch brighter than the frame around it: how the turn
+              ended is the news on this line, and the only thing on it that is
+              not a measurement. */}
+          {row.status !== null ? (
+            <>
+              <span aria-hidden="true">·</span>
+              <span className="text-(--ink-secondary)">{row.status}</span>
+            </>
+          ) : null}
+        </span>
+        <ChevronRightIcon
+          aria-hidden="true"
+          className={cn(
+            "size-3 shrink-0 transition-[opacity,transform]",
+            canOpen ? "opacity-100" : "opacity-0",
+            opened && canOpen && "rotate-90",
+          )}
+        />
+      </button>
+      {detail !== null ? (
+        <ChatGrow open={detailOpen}>
+          {/* Selectable, wrapped, and on the text's own edge — a reason to read
+              once, not an alert to dismiss. */}
+          <p className="py-1 pr-2 text-(length:--text-caption) whitespace-pre-wrap text-(--ink-tertiary)">
+            {detail}
+          </p>
+        </ChatGrow>
+      ) : null}
+    </div>
   );
 });
 

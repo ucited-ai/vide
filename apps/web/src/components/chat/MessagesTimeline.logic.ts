@@ -199,6 +199,17 @@ export type MessagesTimelineRow =
       /** Whether there is any folded work to reopen. A text-only turn still
           gets its "Worked for" line; it just has no chevron. */
       collapsible: boolean;
+      /**
+       * One word beside the duration for a turn that did not simply finish —
+       * "interrupted", "failed". Where a red banner used to stand over the
+       * conversation, the turn now says it in its own line.
+       */
+      status: string | null;
+      /**
+       * What went wrong, in full, revealed by opening the head. Kept out of the
+       * line itself: the word is the news, the detail is for when it is wanted.
+       */
+      statusDetail: string | null;
     }
   | {
       /**
@@ -310,6 +321,8 @@ interface TurnFold {
   /** The head's text without its duration, so the timer keeps its own column. */
   label: string;
   duration: string | null;
+  /** One word for how the turn ended, when it did not simply finish. */
+  status: string | null;
 }
 
 /** The anchor a running turn's head sits at, and what the head should say. */
@@ -569,13 +582,13 @@ function deriveTurnFolds(input: {
      * can keep it in the same tabular column its live timer counted in — the
      * timer stopping is then the only thing that changes about that column.
      */
-    const label = isLatestInterrupted
-      ? duration
-        ? "You stopped after"
-        : "You stopped this response"
-      : duration
-        ? "Worked for"
-        : "Worked";
+    /*
+     * The frame reads the same however the turn ended: it says how long the
+     * work took, and one quiet word beside it says if it did not simply
+     * finish. A sentence that rewrote itself per outcome ("You stopped this
+     * response") made the end of a turn shout.
+     */
+    const label = duration ? "Worked for" : "Worked";
 
     foldsByAnchorEntryId.set(firstEntry.id, {
       turnId: region.lastTurnId,
@@ -584,6 +597,7 @@ function deriveTurnFolds(input: {
       hiddenEntryIds,
       label,
       duration,
+      status: isLatestInterrupted ? "interrupted" : null,
     });
   }
   return foldsByAnchorEntryId;
@@ -598,6 +612,8 @@ export function deriveMessagesTimelineRows(input: {
   activeTurnStartedAt: string | null;
   turnDiffSummaryByAssistantMessageId: ReadonlyMap<MessageId, TurnDiffSummary>;
   revertTurnCountByUserMessageId: ReadonlyMap<MessageId, number>;
+  /** What the thread last failed with, if anything. Hung on the turn it ended. */
+  threadError?: string | null | undefined;
 }): MessagesTimelineRow[] {
   const nextRows: MessagesTimelineRow[] = [];
   const durationStartByMessageId = computeMessageDurationStart(
@@ -627,13 +643,23 @@ export function deriveMessagesTimelineRows(input: {
       }
     }
   }
-  const liveHead: LiveTurnHead | null = input.isWorking
-    ? {
-        turnId: unsettledTurnId,
-        anchorEntryId: liveTurnAnchor.entryId,
-        label: deriveLiveTurnLabel(input.timelineEntries, unsettledTurnId),
-      }
-    : null;
+  /*
+   * A turn is live while the timeline still holds it unsettled — the same
+   * lifecycle the folding above is keyed on, and for the same reason. The
+   * session's status is a fact about the connection: it lags, and it flickers
+   * through a reconnect or a re-hydrated snapshot. Keying the status line on it
+   * is what let the line disappear from under a turn that was plainly still
+   * working. `isWorking` still opens the window before the server has created
+   * the turn, which is the one thing the lifecycle cannot know yet.
+   */
+  const liveHead: LiveTurnHead | null =
+    input.isWorking || unsettledTurnId !== null
+      ? {
+          turnId: unsettledTurnId,
+          anchorEntryId: liveTurnAnchor.entryId,
+          label: deriveLiveTurnLabel(input.timelineEntries, unsettledTurnId),
+        }
+      : null;
   const buildLiveHeadRow = (createdAt: string | null): MessagesTimelineRow => ({
     kind: "turn-head",
     // Keyed by the turn so the row survives the turn ending: the head is the one
@@ -651,6 +677,8 @@ export function deriveMessagesTimelineRows(input: {
     startedAt: liveTurnAnchor.startBoundary ?? input.activeTurnStartedAt,
     expanded: true,
     collapsible: false,
+    status: null,
+    statusDetail: null,
   });
 
   for (let index = 0; index < input.timelineEntries.length; index += 1) {
@@ -672,6 +700,8 @@ export function deriveMessagesTimelineRows(input: {
         startedAt: null,
         expanded: input.expandedTurnIds?.has(turnFold.turnId) ?? false,
         collapsible: turnFold.hiddenEntryIds.size > 0,
+        status: turnFold.status,
+        statusDetail: null,
       });
     }
 
@@ -768,6 +798,7 @@ export function deriveMessagesTimelineRows(input: {
     nextRows.push(buildLiveHeadRow(input.activeTurnStartedAt));
   }
 
+  attachThreadError(nextRows, input.threadError ?? null);
   const settled = settleWorkRows(markLiveTail(nextRows, liveHead !== null));
   if (liveHead === null) {
     return settled;
@@ -810,6 +841,30 @@ export function deriveMessagesTimelineRows(input: {
  * knowing which group is live would hide exactly the call the status line is
  * naming. A group left with nothing at all goes.
  */
+/**
+ * Hangs what the thread last failed with on the turn it ended.
+ *
+ * The newest head is that turn: an error belongs to the exchange the reader is
+ * looking at, and saying so there is what replaced the banner that used to
+ * stand between the header and the conversation. The word goes on the line, the
+ * text goes behind it — a head with something to say is openable even when it
+ * has no work folded under it.
+ */
+function attachThreadError(rows: MessagesTimelineRow[], error: string | null): void {
+  if (error === null) return;
+  for (let index = rows.length - 1; index >= 0; index -= 1) {
+    const row = rows[index];
+    if (row === undefined || row.kind !== "turn-head") continue;
+    rows[index] = {
+      ...row,
+      status: row.status ?? "failed",
+      statusDetail: error,
+      collapsible: true,
+    };
+    return;
+  }
+}
+
 function settleWorkRows(rows: MessagesTimelineRow[]): MessagesTimelineRow[] {
   const settled: MessagesTimelineRow[] = [];
   for (const row of rows) {
@@ -890,7 +945,9 @@ function isRowUnchanged(a: MessagesTimelineRow, b: MessagesTimelineRow): boolean
         a.duration === bh.duration &&
         a.startedAt === bh.startedAt &&
         a.expanded === bh.expanded &&
-        a.collapsible === bh.collapsible
+        a.collapsible === bh.collapsible &&
+        a.status === bh.status &&
+        a.statusDetail === bh.statusDetail
       );
     }
 

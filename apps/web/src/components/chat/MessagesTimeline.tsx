@@ -97,6 +97,8 @@ const EMPTY_TIMELINE_SKILLS: ReadonlyArray<Pick<ServerProviderSkill, "name" | "d
 
 interface MessagesTimelineProps {
   isWorking: boolean;
+  /** What the thread last failed with; hung on the head of the turn it ended. */
+  threadError: string | null | undefined;
   activeTurnInProgress: boolean;
   activeTurnStartedAt: string | null;
   listRef: React.RefObject<LegendListRef | null>;
@@ -151,6 +153,7 @@ interface MessagesTimelineProps {
  */
 export const MessagesTimeline = memo(function MessagesTimeline({
   isWorking,
+  threadError,
   activeTurnInProgress,
   activeTurnStartedAt,
   listRef,
@@ -236,6 +239,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
         activeTurnStartedAt,
         turnDiffSummaryByAssistantMessageId,
         revertTurnCountByUserMessageId,
+        threadError,
       }),
     [
       timelineEntries,
@@ -246,6 +250,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       activeTurnStartedAt,
       turnDiffSummaryByAssistantMessageId,
       revertTurnCountByUserMessageId,
+      threadError,
     ],
   );
   const rows = useStableRows(rawRows);

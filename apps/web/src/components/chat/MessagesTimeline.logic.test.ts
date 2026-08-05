@@ -643,7 +643,7 @@ describe("deriveMessagesTimelineRows", () => {
     expect(foldRow?.duration).toBe("12s");
   });
 
-  it("uses latest-turn timings and the stopped label for an interrupted latest turn", () => {
+  it("keeps the frame and says how the turn ended beside it, for an interrupted turn", () => {
     const rows = deriveMessagesTimelineRows({
       timelineEntries: [
         {
@@ -676,11 +676,90 @@ describe("deriveMessagesTimelineRows", () => {
         kind: "turn-head",
         state: "done",
         turnId: "turn-1",
-        label: "You stopped after",
+        // The frame reads the same however the turn ended; one quiet word beside
+        // the duration carries the outcome.
+        label: "Worked for",
         duration: "47s",
+        status: "interrupted",
         expanded: false,
       }),
     ]);
+  });
+
+  it("keeps the status line under a turn the session has stopped reporting", () => {
+    /*
+     * The session's status is a fact about the connection: it lags, and a
+     * reconnect or a re-hydrated snapshot flickers it. The turn is what is
+     * running, so an unsettled turn keeps its line even while `isWorking` — read
+     * off that status — says otherwise.
+     */
+    const rows = deriveMessagesTimelineRows({
+      timelineEntries: [
+        {
+          id: "work-entry-1",
+          kind: "work",
+          createdAt: "2026-01-01T00:00:05Z",
+          entry: {
+            id: "work-1",
+            createdAt: "2026-01-01T00:00:05Z",
+            turnId: "turn-1" as never,
+            label: "Ran command",
+            tone: "tool" as const,
+          },
+        },
+      ],
+      latestTurn: {
+        turnId: "turn-1" as never,
+        state: "running",
+        startedAt: "2026-01-01T00:00:00Z",
+        completedAt: null,
+      },
+      isWorking: false,
+      activeTurnStartedAt: null,
+      turnDiffSummaryByAssistantMessageId: new Map(),
+      revertTurnCountByUserMessageId: new Map(),
+    });
+
+    expect(rows.some((row) => row.kind === "turn-head" && row.state === "live")).toBe(true);
+    expect(rows.some((row) => row.kind === "turn-tail")).toBe(true);
+  });
+
+  it("hangs a thread error on the head of the turn it ended, openable there", () => {
+    const rows = deriveMessagesTimelineRows({
+      timelineEntries: [
+        {
+          id: "work-entry-1",
+          kind: "work",
+          createdAt: "2026-01-01T00:00:05Z",
+          entry: {
+            id: "work-1",
+            createdAt: "2026-01-01T00:00:05Z",
+            turnId: "turn-1" as never,
+            label: "Ran command",
+            tone: "tool" as const,
+          },
+        },
+      ],
+      latestTurn: {
+        turnId: "turn-1" as never,
+        state: "completed",
+        startedAt: "2026-01-01T00:00:00Z",
+        completedAt: "2026-01-01T00:00:12Z",
+      },
+      isWorking: false,
+      activeTurnStartedAt: null,
+      turnDiffSummaryByAssistantMessageId: new Map(),
+      revertTurnCountByUserMessageId: new Map(),
+      threadError: "Provider exited with code 1",
+    });
+
+    const head = rows.find((row) => row.kind === "turn-head");
+    expect(head).toMatchObject({
+      status: "failed",
+      statusDetail: "Provider exited with code 1",
+      // Something to say is reason enough to be openable, work folded or not.
+      collapsible: true,
+    });
   });
 
   it("keeps the previous turn folded while a newly sent message awaits its turn", () => {
