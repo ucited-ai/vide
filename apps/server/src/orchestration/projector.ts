@@ -481,6 +481,7 @@ export function projectEvent(
             role: payload.role,
             text: payload.text,
             ...(payload.attachments !== undefined ? { attachments: payload.attachments } : {}),
+            ...(payload.agent !== undefined ? { agent: payload.agent } : {}),
             turnId: payload.turnId,
             streaming: payload.streaming,
             createdAt: payload.createdAt,

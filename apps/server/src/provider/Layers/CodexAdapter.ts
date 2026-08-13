@@ -14,6 +14,7 @@ import {
   ProviderDriverKind,
   type ProviderEvent,
   ProviderInstanceId,
+  type ProviderFileMutation,
   type ProviderRuntimeEvent,
   type ProviderRequestKind,
   type ThreadTokenUsageSnapshot,
@@ -222,15 +223,17 @@ function toCanonicalItemType(raw: string | undefined | null): CanonicalItemType 
   if (type.includes("reasoning") || type.includes("thought")) return "reasoning";
   if (type.includes("plan") || type.includes("todo")) return "plan";
   if (type.includes("command")) return "command_execution";
+  if (type.includes("file read")) return "file_read";
   if (type.includes("file change") || type.includes("patch") || type.includes("edit"))
     return "file_change";
   if (type.includes("mcp")) return "mcp_tool_call";
   if (type.includes("dynamic tool")) return "dynamic_tool_call";
-  if (type.includes("collab")) return "collab_agent_tool_call";
+  if (type.includes("collab") || type.includes("sub agent activity"))
+    return "collab_agent_tool_call";
   if (type.includes("web search")) return "web_search";
   if (type.includes("image")) return "image_view";
-  if (type.includes("review entered")) return "review_entered";
-  if (type.includes("review exited")) return "review_exited";
+  if (type.includes("review entered") || type.includes("entered review")) return "review_entered";
+  if (type.includes("review exited") || type.includes("exited review")) return "review_exited";
   if (type.includes("compact")) return "context_compaction";
   if (type.includes("error")) return "error";
   return "unknown";
@@ -251,12 +254,16 @@ function itemTitle(itemType: CanonicalItemType, item?: CodexLifecycleItem): stri
       return "Plan";
     case "command_execution":
       return "Ran command";
+    case "file_read":
+      return "Read file";
     case "file_change":
       return "File change";
     case "mcp_tool_call":
       return "MCP tool call";
     case "dynamic_tool_call":
       return "Tool call";
+    case "collab_agent_tool_call":
+      return "Subagent activity";
     case "web_search":
       return "Web search";
     case "image_view":
@@ -290,6 +297,38 @@ function itemDetail(itemType: CanonicalItemType, item: CodexLifecycleItem): stri
     return trimmed;
   }
   return undefined;
+}
+
+function patchLineStats(patch: string): { additions: number; deletions: number } {
+  let additions = 0;
+  let deletions = 0;
+  for (const line of patch.split(/\r?\n/u)) {
+    if (line.startsWith("+") && !line.startsWith("+++")) additions += 1;
+    if (line.startsWith("-") && !line.startsWith("---")) deletions += 1;
+  }
+  return { additions, deletions };
+}
+
+function fileMutationsFromCodexItem(item: CodexLifecycleItem): ProviderFileMutation[] | undefined {
+  if (item.type !== "fileChange") return undefined;
+  return item.changes.map((change) => {
+    const movedTo =
+      change.kind.type === "update" ? (change.kind.move_path ?? undefined) : undefined;
+    return {
+      path: movedTo ?? change.path,
+      ...(movedTo ? { previousPath: change.path } : {}),
+      kind:
+        change.kind.type === "add"
+          ? "created"
+          : change.kind.type === "delete"
+            ? "deleted"
+            : movedTo
+              ? "moved"
+              : "modified",
+      patch: change.diff,
+      ...patchLineStats(change.diff),
+    } satisfies ProviderFileMutation;
+  });
 }
 
 function toRequestTypeFromMethod(method: string): CanonicalRequestType {
@@ -448,6 +487,7 @@ function runtimeEventBase(
     ...(event.itemId ? { itemId: asRuntimeItemId(event.itemId) } : {}),
     ...(event.requestId ? { requestId: asRuntimeRequestId(event.requestId) } : {}),
     ...(refs ? { providerRefs: refs } : {}),
+    ...(event.agent ? { agent: event.agent } : {}),
     raw: {
       source: eventRawSource(event),
       method: event.method,
@@ -474,6 +514,7 @@ function mapItemLifecycle(
   }
 
   const detail = itemDetail(itemType, item);
+  const fileChanges = fileMutationsFromCodexItem(item);
   const status =
     lifecycle === "item.started"
       ? "inProgress"
@@ -489,6 +530,7 @@ function mapItemLifecycle(
       ...(status ? { status } : {}),
       ...(itemTitle(itemType, item) ? { title: itemTitle(itemType, item) } : {}),
       ...(detail ? { detail } : {}),
+      ...(fileChanges ? { fileChanges } : {}),
       ...(event.payload !== undefined ? { data: event.payload } : {}),
     },
   };

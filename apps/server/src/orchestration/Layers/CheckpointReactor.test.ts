@@ -12,6 +12,7 @@ import {
 } from "@vide/contracts";
 import {
   CommandId,
+  CheckpointRef,
   DEFAULT_PROVIDER_INTERACTION_MODE,
   EventId,
   MessageId,
@@ -417,6 +418,30 @@ describe("CheckpointReactor", () => {
       provider,
       cwd,
       drain,
+      completeTurnChangeSet: (
+        turnId: TurnId,
+        files: ReadonlyArray<{
+          readonly path: string;
+          readonly kind: string;
+          readonly additions: number;
+          readonly deletions: number;
+        }> = [],
+      ) =>
+        Effect.runPromise(
+          engine.dispatch({
+            type: "thread.turn.diff.complete",
+            commandId: CommandId.make(`cmd-semantic-diff-${turnId}`),
+            threadId: ThreadId.make("thread-1"),
+            turnId,
+            completedAt: createdAt,
+            checkpointRef: CheckpointRef.make(`provider-diff:${turnId}`),
+            status: "missing",
+            files: [...files],
+            assistantMessageId: MessageId.make(`assistant:${turnId}`),
+            checkpointTurnCount: 1,
+            createdAt,
+          }),
+        ),
     };
   }
 
@@ -467,6 +492,13 @@ describe("CheckpointReactor", () => {
       turnId: asTurnId("turn-1"),
       payload: { state: "completed" },
     });
+    await harness.completeTurnChangeSet(asTurnId("turn-1"), [
+      { path: "README.md", kind: "modified", additions: 1, deletions: 1 },
+    ]);
+    await waitForGitRefExists(
+      harness.cwd,
+      checkpointRefForThreadTurn(ThreadId.make("thread-1"), 1),
+    );
 
     await waitForEvent(harness.engine, (event) => event.type === "thread.turn-diff-completed");
     const thread = await waitForThread(
@@ -518,7 +550,7 @@ describe("CheckpointReactor", () => {
     expect(gitStatusRefreshCalls).toEqual([harness.cwd]);
   });
 
-  it("ignores auxiliary thread turn completion while primary turn is active", async () => {
+  it("does not infer semantic checkpoints from bare runtime completions", async () => {
     const harness = await createHarness({ seedFilesystemCheckpoints: false });
     const createdAt = "2026-01-01T00:00:00.000Z";
 
@@ -572,22 +604,12 @@ describe("CheckpointReactor", () => {
     const midThread = midReadModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
     expect(midThread?.checkpoints).toHaveLength(0);
 
-    harness.provider.emit({
-      type: "turn.completed",
-      eventId: EventId.make("evt-turn-completed-main"),
-      provider: ProviderDriverKind.make("codex"),
-
-      createdAt: "2026-01-01T00:00:00.000Z",
-      threadId: ThreadId.make("thread-1"),
-      turnId: asTurnId("turn-main"),
-      payload: { state: "completed" },
-    });
-
-    const thread = await waitForThread(
-      harness.readModel,
-      (entry) => entry.latestTurn?.turnId === "turn-main" && entry.checkpoints.length === 1,
+    await harness.drain();
+    const finalReadModel = await harness.readModel();
+    const finalThread = finalReadModel.threads.find(
+      (entry) => entry.id === ThreadId.make("thread-1"),
     );
-    expect(thread.checkpoints[0]?.checkpointTurnCount).toBe(1);
+    expect(finalThread?.checkpoints).toHaveLength(0);
   });
 
   it("captures pre-turn and completion checkpoints for claude runtime events", async () => {
@@ -638,6 +660,13 @@ describe("CheckpointReactor", () => {
       turnId: asTurnId("turn-claude-1"),
       payload: { state: "completed" },
     });
+    await harness.completeTurnChangeSet(asTurnId("turn-claude-1"), [
+      { path: "README.md", kind: "modified", additions: 1, deletions: 1 },
+    ]);
+    await waitForGitRefExists(
+      harness.cwd,
+      checkpointRefForThreadTurn(ThreadId.make("thread-1"), 1),
+    );
 
     await waitForEvent(harness.engine, (event) => event.type === "thread.turn-diff-completed");
     const thread = await waitForThread(
@@ -651,7 +680,7 @@ describe("CheckpointReactor", () => {
     ).toBe(true);
   });
 
-  it("appends capture failure activity when turn diff summary cannot be derived", async () => {
+  it("does not derive semantic file changes from an ambient checkpoint diff", async () => {
     const harness = await createHarness({ seedFilesystemCheckpoints: false });
     const createdAt = "2026-01-01T00:00:00.000Z";
 
@@ -683,19 +712,21 @@ describe("CheckpointReactor", () => {
       turnId: asTurnId("turn-missing-baseline"),
       payload: { state: "completed" },
     });
+    await harness.completeTurnChangeSet(asTurnId("turn-missing-baseline"));
 
     await waitForEvent(harness.engine, (event) => event.type === "thread.turn-diff-completed");
     const thread = await waitForThread(
       harness.readModel,
-      (entry) =>
-        entry.checkpoints.length === 1 &&
-        entry.activities.some((activity) => activity.kind === "checkpoint.capture.failed"),
+      (entry) => entry.checkpoints.length === 1,
     );
 
     expect(thread.checkpoints[0]?.checkpointTurnCount).toBe(1);
+    expect((thread.checkpoints[0] as { readonly files?: ReadonlyArray<unknown> })?.files).toEqual(
+      [],
+    );
     expect(
       thread.activities.some((activity) => activity.kind === "checkpoint.capture.failed"),
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it("captures pre-turn baseline from project workspace root when thread worktree is unset", async () => {
@@ -772,6 +803,13 @@ describe("CheckpointReactor", () => {
       turnId: asTurnId("turn-missing-cwd"),
       payload: { state: "completed" },
     });
+    await harness.completeTurnChangeSet(asTurnId("turn-missing-cwd"), [
+      { path: "README.md", kind: "modified", additions: 1, deletions: 1 },
+    ]);
+    await waitForGitRefExists(
+      harness.cwd,
+      checkpointRefForThreadTurn(ThreadId.make("thread-1"), 1),
+    );
 
     await waitForEvent(harness.engine, (event) => event.type === "thread.turn-diff-completed");
     expect(

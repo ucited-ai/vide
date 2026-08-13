@@ -863,6 +863,20 @@ describe("deriveMessagesTimelineRows", () => {
             tone: "tool" as const,
           },
         },
+        {
+          id: "assistant-next-thought-entry",
+          kind: "message",
+          createdAt: "2026-01-01T00:00:09Z",
+          message: {
+            id: "assistant-next-thought" as never,
+            role: "assistant",
+            text: "Checking the result.",
+            turnId: "turn-1" as never,
+            createdAt: "2026-01-01T00:00:09Z",
+            updatedAt: "2026-01-01T00:00:09Z",
+            streaming: false,
+          },
+        },
       ],
       latestTurn: {
         turnId: "turn-1" as never,
@@ -881,10 +895,14 @@ describe("deriveMessagesTimelineRows", () => {
     expect(rows.map((row) => row.id)).toEqual([
       "turn-head:turn-1",
       "assistant-thought-entry",
+      "assistant-next-thought-entry",
       "turn-tail:live",
     ]);
     const tail = rows.find((row) => row.kind === "turn-tail");
-    expect(tail?.kind === "turn-tail" && tail.label).toBe("Ran command");
+    expect(tail?.kind === "turn-tail" && tail.label).toBe("Thinking");
+    expect(tail?.kind === "turn-tail" && tail.groupedEntries.map((entry) => entry.id)).toEqual([
+      "work-1",
+    ]);
   });
 
   it("does not fold the session's running turn when latestTurn regresses", () => {

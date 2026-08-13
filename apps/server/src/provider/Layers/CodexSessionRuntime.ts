@@ -5,6 +5,7 @@ import {
   ProviderDriverKind,
   ProviderItemId,
   type ProviderInstanceId,
+  type ProviderAgentAttribution,
   type ProviderApprovalDecision,
   type ProviderEvent,
   type ProviderInteractionMode,
@@ -600,8 +601,13 @@ function readRouteFields(notification: CodexServerNotification): {
   }
 }
 
+interface CodexChildAgentRoute {
+  readonly parentTurnId: TurnId;
+  readonly attribution: ProviderAgentAttribution;
+}
+
 function rememberCollabReceiverTurns(
-  collabReceiverTurns: Map<string, TurnId>,
+  collabReceiverTurns: Map<string, CodexChildAgentRoute>,
   notification: CodexServerNotification,
   parentTurnId: TurnId | undefined,
 ): void {
@@ -618,8 +624,50 @@ function rememberCollabReceiverTurns(
   }
 
   for (const receiverThreadId of notification.params.item.receiverThreadIds) {
-    collabReceiverTurns.set(receiverThreadId, parentTurnId);
+    const existing = collabReceiverTurns.get(receiverThreadId);
+    collabReceiverTurns.set(receiverThreadId, {
+      parentTurnId,
+      attribution:
+        existing?.attribution ??
+        ({
+          agentId: receiverThreadId,
+          parentToolUseId: notification.params.item.id,
+          providerThreadId: receiverThreadId,
+        } satisfies ProviderAgentAttribution),
+    });
   }
+}
+
+function rememberSubAgentActivity(
+  collabReceiverTurns: Map<string, CodexChildAgentRoute>,
+  notification: CodexServerNotification,
+): ProviderAgentAttribution | undefined {
+  if (notification.method !== "item/started" && notification.method !== "item/completed") {
+    return undefined;
+  }
+  if (notification.params.item.type !== "subAgentActivity") {
+    return undefined;
+  }
+  const item = notification.params.item;
+  const existing = collabReceiverTurns.get(item.agentThreadId);
+  if (!existing) {
+    return {
+      agentId: item.agentThreadId,
+      providerThreadId: item.agentThreadId,
+      path: item.agentPath,
+      name: item.agentPath.split("/").findLast((segment) => segment.length > 0) ?? item.agentPath,
+    };
+  }
+  const attribution: ProviderAgentAttribution = {
+    ...existing.attribution,
+    path: item.agentPath,
+    name: item.agentPath.split("/").findLast((segment) => segment.length > 0) ?? item.agentPath,
+  };
+  collabReceiverTurns.set(item.agentThreadId, {
+    ...existing,
+    attribution,
+  });
+  return attribution;
 }
 
 function shouldSuppressChildConversationNotification(
@@ -722,7 +770,7 @@ export const makeCodexSessionRuntime = (
     const pendingApprovalsRef = yield* Ref.make(new Map<ApprovalRequestId, PendingApproval>());
     const approvalCorrelationsRef = yield* Ref.make(new Map<string, ApprovalCorrelation>());
     const pendingUserInputsRef = yield* Ref.make(new Map<ApprovalRequestId, PendingUserInput>());
-    const collabReceiverTurnsRef = yield* Ref.make(new Map<string, TurnId>());
+    const collabReceiverTurnsRef = yield* Ref.make(new Map<string, CodexChildAgentRoute>());
     const closedRef = yield* Ref.make(false);
 
     // `~` is not shell-expanded when env vars are set via
@@ -844,7 +892,7 @@ export const makeCodexSessionRuntime = (
         const payload = notification.params;
         const route = readRouteFields(notification);
         const collabReceiverTurns = yield* Ref.get(collabReceiverTurnsRef);
-        const childParentTurnId = (() => {
+        const childRoute = (() => {
           const providerConversationId = readNotificationThreadId(notification);
           return providerConversationId
             ? collabReceiverTurns.get(providerConversationId)
@@ -852,14 +900,18 @@ export const makeCodexSessionRuntime = (
         })();
 
         rememberCollabReceiverTurns(collabReceiverTurns, notification, route.turnId);
-        if (childParentTurnId && shouldSuppressChildConversationNotification(notification.method)) {
+        const subAgentActivityAttribution = rememberSubAgentActivity(
+          collabReceiverTurns,
+          notification,
+        );
+        if (childRoute && shouldSuppressChildConversationNotification(notification.method)) {
           yield* Ref.set(collabReceiverTurnsRef, collabReceiverTurns);
           return;
         }
 
         let requestId: ApprovalRequestId | undefined;
         let requestKind: ProviderRequestKind | undefined;
-        let turnId = childParentTurnId ?? route.turnId;
+        let turnId = childRoute?.parentTurnId ?? route.turnId;
         let itemId = route.itemId;
 
         if (notification.method === "serverRequest/resolved") {
@@ -892,6 +944,11 @@ export const makeCodexSessionRuntime = (
           ...(itemId ? { itemId } : {}),
           ...(requestId ? { requestId } : {}),
           ...(requestKind ? { requestKind } : {}),
+          ...(childRoute?.attribution
+            ? { agent: childRoute.attribution }
+            : subAgentActivityAttribution
+              ? { agent: subAgentActivityAttribution }
+              : {}),
           ...(notification.method === "item/agentMessage/delta"
             ? { textDelta: notification.params.delta }
             : {}),

@@ -2829,8 +2829,23 @@ describe("ProviderRuntimeIngestion", () => {
       turnId: asTurnId("turn-p1"),
       itemId: asItemId("item-p1-assistant"),
       payload: {
-        unifiedDiff: "diff --git a/file.txt b/file.txt\n+hello\n",
+        unifiedDiff: [
+          "diff --git a/file.txt b/file.txt",
+          "--- a/file.txt",
+          "+++ b/file.txt",
+          "@@ -0,0 +1 @@",
+          "+hello",
+        ].join("\n"),
       },
+    });
+    harness.emit({
+      type: "turn.completed",
+      eventId: asEventId("evt-turn-completed"),
+      provider: ProviderDriverKind.make("codex"),
+      createdAt: now,
+      threadId: asThreadId("thread-1"),
+      turnId: asTurnId("turn-p1"),
+      payload: { state: "completed" },
     });
 
     const thread = await waitForThread(
@@ -2888,8 +2903,11 @@ describe("ProviderRuntimeIngestion", () => {
       (entry: ProviderRuntimeTestCheckpoint) => entry.turnId === "turn-p1",
     );
     expect(checkpoint?.status).toBe("missing");
-    expect(checkpoint?.assistantMessageId).toBe("assistant:item-p1-assistant");
-    expect(checkpoint?.checkpointRef).toBe("provider-diff:evt-turn-diff-updated");
+    expect(checkpoint?.files).toEqual([
+      { path: "file.txt", kind: "modified", additions: 1, deletions: 0 },
+    ]);
+    expect(checkpoint?.assistantMessageId).toBe("assistant:turn-p1");
+    expect(checkpoint?.checkpointRef).toBe("provider-diff:evt-turn-completed");
   });
 
   it("projects context window updates into normalized thread activities", async () => {

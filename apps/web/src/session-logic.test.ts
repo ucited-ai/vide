@@ -691,24 +691,34 @@ describe("workEntryIndicatesToolFailure", () => {
 });
 
 describe("deriveWorkLogEntries", () => {
-  it("omits tool started entries and keeps completed entries", () => {
+  it("keeps a live tool call and collapses its completion into the same entry", () => {
     const activities: OrchestrationThreadActivity[] = [
       makeActivity({
         id: "tool-complete",
         createdAt: "2026-02-23T00:00:03.000Z",
         summary: "Tool call complete",
         kind: "tool.completed",
+        payload: {
+          itemType: "dynamic_tool_call",
+          toolCallId: "call-1",
+        },
       }),
       makeActivity({
         id: "tool-start",
         createdAt: "2026-02-23T00:00:02.000Z",
         summary: "Tool call",
         kind: "tool.started",
+        payload: {
+          itemType: "dynamic_tool_call",
+          toolCallId: "call-1",
+          status: "inProgress",
+        },
       }),
     ];
 
     const entries = deriveWorkLogEntries(activities);
     expect(entries.map((entry) => entry.id)).toEqual(["tool-complete"]);
+    expect(entries[0]?.createdAt).toBe("2026-02-23T00:00:02.000Z");
   });
 
   it("omits task.started but shows task.progress and task.completed", () => {
@@ -1146,6 +1156,40 @@ describe("deriveWorkLogEntries", () => {
     ]);
   });
 
+  it("uses canonical provider file mutations for file-change activities", () => {
+    const activities: OrchestrationThreadActivity[] = [
+      makeActivity({
+        id: "canonical-file-tool",
+        kind: "tool.completed",
+        summary: "File change",
+        payload: {
+          itemType: "file_change",
+          fileChanges: [
+            {
+              path: "apps/web/src/session-logic.ts",
+              kind: "modified",
+              additions: 2,
+              deletions: 1,
+              patch: "diff --git a/apps/web/src/session-logic.ts b/apps/web/src/session-logic.ts",
+            },
+          ],
+        },
+      }),
+    ];
+
+    const [entry] = deriveWorkLogEntries(activities);
+    expect(entry?.changedFiles).toEqual(["apps/web/src/session-logic.ts"]);
+    expect(entry?.fileChanges).toEqual([
+      {
+        path: "apps/web/src/session-logic.ts",
+        status: "modified",
+        additions: 2,
+        deletions: 1,
+        diff: "diff --git a/apps/web/src/session-logic.ts b/apps/web/src/session-logic.ts",
+      },
+    ]);
+  });
+
   it("drops duplicated tool detail when it only repeats the title", () => {
     const activities: OrchestrationThreadActivity[] = [
       makeActivity({
@@ -1386,7 +1430,7 @@ describe("deriveWorkLogEntries", () => {
     expect(entries).toHaveLength(1);
     expect(entries[0]).toMatchObject({
       id: "tool-complete",
-      createdAt: "2026-02-23T00:00:03.000Z",
+      createdAt: "2026-02-23T00:00:01.000Z",
       label: "Tool call completed",
       detail: 'Read: {"file_path":"/tmp/app.ts"}',
       command: "sed -n 1,40p /tmp/app.ts",

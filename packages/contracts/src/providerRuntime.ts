@@ -14,6 +14,7 @@ import {
   TurnId,
 } from "./baseSchemas.ts";
 import { ProviderInstanceId, ProviderDriverKind } from "./providerInstance.ts";
+import { ProviderAgentAttribution } from "./providerAgent.ts";
 
 const TrimmedNonEmptyStringSchema = TrimmedNonEmptyString;
 const UnknownRecordSchema = Schema.Record(Schema.String, Schema.Unknown);
@@ -103,6 +104,7 @@ export type RuntimeErrorClass = typeof RuntimeErrorClass.Type;
 
 export const TOOL_LIFECYCLE_ITEM_TYPES = [
   "command_execution",
+  "file_read",
   "file_change",
   "mcp_tool_call",
   "dynamic_tool_call",
@@ -258,6 +260,7 @@ const ProviderRuntimeEventBase = Schema.Struct({
   itemId: Schema.optional(RuntimeItemId),
   requestId: Schema.optional(RuntimeRequestId),
   providerRefs: Schema.optional(ProviderRefs),
+  agent: Schema.optional(ProviderAgentAttribution),
   raw: Schema.optional(RuntimeEventRaw),
 });
 export type ProviderRuntimeEventBase = typeof ProviderRuntimeEventBase.Type;
@@ -396,8 +399,19 @@ const TurnProposedCompletedPayload = Schema.Struct({
 });
 export type TurnProposedCompletedPayload = typeof TurnProposedCompletedPayload.Type;
 
+export const ProviderFileMutation = Schema.Struct({
+  path: TrimmedNonEmptyStringSchema,
+  previousPath: Schema.optional(TrimmedNonEmptyStringSchema),
+  kind: Schema.optional(Schema.Literals(["created", "modified", "deleted", "moved"])),
+  patch: Schema.optional(Schema.String),
+  additions: Schema.optional(NonNegativeInt),
+  deletions: Schema.optional(NonNegativeInt),
+});
+export type ProviderFileMutation = typeof ProviderFileMutation.Type;
+
 const TurnDiffUpdatedPayload = Schema.Struct({
   unifiedDiff: Schema.String,
+  fileChanges: Schema.optional(Schema.Array(ProviderFileMutation)),
 });
 export type TurnDiffUpdatedPayload = typeof TurnDiffUpdatedPayload.Type;
 
@@ -406,6 +420,7 @@ export const ItemLifecyclePayload = Schema.Struct({
   status: Schema.optional(RuntimeItemStatus),
   title: Schema.optional(TrimmedNonEmptyStringSchema),
   detail: Schema.optional(TrimmedNonEmptyStringSchema),
+  fileChanges: Schema.optional(Schema.Array(ProviderFileMutation)),
   data: Schema.optional(Schema.Unknown),
 });
 export type ItemLifecyclePayload = typeof ItemLifecyclePayload.Type;

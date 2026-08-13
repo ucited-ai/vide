@@ -37,6 +37,7 @@ import {
   isSameOpenCodeDirectory,
   makeOpenCodeAdapter,
   mergeOpenCodeAssistantText,
+  openCodeFileMutations,
 } from "./OpenCodeAdapter.ts";
 
 // Test-local service tag so the rest of the file can keep using `yield* OpenCodeAdapter`.
@@ -1066,6 +1067,32 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
         ["Hello", "lo world", ""],
       );
       NodeAssert.equal(secondUpdate.latestText, "Hellolo world");
+    }),
+  );
+
+  it.effect("normalizes OpenCode session diffs into canonical file mutations", () =>
+    Effect.sync(() => {
+      NodeAssert.deepEqual(
+        openCodeFileMutations([
+          {
+            file: "src/app.ts",
+            status: "modified",
+            additions: 1,
+            deletions: 1,
+            patch: "@@ -1 +1 @@\n-old\n+new",
+          },
+        ]),
+        [
+          {
+            path: "src/app.ts",
+            kind: "modified",
+            additions: 1,
+            deletions: 1,
+            patch:
+              "diff --git a/src/app.ts b/src/app.ts\n--- a/src/app.ts\n+++ b/src/app.ts\n@@ -1 +1 @@\n-old\n+new",
+          },
+        ],
+      );
     }),
   );
 

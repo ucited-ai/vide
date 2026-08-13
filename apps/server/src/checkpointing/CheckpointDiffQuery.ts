@@ -20,6 +20,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
+import * as SqlClient from "effect/unstable/sql/SqlClient";
 
 import * as ProjectionSnapshotQuery from "../orchestration/Services/ProjectionSnapshotQuery.ts";
 import {
@@ -32,6 +33,7 @@ import {
 import type { CheckpointServiceError } from "./Errors.ts";
 import { checkpointRefForThreadTurn } from "./Utils.ts";
 import * as CheckpointStore from "./CheckpointStore.ts";
+import { makeTurnChangeSetStore } from "./TurnChangeSetStore.ts";
 
 /** Service tag for checkpoint diff queries. */
 export class CheckpointDiffQuery extends Context.Service<
@@ -78,6 +80,7 @@ function buildTurnDiffResult(
 export const make = Effect.gen(function* () {
   const projectionSnapshotQuery = yield* ProjectionSnapshotQuery.ProjectionSnapshotQuery;
   const checkpointStore = yield* CheckpointStore.CheckpointStore;
+  const turnChangeSetStore = makeTurnChangeSetStore(yield* SqlClient.SqlClient);
 
   const getTurnDiff: CheckpointDiffQuery["Service"]["getTurnDiff"] = Effect.fn("getTurnDiff")(
     function* (input) {
@@ -127,6 +130,20 @@ export const make = Effect.gen(function* () {
           requestedTurnCount: input.toTurnCount,
           availableTurnCount: maxTurnCount,
         });
+      }
+
+      const storedChangeSet = yield* turnChangeSetStore.get(input).pipe(
+        Effect.catch((error) =>
+          Effect.logWarning("failed to read stored turn change set", {
+            threadId: input.threadId,
+            fromTurnCount: input.fromTurnCount,
+            toTurnCount: input.toTurnCount,
+            detail: error.message,
+          }).pipe(Effect.as(Option.none())),
+        ),
+      );
+      if (Option.isSome(storedChangeSet)) {
+        return buildTurnDiffResult(input, storedChangeSet.value.diff);
       }
 
       const workspaceCwd = threadContext.value.worktreePath ?? threadContext.value.workspaceRoot;
@@ -235,6 +252,28 @@ export const make = Effect.gen(function* () {
         requestedTurnCount: input.toTurnCount,
         availableTurnCount: threadContext.value.latestCheckpointTurnCount,
       });
+    }
+
+    const storedChangeSet = yield* turnChangeSetStore
+      .get({
+        threadId: input.threadId,
+        fromTurnCount: 0,
+        toTurnCount: input.toTurnCount,
+      })
+      .pipe(
+        Effect.catch((error) =>
+          Effect.logWarning("failed to read stored session change set", {
+            threadId: input.threadId,
+            toTurnCount: input.toTurnCount,
+            detail: error.message,
+          }).pipe(Effect.as(Option.none())),
+        ),
+      );
+    if (Option.isSome(storedChangeSet)) {
+      return buildTurnDiffResult(
+        { threadId: input.threadId, fromTurnCount: 0, toTurnCount: input.toTurnCount },
+        storedChangeSet.value.diff,
+      );
     }
 
     const workspaceCwd = threadContext.value.worktreePath ?? threadContext.value.workspaceRoot;

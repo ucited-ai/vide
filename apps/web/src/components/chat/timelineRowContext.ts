@@ -37,6 +37,7 @@ export interface TimelineRowSharedState {
   onImageExpand: (preview: ExpandedImagePreview) => void;
   onOpenTurnDiff: (turnId: TurnId, filePath?: string) => void;
   onToggleTurnFold: (turnId: TurnId) => void;
+  onOpenSubagent: (agentId: string) => void;
   /**
    * Open/closed state of work groups and their calls, by row/entry id. A row's
    * own useState dies when the row leaves the virtualizer's buffer, and an

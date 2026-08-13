@@ -3,6 +3,7 @@ import { it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as SqlClient from "effect/unstable/sql/SqlClient";
 import { describe, expect } from "vite-plus/test";
 
 import * as ProjectionSnapshotQuery from "../orchestration/Services/ProjectionSnapshotQuery.ts";
@@ -10,6 +11,8 @@ import { checkpointRefForThreadTurn } from "./Utils.ts";
 import * as CheckpointDiffQuery from "./CheckpointDiffQuery.ts";
 import * as CheckpointStore from "./CheckpointStore.ts";
 import { CheckpointThreadNotFoundError } from "./Errors.ts";
+import { SqlitePersistenceMemory } from "../persistence/Layers/Sqlite.ts";
+import { makeTurnChangeSetStore } from "./TurnChangeSetStore.ts";
 
 function makeThreadCheckpointContext(input: {
   readonly projectId: ProjectId;
@@ -39,6 +42,69 @@ function makeThreadCheckpointContext(input: {
 }
 
 describe("CheckpointDiffQuery.layer", () => {
+  it.effect("prefers the persisted semantic change set over the ambient checkpoint diff", () =>
+    Effect.gen(function* () {
+      const projectId = ProjectId.make("project-semantic-diff");
+      const threadId = ThreadId.make("thread-semantic-diff");
+      const toCheckpointRef = checkpointRefForThreadTurn(threadId, 1);
+      const checkpointStore: CheckpointStore.CheckpointStore["Service"] = {
+        isGitRepository: () => Effect.succeed(true),
+        captureCheckpoint: () => Effect.void,
+        hasCheckpointRef: () => Effect.succeed(true),
+        restoreCheckpoint: () => Effect.succeed(true),
+        diffCheckpoints: () => Effect.die("ambient checkpoint diff must not be queried"),
+        deleteCheckpointRefs: () => Effect.void,
+      };
+      const layer = CheckpointDiffQuery.layer.pipe(
+        Layer.provideMerge(SqlitePersistenceMemory),
+        Layer.provideMerge(Layer.succeed(CheckpointStore.CheckpointStore, checkpointStore)),
+        Layer.provideMerge(
+          Layer.succeed(ProjectionSnapshotQuery.ProjectionSnapshotQuery, {
+            getCommandReadModel: () => Effect.die("unused"),
+            getSnapshot: () => Effect.die("unused"),
+            getShellSnapshot: () => Effect.die("unused"),
+            getArchivedShellSnapshot: () => Effect.die("unused"),
+            getSnapshotSequence: () => Effect.succeed({ snapshotSequence: 0 }),
+            getCounts: () => Effect.succeed({ projectCount: 0, threadCount: 0 }),
+            getActiveProjectByWorkspaceRoot: () => Effect.succeed(Option.none()),
+            getProjectShellById: () => Effect.succeed(Option.none()),
+            getFirstActiveThreadIdByProjectId: () => Effect.succeed(Option.none()),
+            getThreadCheckpointContext: () => Effect.succeed(Option.none()),
+            getFullThreadDiffContext: () =>
+              Effect.succeed(
+                Option.some({
+                  threadId,
+                  projectId,
+                  workspaceRoot: "/tmp/workspace",
+                  worktreePath: null,
+                  latestCheckpointTurnCount: 1,
+                  toCheckpointRef,
+                }),
+              ),
+            getThreadShellById: () => Effect.succeed(Option.none()),
+            getThreadDetailById: () => Effect.succeed(Option.none()),
+            getThreadDetailSnapshot: () => Effect.succeed(Option.none()),
+          }),
+        ),
+      );
+
+      const result = yield* Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        yield* makeTurnChangeSetStore(sql).putTurn({
+          threadId,
+          fromTurnCount: 0,
+          toTurnCount: 1,
+          diff: "provider-attributed patch",
+          createdAt: "2026-08-05T12:00:00.000Z",
+        });
+        const query = yield* CheckpointDiffQuery.CheckpointDiffQuery;
+        return yield* query.getFullThreadDiff({ threadId, toTurnCount: 1 });
+      }).pipe(Effect.provide(layer));
+
+      expect(result.diff).toBe("provider-attributed patch");
+    }),
+  );
+
   it.effect("uses the narrow full-thread context lookup for all-turns diffs", () =>
     Effect.gen(function* () {
       const projectId = ProjectId.make("project-full-thread");
@@ -72,6 +138,7 @@ describe("CheckpointDiffQuery.layer", () => {
       };
 
       const layer = CheckpointDiffQuery.layer.pipe(
+        Layer.provideMerge(SqlitePersistenceMemory),
         Layer.provideMerge(Layer.succeed(CheckpointStore.CheckpointStore, checkpointStore)),
         Layer.provideMerge(
           Layer.succeed(ProjectionSnapshotQuery.ProjectionSnapshotQuery, {
@@ -180,6 +247,7 @@ describe("CheckpointDiffQuery.layer", () => {
       };
 
       const layer = CheckpointDiffQuery.layer.pipe(
+        Layer.provideMerge(SqlitePersistenceMemory),
         Layer.provideMerge(Layer.succeed(CheckpointStore.CheckpointStore, checkpointStore)),
         Layer.provideMerge(
           Layer.succeed(ProjectionSnapshotQuery.ProjectionSnapshotQuery, {
@@ -263,6 +331,7 @@ describe("CheckpointDiffQuery.layer", () => {
       };
 
       const layer = CheckpointDiffQuery.layer.pipe(
+        Layer.provideMerge(SqlitePersistenceMemory),
         Layer.provideMerge(Layer.succeed(CheckpointStore.CheckpointStore, checkpointStore)),
         Layer.provideMerge(
           Layer.succeed(ProjectionSnapshotQuery.ProjectionSnapshotQuery, {
@@ -331,6 +400,7 @@ describe("CheckpointDiffQuery.layer", () => {
       };
 
       const layer = CheckpointDiffQuery.layer.pipe(
+        Layer.provideMerge(SqlitePersistenceMemory),
         Layer.provideMerge(Layer.succeed(CheckpointStore.CheckpointStore, checkpointStore)),
         Layer.provideMerge(
           Layer.succeed(ProjectionSnapshotQuery.ProjectionSnapshotQuery, {
@@ -384,6 +454,7 @@ describe("CheckpointDiffQuery.layer", () => {
       };
 
       const layer = CheckpointDiffQuery.layer.pipe(
+        Layer.provideMerge(SqlitePersistenceMemory),
         Layer.provideMerge(Layer.succeed(CheckpointStore.CheckpointStore, checkpointStore)),
         Layer.provideMerge(
           Layer.succeed(ProjectionSnapshotQuery.ProjectionSnapshotQuery, {

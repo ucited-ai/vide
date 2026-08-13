@@ -22,6 +22,7 @@ import {
   RuntimeMode,
 } from "./orchestration.ts";
 import { ProviderInstanceId, ProviderDriverKind } from "./providerInstance.ts";
+import { ProviderAgentAttribution } from "./providerAgent.ts";
 
 const ProviderSessionStatus = Schema.Literals([
   "connecting",
@@ -126,6 +127,7 @@ export const ProviderEvent = Schema.Struct({
   requestId: Schema.optional(ApprovalRequestId),
   requestKind: Schema.optional(ProviderRequestKind),
   textDelta: Schema.optional(Schema.String),
+  agent: Schema.optional(ProviderAgentAttribution),
   payload: Schema.optional(Schema.Unknown),
 });
 export type ProviderEvent = typeof ProviderEvent.Type;

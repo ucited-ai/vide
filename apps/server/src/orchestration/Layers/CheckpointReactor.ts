@@ -7,6 +7,7 @@ import {
   ThreadId,
   TurnId,
   type OrchestrationEvent,
+  type OrchestrationCheckpointFile,
   type ProviderRuntimeEvent,
 } from "@vide/contracts";
 import * as Cause from "effect/Cause";
@@ -50,26 +51,6 @@ type ReactorInput =
 
 function toTurnId(value: string | undefined): TurnId | null {
   return value === undefined ? null : TurnId.make(String(value));
-}
-
-function sameId(left: string | null | undefined, right: string | null | undefined): boolean {
-  if (left === null || left === undefined || right === null || right === undefined) {
-    return false;
-  }
-  return left === right;
-}
-
-function checkpointStatusFromRuntime(status: string | undefined): "ready" | "missing" | "error" {
-  switch (status) {
-    case "failed":
-      return "error";
-    case "cancelled":
-    case "interrupted":
-      return "missing";
-    case "completed":
-    default:
-      return "ready";
-  }
 }
 
 const make = Effect.gen(function* () {
@@ -229,6 +210,7 @@ const make = Effect.gen(function* () {
     readonly turnCount: number;
     readonly status: "ready" | "missing" | "error";
     readonly assistantMessageId: MessageId | undefined;
+    readonly semanticFiles?: ReadonlyArray<OrchestrationCheckpointFile>;
     readonly createdAt: string;
   }) {
     const fromTurnCount = Math.max(0, input.turnCount - 1);
@@ -256,40 +238,42 @@ const make = Effect.gen(function* () {
     // reflects files created or deleted during this turn.
     yield* workspaceEntries.refresh(input.cwd);
 
-    const files = yield* checkpointStore
-      .diffCheckpoints({
-        cwd: input.cwd,
-        fromCheckpointRef,
-        toCheckpointRef: targetCheckpointRef,
-        fallbackFromToHead: false,
-        ignoreWhitespace: false,
-      })
-      .pipe(
-        Effect.map((diff) =>
-          parseTurnDiffFilesFromUnifiedDiff(diff).map((file) => ({
-            path: file.path,
-            kind: "modified" as const,
-            additions: file.additions,
-            deletions: file.deletions,
-          })),
-        ),
-        Effect.tapError((error) =>
-          appendCaptureFailureActivity({
-            threadId: input.threadId,
-            turnId: input.turnId,
-            detail: `Checkpoint captured, but turn diff summary is unavailable: ${error.message}`,
-            createdAt: input.createdAt,
-          }),
-        ),
-        Effect.catch((error) =>
-          Effect.logWarning("failed to derive checkpoint file summary", {
-            threadId: input.threadId,
-            turnId: input.turnId,
-            turnCount: input.turnCount,
-            detail: error.message,
-          }).pipe(Effect.as([])),
-        ),
-      );
+    const files = input.semanticFiles
+      ? [...input.semanticFiles]
+      : yield* checkpointStore
+          .diffCheckpoints({
+            cwd: input.cwd,
+            fromCheckpointRef,
+            toCheckpointRef: targetCheckpointRef,
+            fallbackFromToHead: false,
+            ignoreWhitespace: false,
+          })
+          .pipe(
+            Effect.map((diff) =>
+              parseTurnDiffFilesFromUnifiedDiff(diff).map((file) => ({
+                path: file.path,
+                kind: "modified" as const,
+                additions: file.additions,
+                deletions: file.deletions,
+              })),
+            ),
+            Effect.tapError((error) =>
+              appendCaptureFailureActivity({
+                threadId: input.threadId,
+                turnId: input.turnId,
+                detail: `Checkpoint captured, but turn diff summary is unavailable: ${error.message}`,
+                createdAt: input.createdAt,
+              }),
+            ),
+            Effect.catch((error) =>
+              Effect.logWarning("failed to derive checkpoint file summary", {
+                threadId: input.threadId,
+                turnId: input.turnId,
+                turnCount: input.turnCount,
+                detail: error.message,
+              }).pipe(Effect.as([])),
+            ),
+          );
 
     const assistantMessageId =
       input.assistantMessageId ??
@@ -348,80 +332,12 @@ const make = Effect.gen(function* () {
     });
   });
 
-  // Captures a real git checkpoint when a turn completes via a runtime event.
-  const captureCheckpointFromTurnCompletion = Effect.fn("captureCheckpointFromTurnCompletion")(
-    function* (event: Extract<ProviderRuntimeEvent, { type: "turn.completed" }>) {
-      const turnId = toTurnId(event.turnId);
-      if (!turnId) {
-        return;
-      }
-
-      const thread = yield* resolveThreadDetail(event.threadId);
-      if (!thread) {
-        return;
-      }
-
-      // When a primary turn is active, only that turn may produce completion checkpoints.
-      if (thread.session?.activeTurnId && !sameId(thread.session.activeTurnId, turnId)) {
-        return;
-      }
-
-      // Only skip if a real (non-placeholder) checkpoint already exists for this turn.
-      // ProviderRuntimeIngestion may insert placeholder entries with status "missing"
-      // before this reactor runs; those must not prevent real git capture.
-      if (
-        thread.checkpoints.some(
-          (checkpoint) => checkpoint.turnId === turnId && checkpoint.status !== "missing",
-        )
-      ) {
-        return;
-      }
-
-      const projects = yield* resolveThreadProjects(thread.projectId);
-      const checkpointCwd = yield* resolveCheckpointCwd({
-        threadId: thread.id,
-        thread,
-        projects,
-        preferSessionRuntime: true,
-      });
-      if (!checkpointCwd) {
-        return;
-      }
-
-      // If a placeholder checkpoint exists for this turn, reuse its turn count
-      // instead of incrementing past it.
-      const existingPlaceholder = thread.checkpoints.find(
-        (checkpoint) => checkpoint.turnId === turnId && checkpoint.status === "missing",
-      );
-      const currentTurnCount = thread.checkpoints.reduce(
-        (maxTurnCount, checkpoint) => Math.max(maxTurnCount, checkpoint.checkpointTurnCount),
-        0,
-      );
-      const nextTurnCount = existingPlaceholder
-        ? existingPlaceholder.checkpointTurnCount
-        : currentTurnCount + 1;
-
-      yield* captureAndDispatchCheckpoint({
-        threadId: thread.id,
-        turnId,
-        thread,
-        cwd: checkpointCwd,
-        turnCount: nextTurnCount,
-        status: checkpointStatusFromRuntime(event.payload.state),
-        assistantMessageId: undefined,
-        createdAt: event.createdAt,
-      });
-    },
-  );
-
-  // Captures a real git checkpoint when a placeholder checkpoint (status "missing")
+  // Captures a real git checkpoint when a semantic placeholder (status "missing")
   // is detected via a domain event. This replaces the placeholder with a real
-  // git-ref-based checkpoint.
-  //
-  // ProviderRuntimeIngestion creates placeholder checkpoints on turn.diff.updated
-  // events from the Codex runtime. This handler fires when the corresponding
-  // domain event arrives, allowing the reactor to capture the actual filesystem
-  // state into a git ref and dispatch a replacement checkpoint.
+  // git-ref-based rollback checkpoint.
+  // ProviderRuntimeIngestion emits one semantic placeholder after the turn is
+  // complete. This handler captures the filesystem state for rollback while
+  // preserving the provider-attributed files carried by that placeholder.
   const captureCheckpointFromPlaceholder = Effect.fn("captureCheckpointFromPlaceholder")(function* (
     event: Extract<OrchestrationEvent, { type: "thread.turn-diff-completed" }>,
   ) {
@@ -472,6 +388,7 @@ const make = Effect.gen(function* () {
       turnCount: checkpointTurnCount,
       status: "ready",
       assistantMessageId: event.payload.assistantMessageId ?? undefined,
+      semanticFiles: event.payload.files,
       createdAt: event.payload.completedAt,
     });
   });
@@ -759,11 +676,9 @@ const make = Effect.gen(function* () {
       return;
     }
 
-    // When ProviderRuntimeIngestion creates a placeholder checkpoint (status "missing")
-    // from a turn.diff.updated runtime event, capture the real git checkpoint to
-    // replace it. The providerService.streamEvents PubSub does not reliably deliver
-    // turn.completed runtime events to this reactor (shared subscription), so
-    // reacting to the domain event is the reliable path.
+    // ProviderRuntimeIngestion emits the completed semantic TurnChangeSet as a
+    // placeholder. Capture the corresponding rollback ref without recomputing its
+    // file attribution from the shared working tree.
     if (event.type === "thread.turn-diff-completed") {
       yield* captureCheckpointFromPlaceholder(event).pipe(
         Effect.catch((error) =>
@@ -789,20 +704,7 @@ const make = Effect.gen(function* () {
     }
 
     if (event.type === "turn.completed") {
-      const turnId = toTurnId(event.turnId);
       yield* refreshLocalGitStatusFromTurnCompletion(event);
-      yield* captureCheckpointFromTurnCompletion(event).pipe(
-        Effect.catch((error) =>
-          Effect.flatMap(nowIso, (createdAt) =>
-            appendCaptureFailureActivity({
-              threadId: event.threadId,
-              turnId,
-              detail: error.message,
-              createdAt,
-            }).pipe(Effect.catch(() => Effect.void)),
-          ),
-        ),
-      );
       return;
     }
   });

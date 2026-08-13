@@ -21,6 +21,7 @@ import {
   TurnId,
 } from "./baseSchemas.ts";
 import { ProviderInstanceId } from "./providerInstance.ts";
+import { ProviderAgentAttribution } from "./providerAgent.ts";
 
 export const ORCHESTRATION_WS_METHODS = {
   dispatchCommand: "orchestration.dispatchCommand",
@@ -230,6 +231,7 @@ export const OrchestrationMessage = Schema.Struct({
   role: OrchestrationMessageRole,
   text: Schema.String,
   attachments: Schema.optional(Schema.Array(ChatAttachment)),
+  agent: Schema.optional(ProviderAgentAttribution),
   turnId: Schema.NullOr(TurnId),
   streaming: Schema.Boolean,
   createdAt: IsoDateTime,
@@ -317,6 +319,7 @@ export const OrchestrationThreadActivity = Schema.Struct({
   kind: TrimmedNonEmptyString,
   summary: TrimmedNonEmptyString,
   payload: Schema.Unknown,
+  agent: Schema.optional(ProviderAgentAttribution),
   turnId: Schema.NullOr(TurnId),
   sequence: Schema.optional(NonNegativeInt),
   createdAt: IsoDateTime,
@@ -829,6 +832,7 @@ const ThreadMessageAssistantDeltaCommand = Schema.Struct({
   threadId: ThreadId,
   messageId: MessageId,
   delta: Schema.String,
+  agent: Schema.optional(ProviderAgentAttribution),
   turnId: Schema.optional(TurnId),
   createdAt: IsoDateTime,
 });
@@ -838,6 +842,7 @@ const ThreadMessageAssistantCompleteCommand = Schema.Struct({
   commandId: CommandId,
   threadId: ThreadId,
   messageId: MessageId,
+  agent: Schema.optional(ProviderAgentAttribution),
   turnId: Schema.optional(TurnId),
   createdAt: IsoDateTime,
 });
@@ -1058,6 +1063,7 @@ export const ThreadMessageSentPayload = Schema.Struct({
   role: OrchestrationMessageRole,
   text: Schema.String,
   attachments: Schema.optional(Schema.Array(ChatAttachment)),
+  agent: Schema.optional(ProviderAgentAttribution),
   turnId: Schema.NullOr(TurnId),
   streaming: Schema.Boolean,
   createdAt: IsoDateTime,

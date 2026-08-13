@@ -6,6 +6,7 @@ import {
   type WorkLogEntry,
 } from "../../session-logic";
 import { type ChatMessage, type ProposedPlan, type TurnDiffSummary } from "../../types";
+import { type SubagentSummary } from "../../subagentActivity";
 import {
   type MessageId,
   type OrchestrationLatestTurn,
@@ -223,6 +224,7 @@ export type MessagesTimelineRow =
       id: "turn-tail:live";
       createdAt: string | null;
       label: string;
+      groupedEntries: WorkLogEntry[];
     }
   | {
       kind: "message";
@@ -239,6 +241,18 @@ export type MessagesTimelineRow =
       isLiveThought: boolean;
       assistantTurnDiffSummary?: TurnDiffSummary | undefined;
       revertTurnCount?: number | undefined;
+    }
+  | {
+      kind: "subagents-started";
+      id: string;
+      createdAt: string;
+      agents: ReadonlyArray<SubagentSummary>;
+    }
+  | {
+      kind: "subagent-finished";
+      id: string;
+      createdAt: string;
+      agent: SubagentSummary;
     }
   | {
       kind: "proposed-plan";
@@ -357,6 +371,7 @@ export function workEntryHeading(entry: Pick<WorkLogEntry, "label" | "toolTitle"
 const LIVE_WORK_ITEM_TYPE_LABELS: Readonly<Record<ToolLifecycleItemType, string>> = {
   command_execution: "Running command",
   file_change: "Editing files",
+  file_read: "Reading files",
   mcp_tool_call: "Calling tool",
   dynamic_tool_call: "Calling tool",
   collab_agent_tool_call: "Delegating work",
@@ -614,6 +629,7 @@ export function deriveMessagesTimelineRows(input: {
   revertTurnCountByUserMessageId: ReadonlyMap<MessageId, number>;
   /** What the thread last failed with, if anything. Hung on the turn it ended. */
   threadError?: string | null | undefined;
+  subagents?: ReadonlyArray<SubagentSummary>;
 }): MessagesTimelineRow[] {
   const nextRows: MessagesTimelineRow[] = [];
   const durationStartByMessageId = computeMessageDurationStart(
@@ -801,7 +817,7 @@ export function deriveMessagesTimelineRows(input: {
   attachThreadError(nextRows, input.threadError ?? null);
   const settled = settleWorkRows(markLiveTail(nextRows, liveHead !== null));
   if (liveHead === null) {
-    return settled;
+    return insertSubagentRows(settled, input.subagents ?? []);
   }
   /*
    * The live work group does not render as a row of its own: the status line
@@ -811,25 +827,90 @@ export function deriveMessagesTimelineRows(input: {
    * still in the timeline; they surface as one settled row the moment the
    * group stops being the tail (next thought, or turn end).
    */
-  const lastRow = settled.at(-1);
-  const visible =
-    lastRow !== undefined && lastRow.kind === "work" && lastRow.live
-      ? settled.slice(0, -1)
-      : settled;
+  const liveWorkRows = settled.filter(
+    (row): row is Extract<MessagesTimelineRow, { kind: "work" }> =>
+      row.kind === "work" &&
+      (liveHead.turnId === null
+        ? row.live
+        : row.groupedEntries.some((entry) => entry.turnId === liveHead.turnId)),
+  );
+  const liveWorkRowIds = new Set(liveWorkRows.map((row) => row.id));
+  const liveGroupedEntries = liveWorkRows.flatMap((row) => row.groupedEntries);
+  // While a turn runs, its one tail owns the whole call list. Commentary may
+  // arrive between calls without collapsing or resetting that list. Once the
+  // final answer lands the ordinary historical work rows return.
+  const visible = settled.filter((row) => !liveWorkRowIds.has(row.id));
   /*
    * The animated reading of the turn, at its bottom. One constant id: exactly
    * one exists at a time, and a constant id is what stops it remounting when
    * the server assigns the turn its real id mid-flight.
    */
   return [
-    ...visible,
+    ...insertSubagentRows(visible, input.subagents ?? []),
     {
       kind: "turn-tail",
       id: "turn-tail:live",
       createdAt: input.activeTurnStartedAt,
       label: liveHead.label,
+      groupedEntries: liveGroupedEntries,
     },
   ];
+}
+
+function insertSubagentRows(
+  rows: ReadonlyArray<MessagesTimelineRow>,
+  subagents: ReadonlyArray<SubagentSummary>,
+): MessagesTimelineRow[] {
+  type SubagentRow = Extract<
+    MessagesTimelineRow,
+    { kind: "subagents-started" | "subagent-finished" }
+  >;
+  const spawnGroups = new Map<string, SubagentSummary[]>();
+  for (const agent of subagents) {
+    const key = agent.agent.parentToolUseId ?? agent.startedAt;
+    const group = spawnGroups.get(key);
+    if (group) group.push(agent);
+    else spawnGroups.set(key, [agent]);
+  }
+  const agentRows: SubagentRow[] = [];
+  for (const [groupId, agents] of spawnGroups) {
+    const first = agents[0];
+    if (!first) continue;
+    agentRows.push({
+      kind: "subagents-started",
+      id: `subagents-started:${groupId}`,
+      createdAt: agents.reduce(
+        (earliest, agent) =>
+          agent.startedAt.localeCompare(earliest) < 0 ? agent.startedAt : earliest,
+        first.startedAt,
+      ),
+      agents,
+    });
+  }
+  for (const agent of subagents) {
+    if (!agent.finishedAt) continue;
+    agentRows.push({
+      kind: "subagent-finished",
+      id: `subagent-finished:${agent.agent.agentId}`,
+      createdAt: agent.finishedAt,
+      agent,
+    });
+  }
+  if (agentRows.length === 0) return [...rows];
+  const pending = agentRows.toSorted((left, right) =>
+    left.createdAt.localeCompare(right.createdAt),
+  );
+  const merged: MessagesTimelineRow[] = [];
+  let eventIndex = 0;
+  for (const row of rows) {
+    while (pending[eventIndex] && pending[eventIndex]!.createdAt < (row.createdAt ?? "")) {
+      merged.push(pending[eventIndex]!);
+      eventIndex += 1;
+    }
+    merged.push(row);
+  }
+  merged.push(...pending.slice(eventIndex));
+  return merged;
 }
 
 /**
@@ -953,11 +1034,21 @@ function isRowUnchanged(a: MessagesTimelineRow, b: MessagesTimelineRow): boolean
 
     case "turn-tail": {
       const bt = b as typeof a;
-      return a.createdAt === bt.createdAt && a.label === bt.label;
+      return (
+        a.createdAt === bt.createdAt &&
+        a.label === bt.label &&
+        Equal.equals(a.groupedEntries, bt.groupedEntries)
+      );
     }
 
     case "proposed-plan":
       return a.proposedPlan === (b as typeof a).proposedPlan;
+
+    case "subagents-started":
+      return Equal.equals(a.agents, (b as typeof a).agents);
+
+    case "subagent-finished":
+      return Equal.equals(a.agent, (b as typeof a).agent);
 
     case "work": {
       const bw = b as typeof a;

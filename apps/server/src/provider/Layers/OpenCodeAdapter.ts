@@ -2,6 +2,7 @@ import {
   EventId,
   type OpenCodeSettings,
   ProviderDriverKind,
+  type ProviderFileMutation,
   ProviderInstanceId,
   type ProviderRuntimeEvent,
   type ProviderSession,
@@ -23,7 +24,13 @@ import * as Queue from "effect/Queue";
 import * as Ref from "effect/Ref";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
-import type { OpencodeClient, Part, PermissionRequest, QuestionRequest } from "@opencode-ai/sdk/v2";
+import type {
+  OpencodeClient,
+  Part,
+  PermissionRequest,
+  QuestionRequest,
+  SnapshotFileDiff,
+} from "@opencode-ai/sdk/v2";
 import { getModelSelectionStringOptionValue } from "@vide/shared/model";
 
 import { resolveAttachmentPath } from "../../attachmentStore.ts";
@@ -213,6 +220,7 @@ interface OpenCodeSessionContext {
   readonly pendingPermissions: Map<string, PermissionRequest>;
   readonly pendingQuestions: Map<string, QuestionRequest>;
   readonly messageRoleById: Map<string, "user" | "assistant">;
+  readonly userMessageIdByTurnId: Map<string, string>;
   readonly partById: Map<string, Part>;
   readonly emittedTextByPartId: Map<string, string>;
   readonly completedAssistantPartIds: Set<string>;
@@ -235,6 +243,41 @@ interface OpenCodeSessionContext {
    *   - tears down the OpenCode server process for scope-owned servers.
    */
   readonly sessionScope: Scope.Closeable;
+}
+
+function ensureOpenCodeUnifiedPatch(
+  path: string,
+  patch: string,
+  kind: ProviderFileMutation["kind"],
+): string {
+  const trimmed = patch.trim();
+  if (trimmed.startsWith("diff --git ")) return trimmed;
+  const beforePath = kind === "created" ? "/dev/null" : `a/${path}`;
+  const afterPath = kind === "deleted" ? "/dev/null" : `b/${path}`;
+  return [`diff --git a/${path} b/${path}`, `--- ${beforePath}`, `+++ ${afterPath}`, trimmed].join(
+    "\n",
+  );
+}
+
+export function openCodeFileMutations(
+  diffs: ReadonlyArray<SnapshotFileDiff>,
+): ReadonlyArray<ProviderFileMutation> {
+  return diffs.flatMap((diff) => {
+    const path = diff.file?.trim();
+    if (!path) return [];
+    const kind =
+      diff.status === "added" ? "created" : diff.status === "deleted" ? "deleted" : "modified";
+    const patch = diff.patch?.trim();
+    return [
+      {
+        path,
+        kind,
+        additions: diff.additions,
+        deletions: diff.deletions,
+        ...(patch ? { patch: ensureOpenCodeUnifiedPatch(path, patch, kind) } : {}),
+      } satisfies ProviderFileMutation,
+    ];
+  });
 }
 
 export interface OpenCodeAdapterLiveOptions {
@@ -827,6 +870,9 @@ export function makeOpenCodeAdapter(
 
         case "message.updated": {
           context.messageRoleById.set(event.properties.info.id, event.properties.info.role);
+          if (event.properties.info.role === "user" && turnId) {
+            context.userMessageIdByTurnId.set(turnId, event.properties.info.id);
+          }
           if (event.properties.info.role === "assistant") {
             for (const part of context.partById.values()) {
               if (part.messageID !== event.properties.info.id) {
@@ -1057,6 +1103,38 @@ export function makeOpenCodeAdapter(
           }
 
           if (event.properties.status.type === "idle" && turnId) {
+            const messageID = context.userMessageIdByTurnId.get(turnId);
+            const diffResponse = yield* runOpenCodeSdk("session.diff", () =>
+              context.client.session.diff({
+                sessionID: context.openCodeSessionId,
+                ...(messageID ? { messageID } : {}),
+              }),
+            ).pipe(
+              Effect.map((response) => response.data ?? []),
+              Effect.catch((error) =>
+                Effect.logWarning("failed to read OpenCode turn diff", {
+                  threadId: context.session.threadId,
+                  turnId,
+                  detail: openCodeRuntimeErrorDetail(error),
+                }).pipe(Effect.as([] as ReadonlyArray<SnapshotFileDiff>)),
+              ),
+            );
+            const fileChanges = openCodeFileMutations(diffResponse);
+            yield* emit({
+              ...(yield* buildEventBase({
+                threadId: context.session.threadId,
+                turnId,
+                raw: event,
+              })),
+              type: "turn.diff.updated",
+              payload: {
+                unifiedDiff: fileChanges
+                  .flatMap((change) => (change.patch ? [change.patch] : []))
+                  .join("\n"),
+                fileChanges,
+              },
+            });
+            context.userMessageIdByTurnId.delete(turnId);
             context.activeTurnId = undefined;
             yield* updateProviderSession(context, { status: "ready" }, { clearActiveTurnId: true });
             yield* emit({
@@ -1379,6 +1457,7 @@ export function makeOpenCodeAdapter(
           partById: new Map(),
           emittedTextByPartId: new Map(),
           messageRoleById: new Map(),
+          userMessageIdByTurnId: new Map(),
           completedAssistantPartIds: new Set(),
           turns: [],
           activeTurnId: undefined,

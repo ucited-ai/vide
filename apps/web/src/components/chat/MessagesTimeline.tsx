@@ -53,6 +53,8 @@ import {
 import { TurnHeadRow } from "./TurnHeadRow";
 import { TurnTailRow } from "./TurnTailRow";
 import { WorkGroupRow } from "./WorkGroupRow";
+import { SubagentFinishedRow, SubagentsStartedRow } from "./SubagentRow";
+import { type SubagentSummary } from "../../subagentActivity";
 import { TerminalContextInlineChip } from "./TerminalContextInlineChip";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import {
@@ -90,6 +92,8 @@ const TIMELINE_LIST_HEADER = <div className="h-3 sm:h-4" />;
 const TIMELINE_LIST_FADE_HEADER = <div className="h-10 sm:h-12" />;
 const TIMELINE_LIST_FOOTER = <div className="h-3 sm:h-4" />;
 const EMPTY_TIMELINE_SKILLS: ReadonlyArray<Pick<ServerProviderSkill, "name" | "displayName">> = [];
+const EMPTY_SUBAGENTS: ReadonlyArray<SubagentSummary> = [];
+const NOOP_OPEN_SUBAGENT = () => undefined;
 
 // ---------------------------------------------------------------------------
 // Props (public API)
@@ -133,6 +137,8 @@ interface MessagesTimelineProps {
   onManualNavigation: () => void;
   hideEmptyPlaceholder?: boolean;
   topFadeEnabled?: boolean;
+  subagents?: ReadonlyArray<SubagentSummary>;
+  onOpenSubagent?: (agentId: string) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -182,6 +188,8 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   onManualNavigation,
   hideEmptyPlaceholder = false,
   topFadeEnabled = false,
+  subagents = EMPTY_SUBAGENTS,
+  onOpenSubagent = NOOP_OPEN_SUBAGENT,
 }: MessagesTimelineProps) {
   const chatAppearance = useChatAppearance();
   const [expandedTurnIds, setExpandedTurnIds] = useState<ReadonlySet<TurnId>>(new Set());
@@ -240,6 +248,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
         turnDiffSummaryByAssistantMessageId,
         revertTurnCountByUserMessageId,
         threadError,
+        subagents,
       }),
     [
       timelineEntries,
@@ -251,6 +260,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       turnDiffSummaryByAssistantMessageId,
       revertTurnCountByUserMessageId,
       threadError,
+      subagents,
     ],
   );
   const rows = useStableRows(rawRows);
@@ -367,6 +377,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       onImageExpand,
       onOpenTurnDiff,
       onToggleTurnFold,
+      onOpenSubagent,
       workRowOpenById,
     }),
     [
@@ -382,6 +393,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       onImageExpand,
       onOpenTurnDiff,
       onToggleTurnFold,
+      onOpenSubagent,
       workRowOpenById,
     ],
   );
@@ -838,6 +850,8 @@ const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: Time
       {row.kind === "work" ? <WorkGroupRow row={row} /> : null}
       {row.kind === "turn-head" ? <TurnHeadRow row={row} /> : null}
       {row.kind === "turn-tail" ? <TurnTailRow row={row} /> : null}
+      {row.kind === "subagents-started" ? <SubagentsStartedRow row={row} /> : null}
+      {row.kind === "subagent-finished" ? <SubagentFinishedRow row={row} /> : null}
       {row.kind === "message" && row.message.role === "user" ? <UserTimelineRow row={row} /> : null}
       {row.kind === "message" && row.message.role === "assistant" ? (
         <AssistantTimelineRow row={row} />

@@ -512,6 +512,54 @@ function startLifecycleRuntime() {
 }
 
 lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
+  it.effect("normalizes Codex file-change items into canonical file mutations", () =>
+    Effect.gen(function* () {
+      const { adapter, runtime } = yield* startLifecycleRuntime();
+      const firstEventFiber = yield* Stream.runHead(adapter.streamEvents).pipe(Effect.forkChild);
+
+      yield* runtime.emit({
+        id: asEventId("evt-file-change-complete"),
+        kind: "notification",
+        provider: ProviderDriverKind.make("codex"),
+        createdAt: "2026-01-01T00:00:00.000Z",
+        method: "item/completed",
+        threadId: asThreadId("thread-1"),
+        turnId: asTurnId("turn-1"),
+        itemId: asItemId("file_1"),
+        payload: {
+          completedAtMs: 1_778_000_000_000,
+          threadId: "thread-1",
+          turnId: "turn-1",
+          item: {
+            type: "fileChange",
+            id: "file_1",
+            status: "completed",
+            changes: [
+              {
+                path: "src/app.ts",
+                kind: { type: "update" },
+                diff: "@@ -1 +1 @@\n-old\n+new",
+              },
+            ],
+          },
+        },
+      } satisfies ProviderEvent);
+
+      const firstEvent = yield* Fiber.join(firstEventFiber);
+      NodeAssert.equal(firstEvent._tag, "Some");
+      if (firstEvent._tag !== "Some" || firstEvent.value.type !== "item.completed") return;
+      NodeAssert.deepEqual(firstEvent.value.payload.fileChanges, [
+        {
+          path: "src/app.ts",
+          kind: "modified",
+          patch: "@@ -1 +1 @@\n-old\n+new",
+          additions: 1,
+          deletions: 1,
+        },
+      ]);
+    }),
+  );
+
   it.effect("maps completed agent message items to canonical item.completed events", () =>
     Effect.gen(function* () {
       const { adapter, runtime } = yield* startLifecycleRuntime();

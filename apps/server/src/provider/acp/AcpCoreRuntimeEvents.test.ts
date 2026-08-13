@@ -117,6 +117,40 @@ describe("AcpCoreRuntimeEvents", () => {
     });
 
     expect(
+      makeAcpToolCallEvent({
+        stamp,
+        provider: ProviderDriverKind.make("cursor"),
+        threadId: "thread-1" as never,
+        turnId,
+        toolCall: {
+          toolCallId: "tool-edit-1",
+          kind: "edit",
+          status: "completed",
+          data: {
+            locations: [{ path: "src/app.ts", line: 3 }],
+            rawOutput: {
+              patch: "@@ -1 +1 @@\n-old\n+new",
+            },
+          },
+        },
+        rawPayload: { sessionId: "session-1" },
+      }),
+    ).toMatchObject({
+      type: "item.completed",
+      payload: {
+        itemType: "file_change",
+        fileChanges: [
+          {
+            path: "src/app.ts",
+            kind: "modified",
+            additions: 1,
+            deletions: 1,
+          },
+        ],
+      },
+    });
+
+    expect(
       makeAcpContentDeltaEvent({
         stamp,
         provider: ProviderDriverKind.make("cursor"),

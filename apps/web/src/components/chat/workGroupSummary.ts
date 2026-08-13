@@ -29,6 +29,8 @@ function workEntryBucket(entry: WorkLogEntry): WorkGroupBucket {
   switch (entry.itemType) {
     case "command_execution":
       return "command";
+    case "file_read":
+      return "read";
     case "file_change":
       return "edit";
     case "web_search":

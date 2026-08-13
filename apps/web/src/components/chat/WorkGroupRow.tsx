@@ -13,17 +13,25 @@ import {
   XIcon,
   ZapIcon,
 } from "lucide-react";
+import { FileDiff } from "@pierre/diffs/react";
 import { memo, use, useState } from "react";
 
 import { cn } from "~/lib/utils";
 import { formatWorkspaceRelativePath, splitWorkspaceRelativePath } from "../../filePathDisplay";
 import {
+  getRenderablePatch,
+  resolveDiffThemeName,
+  resolveFileDiffPath,
+} from "../../lib/diffRendering";
+import {
   workEntryIndicatesToolFailure,
   workLogEntryIsToolLike,
+  type WorkLogFileChange,
   type WorkLogEntry,
 } from "../../session-logic";
 import { ChatGrow } from "./ChatGrow";
 import { ChatSwapText } from "./ChatSwapText";
+import { DiffStatLabel, hasNonZeroStat } from "./DiffStatLabel";
 import {
   normalizeCompactToolLabel,
   workEntryHeading,
@@ -106,12 +114,24 @@ export const WorkGroupRow = memo(function WorkGroupRow({ row }: { row: TimelineW
           grows in place as the agent moves on, so "what is happening" and
           "what happened" are the same view at different moments. */}
       <ChatGrow open={open}>
-        <div className="chat-turn-body pt-0.5 pb-1">
-          {entries.map((entry) => (
-            <WorkCallRow entry={entry} key={entry.id} workspaceRoot={workspaceRoot} />
-          ))}
-        </div>
+        <WorkCallList entries={entries} workspaceRoot={workspaceRoot} />
       </ChatGrow>
+    </div>
+  );
+});
+
+export const WorkCallList = memo(function WorkCallList({
+  entries,
+  workspaceRoot,
+}: {
+  readonly entries: ReadonlyArray<WorkLogEntry>;
+  readonly workspaceRoot: string | undefined;
+}) {
+  return (
+    <div className="chat-turn-body pt-0.5 pb-1">
+      {entries.map((entry) => (
+        <WorkCallRow entry={entry} key={entry.id} workspaceRoot={workspaceRoot} />
+      ))}
     </div>
   );
 });
@@ -119,10 +139,8 @@ export const WorkGroupRow = memo(function WorkGroupRow({ row }: { row: TimelineW
 /**
  * One call: what was run, and what came back.
  *
- * The second line is all the output there is for a command — the server keeps a
- * one-line preview of stdout and drops the rest — so a call that has more to show
- * (an MCP result, the raw command behind a prettified one, the files a patch
- * touched) opens to it rather than pretending the preview was everything.
+ * Calls retain their provider payload. The compact row stays scannable; opening
+ * it reveals command output, inline patches, sources, or structured MCP values.
  */
 function WorkCallRow({
   entry,
@@ -131,7 +149,7 @@ function WorkCallRow({
   readonly entry: WorkLogEntry;
   readonly workspaceRoot: string | undefined;
 }) {
-  const { workRowOpenById } = use(TimelineRowCtx);
+  const { resolvedTheme, workRowOpenById } = use(TimelineRowCtx);
   const [open, setOpenState] = useState(() => workRowOpenById.get(entry.id) ?? false);
   const setOpen = (update: (value: boolean) => boolean) => {
     setOpenState((value) => {
@@ -143,8 +161,10 @@ function WorkCallRow({
   const heading = workEntryHeading(entry);
   const command = entry.rawCommand?.trim() || entry.command?.trim() || null;
   const preview = workEntryPreview(entry, workspaceRoot);
-  const body = workEntryExpandedBody(entry, workspaceRoot);
+  const hasBody = workEntryHasExpandedBody(entry);
   const failed = workEntryIndicatesToolFailure(entry);
+  const fileStat = totalFileStat(entry.fileChanges ?? []);
+  const compactMeta = workEntryCompactMeta(entry);
   const showPreview =
     preview !== null &&
     normalizeCompactToolLabel(preview.text).toLowerCase() !==
@@ -153,15 +173,15 @@ function WorkCallRow({
   return (
     <div className="border-t border-(--edge) first:border-t-0">
       <button
-        aria-expanded={body === null ? undefined : open}
+        aria-expanded={hasBody ? open : undefined}
         className={cn(
           "grid w-full gap-0.5 rounded-(--radius) py-1 text-left",
-          body === null
+          !hasBody
             ? "cursor-default"
             : "cursor-pointer transition-colors hover:bg-(--wash-hover) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70",
         )}
         data-scroll-anchor-ignore
-        disabled={body === null}
+        disabled={!hasBody}
         onClick={() => setOpen((value) => !value)}
         type="button"
       >
@@ -177,6 +197,22 @@ function WorkCallRow({
           {failed ? (
             <XIcon aria-label="Tool call failed" className="size-3 shrink-0 text-destructive" />
           ) : null}
+          <span className="ml-auto flex shrink-0 items-center gap-1.5 text-(length:--text-caption) text-(--ink-tertiary)">
+            {compactMeta ? <span>{compactMeta}</span> : null}
+            {hasNonZeroStat(fileStat) ? (
+              <DiffStatLabel
+                additions={fileStat.additions}
+                deletions={fileStat.deletions}
+                layout="inline"
+              />
+            ) : null}
+            {hasBody ? (
+              <ChevronRightIcon
+                aria-hidden
+                className={cn("size-3 shrink-0 transition-transform", open && "rotate-90")}
+              />
+            ) : null}
+          </span>
         </span>
         {showPreview ? (
           <span className="min-w-0 truncate text-(length:--text-caption) text-(--ink-tertiary)">
@@ -192,11 +228,13 @@ function WorkCallRow({
           </span>
         ) : null}
       </button>
-      {body === null ? null : (
+      {!hasBody ? null : (
         <ChatGrow open={open}>
-          <pre className="max-h-64 cursor-text overflow-auto whitespace-pre-wrap break-words pb-1 font-mono text-(length:--text-caption) leading-relaxed text-(--ink-tertiary) select-text">
-            {body}
-          </pre>
+          <WorkCallExpandedDetails
+            entry={entry}
+            resolvedTheme={resolvedTheme}
+            workspaceRoot={workspaceRoot}
+          />
         </ChatGrow>
       )}
     </div>
@@ -224,9 +262,10 @@ interface WorkEntryPreview {
 }
 
 function workEntryPreview(
-  entry: Pick<WorkLogEntry, "detail" | "changedFiles">,
+  entry: Pick<WorkLogEntry, "detail" | "changedFiles" | "webSearch">,
   workspaceRoot: string | undefined,
 ): WorkEntryPreview | null {
+  if (entry.webSearch?.query) return { text: entry.webSearch.query, path: null };
   if (entry.detail) return { text: entry.detail, path: null };
   const changedFiles = entry.changedFiles ?? [];
   const [firstPath] = changedFiles;
@@ -240,32 +279,275 @@ function workEntryPreview(
   };
 }
 
-/** Everything a call knows that its two lines could not hold. */
-function workEntryExpandedBody(
-  entry: WorkLogEntry,
-  workspaceRoot: string | undefined,
-): string | null {
-  const blocks: string[] = [];
-  if (entry.itemType === "mcp_tool_call" && entry.toolData !== undefined) {
-    blocks.push(`MCP call\n${JSON.stringify(entry.toolData, null, 2)}`);
+function totalFileStat(changes: ReadonlyArray<WorkLogFileChange>) {
+  return changes.reduce(
+    (total, change) => ({
+      additions: total.additions + change.additions,
+      deletions: total.deletions + change.deletions,
+    }),
+    { additions: 0, deletions: 0 },
+  );
+}
+
+function formatDuration(durationMs: number): string {
+  if (durationMs < 1_000) return `${String(Math.round(durationMs))}ms`;
+  if (durationMs < 10_000) return `${(durationMs / 1_000).toFixed(1).replace(/\.0$/u, "")}s`;
+  return `${String(Math.round(durationMs / 1_000))}s`;
+}
+
+function workEntryCompactMeta(entry: WorkLogEntry): string | null {
+  const changes = entry.fileChanges ?? [];
+  const statuses = [
+    ...new Set(changes.flatMap((change) => (change.status ? [change.status] : []))),
+  ];
+  if (changes.length === 1 && statuses[0]) return statuses[0];
+  if (changes.length > 1) return `${String(changes.length)} files`;
+  if (entry.commandDetails?.exitCode !== undefined) {
+    const duration = entry.commandDetails.durationMs;
+    return `exit ${String(entry.commandDetails.exitCode)}${duration === undefined ? "" : ` · ${formatDuration(duration)}`}`;
   }
+  if (entry.commandDetails?.durationMs !== undefined) {
+    return formatDuration(entry.commandDetails.durationMs);
+  }
+  if (entry.webSearch && entry.webSearch.sources.length > 0) {
+    return `${String(entry.webSearch.sources.length)} sources`;
+  }
+  return null;
+}
+
+function workEntryHasExpandedBody(entry: WorkLogEntry): boolean {
+  if ((entry.fileChanges?.length ?? 0) > 0) return true;
+  if (entry.commandDetails) return true;
+  if (entry.webSearch) return true;
+  if (entry.mcpDetails) return true;
+  if (entry.toolInput !== undefined || entry.toolResult !== undefined) return true;
   const rawCommand = entry.rawCommand?.trim();
   const command = entry.command?.trim();
-  if (rawCommand && command && rawCommand !== command) {
-    blocks.push(command);
+  return Boolean(
+    (rawCommand && command && rawCommand !== command) || entry.detail?.trim().includes("\n"),
+  );
+}
+
+export function WorkCallExpandedDetails({
+  entry,
+  resolvedTheme,
+  workspaceRoot,
+}: {
+  readonly entry: WorkLogEntry;
+  readonly resolvedTheme: "light" | "dark";
+  readonly workspaceRoot: string | undefined;
+}) {
+  const command = entry.commandDetails;
+  const webSearch = entry.webSearch;
+  const mcp = entry.mcpDetails;
+  const rawCommand = entry.rawCommand?.trim();
+  const displayCommand = entry.command?.trim();
+
+  return (
+    <div className="space-y-2 pb-1 text-(length:--text-caption) text-(--ink-tertiary)">
+      {command ? (
+        <section className="space-y-1">
+          <DetailMeta
+            items={[
+              command.cwd ? `cwd ${formatWorkspaceRelativePath(command.cwd, workspaceRoot)}` : null,
+              command.exitCode === undefined ? null : `exit ${String(command.exitCode)}`,
+              command.durationMs === undefined ? null : formatDuration(command.durationMs),
+            ]}
+          />
+          {command.output ? <OutputBlock text={command.output} /> : null}
+        </section>
+      ) : null}
+      {rawCommand && displayCommand && rawCommand !== displayCommand ? (
+        <OutputBlock text={displayCommand} />
+      ) : null}
+      {(entry.fileChanges ?? []).map((change, index) => (
+        <FileChangeDetails
+          change={change}
+          key={`${change.path}:${String(index)}`}
+          resolvedTheme={resolvedTheme}
+          workspaceRoot={workspaceRoot}
+        />
+      ))}
+      {webSearch ? (
+        <section className="space-y-1.5">
+          {webSearch.query ? (
+            <div className="cursor-text select-text text-(--ink-secondary)">{webSearch.query}</div>
+          ) : null}
+          {webSearch.sources.length > 0 ? (
+            <ol className="space-y-1">
+              {webSearch.sources.map((source) => (
+                <li className="min-w-0" key={source.url}>
+                  <a
+                    className="block truncate underline decoration-(--edge) underline-offset-2 hover:text-(--ink-secondary)"
+                    href={source.url}
+                    rel="noreferrer"
+                    target="_blank"
+                    title={source.url}
+                  >
+                    {source.title ?? source.url}
+                  </a>
+                </li>
+              ))}
+            </ol>
+          ) : null}
+        </section>
+      ) : null}
+      {mcp ? (
+        <section className="space-y-1.5">
+          <DetailMeta
+            items={[
+              mcp.server ? `server ${mcp.server}` : null,
+              mcp.tool ? `tool ${mcp.tool}` : null,
+              mcp.durationMs === undefined ? null : formatDuration(mcp.durationMs),
+            ]}
+          />
+          {mcp.error ? <p className="text-destructive">{mcp.error}</p> : null}
+          {mcp.arguments !== undefined ? (
+            <StructuredSection label="Arguments" value={mcp.arguments} />
+          ) : null}
+          {mcp.result !== undefined ? (
+            <StructuredSection label="Result" value={mcp.result} />
+          ) : null}
+        </section>
+      ) : null}
+      {!command && !webSearch && !mcp && (entry.fileChanges?.length ?? 0) === 0 ? (
+        <>
+          {entry.toolInput !== undefined ? (
+            <StructuredSection label="Input" value={entry.toolInput} />
+          ) : null}
+          {entry.toolResult !== undefined ? (
+            <StructuredSection label="Result" value={entry.toolResult} />
+          ) : null}
+          {entry.detail?.includes("\n") ? <OutputBlock text={entry.detail} /> : null}
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+function DetailMeta({ items }: { readonly items: ReadonlyArray<string | null> }) {
+  const visible = items.filter((item): item is string => item !== null);
+  return visible.length === 0 ? null : (
+    <div className="flex flex-wrap gap-x-2 font-mono text-(length:--text-caption)">
+      {visible.map((item) => (
+        <span key={item}>{item}</span>
+      ))}
+    </div>
+  );
+}
+
+function OutputBlock({ text }: { readonly text: string }) {
+  return (
+    <pre className="max-h-64 cursor-text overflow-auto whitespace-pre-wrap break-words rounded-(--radius) bg-(--wash) p-2 font-mono leading-relaxed text-(--ink-secondary) select-text">
+      {text}
+    </pre>
+  );
+}
+
+function FileChangeDetails({
+  change,
+  resolvedTheme,
+  workspaceRoot,
+}: {
+  readonly change: WorkLogFileChange;
+  readonly resolvedTheme: "light" | "dark";
+  readonly workspaceRoot: string | undefined;
+}) {
+  const renderable = getRenderablePatch(change.diff, `tool-call:${change.path}`);
+  return (
+    <section className="space-y-1.5">
+      <div className="flex min-w-0 items-center gap-2">
+        <span className="min-w-0 truncate font-mono text-(--ink-secondary)">
+          {formatWorkspaceRelativePath(change.path, workspaceRoot)}
+        </span>
+        {change.status ? <span className="shrink-0">{change.status}</span> : null}
+        {hasNonZeroStat(change) ? (
+          <DiffStatLabel
+            additions={change.additions}
+            className="ml-auto shrink-0"
+            deletions={change.deletions}
+            layout="inline"
+          />
+        ) : null}
+      </div>
+      {change.previousPath ? (
+        <div>from {formatWorkspaceRelativePath(change.previousPath, workspaceRoot)}</div>
+      ) : null}
+      {renderable?.kind === "files"
+        ? renderable.files.map((fileDiff) => (
+            <FileDiff
+              fileDiff={fileDiff}
+              key={resolveFileDiffPath(fileDiff)}
+              options={{
+                collapsed: false,
+                diffStyle: "unified",
+                overflow: "scroll",
+                theme: resolveDiffThemeName(resolvedTheme),
+              }}
+            />
+          ))
+        : null}
+      {renderable?.kind === "raw" ? <OutputBlock text={renderable.text} /> : null}
+    </section>
+  );
+}
+
+function StructuredSection({ label, value }: { readonly label: string; readonly value: unknown }) {
+  return (
+    <section className="space-y-1">
+      <div className="text-(--ink-secondary)">{label}</div>
+      <div className="max-h-64 overflow-auto rounded-(--radius) bg-(--wash) p-2 font-mono">
+        <StructuredValue value={value} />
+      </div>
+    </section>
+  );
+}
+
+function StructuredValue({
+  value,
+  depth = 0,
+}: {
+  readonly value: unknown;
+  readonly depth?: number;
+}) {
+  if (value === null) return <span>null</span>;
+  if (typeof value === "string") {
+    return <span className="whitespace-pre-wrap break-words text-(--ink-secondary)">{value}</span>;
   }
-  const changedFiles = entry.changedFiles ?? [];
-  if (changedFiles.length > 1) {
-    blocks.push(
-      changedFiles.map((path) => formatWorkspaceRelativePath(path, workspaceRoot)).join("\n"),
+  if (typeof value === "number" || typeof value === "boolean") return <span>{String(value)}</span>;
+  if (Array.isArray(value)) {
+    const rows = value.map((item, position) => ({
+      item,
+      position,
+      key: `${String(depth)}:${String(position)}`,
+    }));
+    return (
+      <div className="space-y-1">
+        {rows.map((row) => (
+          <div className="grid grid-cols-[2ch_minmax(0,1fr)] gap-1" key={row.key}>
+            <span>{row.position}</span>
+            <StructuredValue depth={depth + 1} value={row.item} />
+          </div>
+        ))}
+      </div>
     );
   }
-  const detail = entry.detail?.trim();
-  /* A one-line preview is already on the row; a multi-line one is not. */
-  if (detail && detail.includes("\n")) {
-    blocks.push(detail);
+  if (typeof value === "object") {
+    return (
+      <div className="space-y-1">
+        {Object.entries(value as Record<string, unknown>).map(([key, item]) => (
+          <div
+            className={cn("grid gap-1", depth < 3 && "grid-cols-[minmax(5rem,auto)_minmax(0,1fr)]")}
+            key={key}
+          >
+            <span className="text-(--ink-tertiary)">{key}</span>
+            <StructuredValue depth={depth + 1} value={item} />
+          </div>
+        ))}
+      </div>
+    );
   }
-  return blocks.length > 0 ? blocks.join("\n\n") : null;
+  return <span>{String(value)}</span>;
 }
 
 // ---------------------------------------------------------------------------
@@ -336,6 +618,7 @@ function workEntryIconName(entry: WorkLogEntry): WorkEntryIconName {
   if (entry.itemType === "file_change" || (entry.changedFiles?.length ?? 0) > 0) {
     return "square-pen";
   }
+  if (entry.itemType === "file_read") return "eye";
   if (entry.itemType === "web_search") return "globe";
   if (entry.itemType === "image_view") return "eye";
 

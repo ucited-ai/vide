@@ -28,7 +28,9 @@ import {
   type ClaudeSettings,
   EventId,
   type ProviderApprovalDecision,
+  type ProviderAgentAttribution,
   ProviderDriverKind,
+  type ProviderFileMutation,
   ProviderInstanceId,
   type ModelSelection,
   ProviderItemId,
@@ -133,7 +135,7 @@ interface ClaudeTurnState {
    */
   readonly synthetic?: boolean;
   readonly items: Array<unknown>;
-  readonly assistantTextBlocks: Map<number, AssistantTextBlockState>;
+  readonly assistantTextBlocks: Map<string, AssistantTextBlockState>;
   readonly assistantTextBlockOrder: Array<AssistantTextBlockState>;
   readonly capturedProposedPlanKeys: Set<string>;
   nextSyntheticAssistantBlockIndex: number;
@@ -142,6 +144,8 @@ interface ClaudeTurnState {
 interface AssistantTextBlockState {
   readonly itemId: string;
   readonly blockIndex: number;
+  readonly key: string;
+  readonly agent?: ProviderAgentAttribution;
   emittedTextDelta: boolean;
   fallbackText: string;
   streamClosed: boolean;
@@ -168,6 +172,7 @@ interface ToolInFlight {
   readonly detail?: string;
   readonly input: Record<string, unknown>;
   readonly partialInputJson: string;
+  readonly agent?: ProviderAgentAttribution;
   readonly lastEmittedInputFingerprint?: string;
 }
 
@@ -193,8 +198,10 @@ interface ClaudeSessionContext {
     id: TurnId;
     items: Array<unknown>;
   }>;
-  readonly inFlightTools: Map<number, ToolInFlight>;
+  readonly inFlightTools: Map<string, ToolInFlight>;
   readonly claudeTasks: Map<string, ClaudeTaskState>;
+  readonly subagentsByTaskId: Map<string, ProviderAgentAttribution>;
+  readonly subagentsByToolUseId: Map<string, ProviderAgentAttribution>;
   turnState: ClaudeTurnState | undefined;
   lastKnownContextWindow: number | undefined;
   lastKnownTokenUsage: ThreadTokenUsageSnapshot | undefined;
@@ -211,6 +218,56 @@ interface ClaudeQueryRuntime extends AsyncIterable<SDKMessage> {
   readonly setMaxThinkingTokens: (maxThinkingTokens: number | null) => Promise<void>;
   readonly getContextUsage?: () => Promise<SDKControlGetContextUsageResponse>;
   readonly close: () => void;
+}
+
+function claudeParentToolUseId(message: SDKMessage): string | undefined {
+  if (!("parent_tool_use_id" in message)) {
+    return undefined;
+  }
+  return typeof message.parent_tool_use_id === "string" && message.parent_tool_use_id.length > 0
+    ? message.parent_tool_use_id
+    : undefined;
+}
+
+function conciseAgentName(value: string | undefined): string | undefined {
+  const normalized = value?.replace(/\s+/g, " ").trim();
+  if (!normalized) {
+    return undefined;
+  }
+  return normalized.length <= 80 ? normalized : `${normalized.slice(0, 79).trimEnd()}…`;
+}
+
+function claudeAgentAttribution(
+  context: ClaudeSessionContext,
+  message: SDKMessage,
+): ProviderAgentAttribution | undefined {
+  const parentToolUseId = claudeParentToolUseId(message);
+  if (!parentToolUseId) {
+    return undefined;
+  }
+  const registered = context.subagentsByToolUseId.get(parentToolUseId);
+  if (registered) {
+    return registered;
+  }
+  const messageMetadata =
+    message.type === "assistant"
+      ? {
+          name: conciseAgentName(message.task_description),
+          path: conciseAgentName(message.subagent_type),
+        }
+      : {};
+  const attribution: ProviderAgentAttribution = {
+    agentId: parentToolUseId,
+    parentToolUseId,
+    ...(messageMetadata.name ? { name: messageMetadata.name } : {}),
+    ...(messageMetadata.path ? { path: messageMetadata.path } : {}),
+  };
+  context.subagentsByToolUseId.set(parentToolUseId, attribution);
+  return attribution;
+}
+
+function claudeStreamItemKey(index: number, agent: ProviderAgentAttribution | undefined): string {
+  return `${agent?.agentId ?? "parent"}:${String(index)}`;
 }
 
 export interface ClaudeAdapterLiveOptions {
@@ -595,12 +652,13 @@ function readClaudeResumeState(resumeCursor: unknown): ClaudeResumeState | undef
 
 function classifyToolItemType(toolName: string): CanonicalItemType {
   const normalized = toolName.toLowerCase();
-  if (normalized.includes("agent")) {
-    return "collab_agent_tool_call";
+  if (normalized.includes("mcp")) {
+    return "mcp_tool_call";
   }
   if (
     normalized === "task" ||
     normalized === "agent" ||
+    normalized.includes("agent") ||
     normalized.includes("subagent") ||
     normalized.includes("sub-agent")
   ) {
@@ -615,6 +673,25 @@ function classifyToolItemType(toolName: string): CanonicalItemType {
     return "command_execution";
   }
   if (
+    normalized.includes("websearch") ||
+    normalized.includes("web search") ||
+    normalized.includes("webfetch") ||
+    normalized.includes("web fetch")
+  ) {
+    return "web_search";
+  }
+  if (
+    normalized === "read" ||
+    normalized === "grep" ||
+    normalized === "glob" ||
+    normalized.includes("read file")
+  ) {
+    return "file_read";
+  }
+  if (normalized.includes("todowrite") || normalized.includes("todo write")) {
+    return "plan";
+  }
+  if (
     normalized.includes("edit") ||
     normalized.includes("write") ||
     normalized.includes("file") ||
@@ -624,12 +701,6 @@ function classifyToolItemType(toolName: string): CanonicalItemType {
     normalized.includes("delete")
   ) {
     return "file_change";
-  }
-  if (normalized.includes("mcp")) {
-    return "mcp_tool_call";
-  }
-  if (normalized.includes("websearch") || normalized.includes("web search")) {
-    return "web_search";
   }
   if (normalized.includes("image")) {
     return "image_view";
@@ -718,6 +789,63 @@ function readClaudeToolUseResult(message: SDKMessage): Record<string, unknown> |
   return result !== null && typeof result === "object" && !Array.isArray(result)
     ? (result as Record<string, unknown>)
     : undefined;
+}
+
+function readFiniteNonNegativeInt(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : undefined;
+}
+
+function ensureUnifiedFilePatch(
+  path: string,
+  patch: string,
+  kind: ProviderFileMutation["kind"],
+): string {
+  const trimmed = patch.trim();
+  if (trimmed.startsWith("diff --git ")) return trimmed;
+  const beforePath = kind === "created" ? "/dev/null" : `a/${path}`;
+  const afterPath = kind === "deleted" ? "/dev/null" : `b/${path}`;
+  return [`diff --git a/${path} b/${path}`, `--- ${beforePath}`, `+++ ${afterPath}`, trimmed].join(
+    "\n",
+  );
+}
+
+function claudeFileMutations(
+  tool: ToolInFlight,
+  result: Record<string, unknown> | undefined,
+): ProviderFileMutation[] | undefined {
+  if (tool.itemType !== "file_change") return undefined;
+
+  const filePath =
+    readString(result?.filePath) ??
+    readString(tool.input.file_path) ??
+    readString(tool.input.path) ??
+    readString(tool.input.notebook_path);
+  if (!filePath) return undefined;
+
+  const gitDiffValue = result?.gitDiff;
+  const gitDiff =
+    gitDiffValue !== null && typeof gitDiffValue === "object" && !Array.isArray(gitDiffValue)
+      ? (gitDiffValue as Record<string, unknown>)
+      : undefined;
+  const status =
+    gitDiff?.status === "added" || result?.type === "create"
+      ? "created"
+      : /delete|remove/iu.test(tool.toolName)
+        ? "deleted"
+        : "modified";
+  const path = readString(gitDiff?.filename) ?? filePath;
+  const rawPatch = readString(gitDiff?.patch);
+  const additions = readFiniteNonNegativeInt(gitDiff?.additions);
+  const deletions = readFiniteNonNegativeInt(gitDiff?.deletions);
+  return [
+    {
+      path,
+      kind: status,
+      ...(rawPatch ? { patch: ensureUnifiedFilePatch(path, rawPatch, status) } : {}),
+      ...(additions !== undefined ? { additions } : {}),
+      ...(deletions !== undefined ? { deletions } : {}),
+    },
+  ];
 }
 
 function readClaudeTaskFromResult(
@@ -858,6 +986,8 @@ function titleForTool(itemType: CanonicalItemType): string {
   switch (itemType) {
     case "command_execution":
       return "Command run";
+    case "file_read":
+      return "File read";
     case "file_change":
       return "File change";
     case "mcp_tool_call":
@@ -1470,6 +1600,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
     options?: {
       readonly fallbackText?: string;
       readonly streamClosed?: boolean;
+      readonly agent?: ProviderAgentAttribution;
     },
   ) {
     const turnState = context.turnState;
@@ -1477,7 +1608,8 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
       return undefined;
     }
 
-    const existing = turnState.assistantTextBlocks.get(blockIndex);
+    const key = claudeStreamItemKey(blockIndex, options?.agent);
+    const existing = turnState.assistantTextBlocks.get(key);
     if (existing && !existing.completionEmitted) {
       if (existing.fallbackText.length === 0 && options?.fallbackText) {
         existing.fallbackText = options.fallbackText;
@@ -1491,18 +1623,24 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
     const block: AssistantTextBlockState = {
       itemId: yield* randomUUIDv4,
       blockIndex,
+      key,
+      ...(options?.agent ? { agent: options.agent } : {}),
       emittedTextDelta: false,
       fallbackText: options?.fallbackText ?? "",
       streamClosed: options?.streamClosed ?? false,
       completionEmitted: false,
     };
-    turnState.assistantTextBlocks.set(blockIndex, block);
+    turnState.assistantTextBlocks.set(key, block);
     turnState.assistantTextBlockOrder.push(block);
     return { blockIndex, block };
   });
 
   const createSyntheticAssistantTextBlock = Effect.fn("createSyntheticAssistantTextBlock")(
-    function* (context: ClaudeSessionContext, fallbackText: string) {
+    function* (
+      context: ClaudeSessionContext,
+      fallbackText: string,
+      agent?: ProviderAgentAttribution,
+    ) {
       const turnState = context.turnState;
       if (!turnState) {
         return undefined;
@@ -1513,6 +1651,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
       return yield* ensureAssistantTextBlock(context, blockIndex, {
         fallbackText,
         streamClosed: true,
+        ...(agent ? { agent } : {}),
       });
     },
   );
@@ -1545,6 +1684,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         threadId: context.session.threadId,
         turnId: turnState.turnId,
         itemId: asRuntimeItemId(block.itemId),
+        ...(block.agent ? { agent: block.agent } : {}),
         payload: {
           streamKind: "assistant_text",
           delta: block.fallbackText,
@@ -1563,8 +1703,8 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
     }
 
     block.completionEmitted = true;
-    if (turnState.assistantTextBlocks.get(block.blockIndex) === block) {
-      turnState.assistantTextBlocks.delete(block.blockIndex);
+    if (turnState.assistantTextBlocks.get(block.key) === block) {
+      turnState.assistantTextBlocks.delete(block.key);
     }
 
     const stamp = yield* makeEventStamp();
@@ -1574,6 +1714,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
       provider: PROVIDER,
       createdAt: stamp.createdAt,
       itemId: asRuntimeItemId(block.itemId),
+      ...(block.agent ? { agent: block.agent } : {}),
       threadId: context.session.threadId,
       turnId: turnState.turnId,
       payload: {
@@ -1608,16 +1749,19 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
       return;
     }
 
-    const orderedBlocks = turnState.assistantTextBlockOrder.map((block) => ({
-      blockIndex: block.blockIndex,
-      block,
-    }));
+    const agent = claudeAgentAttribution(context, message);
+    const orderedBlocks = turnState.assistantTextBlockOrder
+      .filter((block) => block.agent?.agentId === agent?.agentId)
+      .map((block) => ({
+        blockIndex: block.blockIndex,
+        block,
+      }));
 
     for (const [position, text] of snapshotTextBlocks.entries()) {
       const existingEntry = orderedBlocks[position];
       const entry =
         existingEntry ??
-        (yield* createSyntheticAssistantTextBlock(context, text).pipe(
+        (yield* createSyntheticAssistantTextBlock(context, text, agent).pipe(
           Effect.map((created) => {
             if (!created) {
               return undefined;
@@ -1991,6 +2135,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         threadId: context.session.threadId,
         turnId: turnState.turnId,
         itemId: asRuntimeItemId(tool.itemId),
+        ...(tool.agent ? { agent: tool.agent } : {}),
         payload: {
           itemType: tool.itemType,
           status: status === "completed" ? "completed" : "failed",
@@ -2075,6 +2220,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
     }
 
     const { event } = message;
+    const agent = claudeAgentAttribution(context, message);
 
     if (event.type === "message_delta") {
       if (message.parent_tool_use_id !== null && message.parent_tool_use_id !== undefined) {
@@ -2108,14 +2254,15 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
           return;
         }
         const streamKind = streamKindFromDeltaType(event.delta.type);
+        const streamItemKey = claudeStreamItemKey(event.index, agent);
         const assistantBlockEntry =
           event.delta.type === "text_delta"
-            ? yield* ensureAssistantTextBlock(context, event.index)
-            : context.turnState.assistantTextBlocks.get(event.index)
+            ? yield* ensureAssistantTextBlock(context, event.index, agent ? { agent } : {})
+            : context.turnState.assistantTextBlocks.get(streamItemKey)
               ? {
                   blockIndex: event.index,
                   block: context.turnState.assistantTextBlocks.get(
-                    event.index,
+                    streamItemKey,
                   ) as AssistantTextBlockState,
                 }
               : undefined;
@@ -2135,6 +2282,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
                 itemId: asRuntimeItemId(assistantBlockEntry.block.itemId),
               }
             : {}),
+          ...(agent ? { agent } : {}),
           payload: {
             streamKind,
             delta: deltaText,
@@ -2150,7 +2298,8 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
       }
 
       if (event.delta.type === "input_json_delta") {
-        const tool = context.inFlightTools.get(event.index);
+        const toolKey = claudeStreamItemKey(event.index, agent);
+        const tool = context.inFlightTools.get(toolKey);
         if (!tool || typeof event.delta.partial_json !== "string") {
           return;
         }
@@ -2169,7 +2318,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
           parsedInput && Object.keys(parsedInput).length > 0
             ? toolInputFingerprint(parsedInput)
             : undefined;
-        context.inFlightTools.set(event.index, nextTool);
+        context.inFlightTools.set(toolKey, nextTool);
 
         if (
           !parsedInput ||
@@ -2183,7 +2332,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
           ...nextTool,
           lastEmittedInputFingerprint: nextFingerprint,
         };
-        context.inFlightTools.set(event.index, nextTool);
+        context.inFlightTools.set(toolKey, nextTool);
 
         const stamp = yield* makeEventStamp();
         yield* offerRuntimeEvent({
@@ -2198,6 +2347,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
               }
             : {}),
           itemId: asRuntimeItemId(nextTool.itemId),
+          ...(nextTool.agent ? { agent: nextTool.agent } : {}),
           payload: {
             itemType: nextTool.itemType,
             status: "inProgress",
@@ -2250,6 +2400,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
       if (block.type === "text") {
         yield* ensureAssistantTextBlock(context, index, {
           fallbackText: extractContentBlockText(block),
+          ...(agent ? { agent } : {}),
         });
         return;
       }
@@ -2280,9 +2431,10 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         detail,
         input: toolInput,
         partialInputJson: "",
+        ...(agent ? { agent } : {}),
         ...(inputFingerprint ? { lastEmittedInputFingerprint: inputFingerprint } : {}),
       };
-      context.inFlightTools.set(index, tool);
+      context.inFlightTools.set(claudeStreamItemKey(index, agent), tool);
 
       const stamp = yield* makeEventStamp();
       yield* offerRuntimeEvent({
@@ -2293,6 +2445,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         threadId: context.session.threadId,
         ...(context.turnState ? { turnId: asCanonicalTurnId(context.turnState.turnId) } : {}),
         itemId: asRuntimeItemId(tool.itemId),
+        ...(agent ? { agent } : {}),
         payload: {
           itemType: tool.itemType,
           status: "inProgress",
@@ -2317,7 +2470,9 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
 
     if (event.type === "content_block_stop") {
       const { index } = event;
-      const assistantBlock = context.turnState?.assistantTextBlocks.get(index);
+      const assistantBlock = context.turnState?.assistantTextBlocks.get(
+        claudeStreamItemKey(index, agent),
+      );
       if (assistantBlock) {
         assistantBlock.streamClosed = true;
         yield* completeAssistantTextBlock(context, assistantBlock, {
@@ -2326,7 +2481,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         });
         return;
       }
-      const tool = context.inFlightTools.get(index);
+      const tool = context.inFlightTools.get(claudeStreamItemKey(index, agent));
       if (!tool) {
         return;
       }
@@ -2356,6 +2511,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
       const [index, tool] = toolEntry;
       const itemStatus = toolResult.isError ? "failed" : "completed";
       const toolUseResult = readClaudeToolUseResult(message);
+      const fileChanges = claudeFileMutations(tool, toolUseResult);
       const toolData = {
         toolName: tool.toolName,
         input: tool.input,
@@ -2371,11 +2527,13 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         threadId: context.session.threadId,
         ...(context.turnState ? { turnId: asCanonicalTurnId(context.turnState.turnId) } : {}),
         itemId: asRuntimeItemId(tool.itemId),
+        ...(tool.agent ? { agent: tool.agent } : {}),
         payload: {
           itemType: tool.itemType,
           status: toolResult.isError ? "failed" : "inProgress",
           title: tool.title,
           ...(tool.detail ? { detail: tool.detail } : {}),
+          ...(fileChanges ? { fileChanges } : {}),
           data: toolData,
         },
         providerRefs: nativeProviderRefs(context, {
@@ -2399,6 +2557,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
           threadId: context.session.threadId,
           turnId: context.turnState.turnId,
           itemId: asRuntimeItemId(tool.itemId),
+          ...(tool.agent ? { agent: tool.agent } : {}),
           payload: {
             streamKind,
             delta: toolResult.text,
@@ -2423,11 +2582,13 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         threadId: context.session.threadId,
         ...(context.turnState ? { turnId: asCanonicalTurnId(context.turnState.turnId) } : {}),
         itemId: asRuntimeItemId(tool.itemId),
+        ...(tool.agent ? { agent: tool.agent } : {}),
         payload: {
           itemType: tool.itemType,
           status: itemStatus,
           title: tool.title,
           ...(tool.detail ? { detail: tool.detail } : {}),
+          ...(fileChanges ? { fileChanges } : {}),
           data: toolData,
         },
         providerRefs: nativeProviderRefs(context, {
@@ -2676,9 +2837,25 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
           },
         });
         return;
-      case "task_started":
+      case "task_started": {
+        const parentToolUseId = message.tool_use_id;
+        const attribution: ProviderAgentAttribution = {
+          agentId: parentToolUseId ?? message.task_id,
+          ...(conciseAgentName(message.description)
+            ? { name: conciseAgentName(message.description) }
+            : {}),
+          ...(parentToolUseId ? { parentToolUseId } : {}),
+          ...(conciseAgentName(message.subagent_type)
+            ? { path: conciseAgentName(message.subagent_type) }
+            : {}),
+        };
+        context.subagentsByTaskId.set(message.task_id, attribution);
+        if (parentToolUseId) {
+          context.subagentsByToolUseId.set(parentToolUseId, attribution);
+        }
         yield* offerRuntimeEvent({
           ...base,
+          agent: attribution,
           type: "task.started",
           payload: {
             taskId: RuntimeTaskId.make(message.task_id),
@@ -2687,7 +2864,11 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
           },
         });
         return;
-      case "task_progress":
+      }
+      case "task_progress": {
+        const attribution =
+          context.subagentsByTaskId.get(message.task_id) ??
+          (message.tool_use_id ? context.subagentsByToolUseId.get(message.tool_use_id) : undefined);
         yield* emitThreadTokenUsage(
           context,
           normalizeClaudeTaskProgressTokenUsage(message.usage, context),
@@ -2698,6 +2879,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         );
         yield* offerRuntimeEvent({
           ...base,
+          ...(attribution ? { agent: attribution } : {}),
           type: "task.progress",
           payload: {
             taskId: RuntimeTaskId.make(message.task_id),
@@ -2708,12 +2890,16 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
           },
         });
         return;
+      }
       // Task state patch (status/backgrounded/end_time). No runtime mapping
       // yet — the terminal task_notification reports the outcome — but it
       // must not surface as an unknown-subtype warning row.
       case "task_updated":
         return;
-      case "task_notification":
+      case "task_notification": {
+        const attribution =
+          context.subagentsByTaskId.get(message.task_id) ??
+          (message.tool_use_id ? context.subagentsByToolUseId.get(message.tool_use_id) : undefined);
         yield* emitThreadTokenUsage(
           context,
           normalizeClaudeTaskProgressTokenUsage(message.usage, context),
@@ -2724,6 +2910,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         );
         yield* offerRuntimeEvent({
           ...base,
+          ...(attribution ? { agent: attribution } : {}),
           type: "task.completed",
           payload: {
             taskId: RuntimeTaskId.make(message.task_id),
@@ -2733,6 +2920,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
           },
         });
         return;
+      }
       case "files_persisted":
         yield* offerRuntimeEvent({
           ...base,
@@ -2845,12 +3033,14 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
     message: SDKMessage,
   ) {
     const stamp = yield* makeEventStamp();
+    const agent = claudeAgentAttribution(context, message);
     const base = {
       eventId: stamp.eventId,
       provider: PROVIDER,
       createdAt: stamp.createdAt,
       threadId: context.session.threadId,
       ...(context.turnState ? { turnId: asCanonicalTurnId(context.turnState.turnId) } : {}),
+      ...(agent ? { agent } : {}),
       providerRefs: nativeProviderRefs(context),
       raw: {
         source: "claude.sdk.message" as const,
@@ -3188,8 +3378,10 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
 
       const pendingApprovals = new Map<ApprovalRequestId, PendingApproval>();
       const pendingUserInputs = new Map<ApprovalRequestId, PendingUserInput>();
-      const inFlightTools = new Map<number, ToolInFlight>();
+      const inFlightTools = new Map<string, ToolInFlight>();
       const claudeTasks = new Map<string, ClaudeTaskState>();
+      const subagentsByTaskId = new Map<string, ProviderAgentAttribution>();
+      const subagentsByToolUseId = new Map<string, ProviderAgentAttribution>();
 
       const contextRef = yield* Ref.make<ClaudeSessionContext | undefined>(undefined);
 
@@ -3540,6 +3732,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         ...(existingResumeSessionId ? { resume: existingResumeSessionId } : {}),
         ...(newSessionId ? { sessionId: newSessionId } : {}),
         includePartialMessages: true,
+        forwardSubagentText: true,
         canUseTool,
         env: claudeEnvironment,
         ...(input.cwd ? { additionalDirectories: [input.cwd] } : {}),
@@ -3632,6 +3825,8 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         turns: [],
         inFlightTools,
         claudeTasks,
+        subagentsByTaskId,
+        subagentsByToolUseId,
         turnState: undefined,
         lastKnownContextWindow: initialContextWindow,
         lastKnownTokenUsage: undefined,

@@ -1176,7 +1176,7 @@ describe("ClaudeAdapterLive", () => {
       const toolStarted = runtimeEvents.find((event) => event.type === "item.started");
       assert.equal(toolStarted?.type, "item.started");
       if (toolStarted?.type === "item.started") {
-        assert.equal(toolStarted.payload.itemType, "dynamic_tool_call");
+        assert.equal(toolStarted.payload.itemType, "file_read");
       }
 
       const toolInputUpdated = runtimeEvents.find(
@@ -1711,7 +1711,7 @@ describe("ClaudeAdapterLive", () => {
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
 
-      const runtimeEventsFiber = yield* Stream.take(adapter.streamEvents, 6).pipe(
+      const runtimeEventsFiber = yield* Stream.take(adapter.streamEvents, 7).pipe(
         Stream.runCollect,
         Effect.forkChild,
       );
@@ -1724,8 +1724,20 @@ describe("ClaudeAdapterLive", () => {
 
       harness.query.emit({
         type: "system",
+        subtype: "task_started",
+        task_id: "task-subagent-1",
+        tool_use_id: "tool-parent-1",
+        description: "Running background teammate",
+        subagent_type: "code-reviewer",
+        session_id: "sdk-session-task-summary",
+        uuid: "task-started-1",
+      } as unknown as SDKMessage);
+
+      harness.query.emit({
+        type: "system",
         subtype: "task_progress",
         task_id: "task-subagent-1",
+        tool_use_id: "tool-parent-1",
         description: "Running background teammate",
         summary: "Code reviewer checked the migration edge cases.",
         usage: {
@@ -1741,6 +1753,12 @@ describe("ClaudeAdapterLive", () => {
       const progressEvent = runtimeEvents.find((event) => event.type === "task.progress");
       assert.equal(progressEvent?.type, "task.progress");
       if (progressEvent?.type === "task.progress") {
+        assert.deepEqual(progressEvent.agent, {
+          agentId: "tool-parent-1",
+          name: "Running background teammate",
+          parentToolUseId: "tool-parent-1",
+          path: "code-reviewer",
+        });
         assert.equal(
           progressEvent.payload.summary,
           "Code reviewer checked the migration edge cases.",

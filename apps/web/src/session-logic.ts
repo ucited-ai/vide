@@ -5,6 +5,7 @@ import {
   isToolLifecycleItemType,
   type OrchestrationLatestTurn,
   type OrchestrationThreadActivity,
+  type ProviderAgentAttribution,
   type OrchestrationProposedPlanId,
   ProviderDriverKind,
   type ToolLifecycleItemType,
@@ -60,6 +61,44 @@ export type WorkLogToolLifecycleStatus =
   | "declined"
   | "stopped";
 
+export type WorkLogFileStatus = "created" | "modified" | "deleted" | "moved";
+
+export interface WorkLogFileChange {
+  readonly path: string;
+  readonly previousPath?: string;
+  readonly status?: WorkLogFileStatus;
+  readonly additions: number;
+  readonly deletions: number;
+  readonly diff?: string;
+}
+
+export interface WorkLogCommandDetails {
+  readonly output?: string;
+  readonly exitCode?: number;
+  readonly durationMs?: number;
+  readonly cwd?: string;
+}
+
+export interface WorkLogWebSource {
+  readonly url: string;
+  readonly title?: string;
+}
+
+export interface WorkLogWebSearchDetails {
+  readonly query?: string;
+  readonly action?: unknown;
+  readonly sources: ReadonlyArray<WorkLogWebSource>;
+}
+
+export interface WorkLogMcpDetails {
+  readonly server?: string;
+  readonly tool?: string;
+  readonly arguments?: unknown;
+  readonly result?: unknown;
+  readonly error?: string;
+  readonly durationMs?: number;
+}
+
 export interface WorkLogEntry {
   id: string;
   createdAt: string;
@@ -71,7 +110,15 @@ export interface WorkLogEntry {
   changedFiles?: ReadonlyArray<string>;
   tone: "thinking" | "tool" | "info" | "error";
   toolTitle?: string;
+  toolName?: string;
+  toolInput?: unknown;
+  toolResult?: unknown;
   toolData?: unknown;
+  commandDetails?: WorkLogCommandDetails;
+  fileChanges?: ReadonlyArray<WorkLogFileChange>;
+  webSearch?: WorkLogWebSearchDetails;
+  mcpDetails?: WorkLogMcpDetails;
+  agent?: ProviderAgentAttribution;
   itemType?: ToolLifecycleItemType;
   requestKind?: PendingApproval["requestKind"];
   /** From runtime item / task payload `status` when present (e.g. tool.updated). */
@@ -630,7 +677,6 @@ export function deriveWorkLogEntries(
   const ordered = [...activities].toSorted(compareActivitiesByOrder);
   const entries: DerivedWorkLogEntry[] = [];
   for (const activity of ordered) {
-    if (activity.kind === "tool.started") continue;
     if (activity.kind === "task.started") continue;
     if (activity.kind === "context-window.updated") continue;
     if (activity.summary === "Checkpoint captured") continue;
@@ -716,6 +762,7 @@ function toDerivedWorkLogEntry(activity: OrchestrationThreadActivity): DerivedWo
           ? "info"
           : activity.tone,
     activityKind: activity.kind,
+    ...(activity.agent ? { agent: activity.agent } : {}),
   };
   const itemType = extractWorkLogItemType(payload);
   const requestKind = extractWorkLogRequestKind(payload);
@@ -734,6 +781,17 @@ function toDerivedWorkLogEntry(activity: OrchestrationThreadActivity): DerivedWo
   if (title) {
     entry.toolTitle = title;
   }
+  const richToolDetails = extractRichToolDetails(payload, itemType);
+  if (richToolDetails.toolName) entry.toolName = richToolDetails.toolName;
+  if (richToolDetails.input !== undefined) entry.toolInput = richToolDetails.input;
+  if (richToolDetails.result !== undefined) entry.toolResult = richToolDetails.result;
+  if (richToolDetails.commandDetails) entry.commandDetails = richToolDetails.commandDetails;
+  if (richToolDetails.fileChanges.length > 0) {
+    entry.fileChanges = richToolDetails.fileChanges;
+    entry.changedFiles = [...new Set(richToolDetails.fileChanges.map((change) => change.path))];
+  }
+  if (richToolDetails.webSearch) entry.webSearch = richToolDetails.webSearch;
+  if (richToolDetails.mcpDetails) entry.mcpDetails = richToolDetails.mcpDetails;
   if (itemType === "mcp_tool_call") {
     const data = asRecord(payload?.data);
     if (data?.item !== undefined) {
@@ -782,7 +840,11 @@ function shouldCollapseToolLifecycleEntries(
   previous: DerivedWorkLogEntry,
   next: DerivedWorkLogEntry,
 ): boolean {
-  if (previous.activityKind !== "tool.updated" && previous.activityKind !== "tool.completed") {
+  if (
+    previous.activityKind !== "tool.started" &&
+    previous.activityKind !== "tool.updated" &&
+    previous.activityKind !== "tool.completed"
+  ) {
     return false;
   }
   if (next.activityKind !== "tool.updated" && next.activityKind !== "tool.completed") {
@@ -792,6 +854,9 @@ function shouldCollapseToolLifecycleEntries(
     return false;
   }
   if (previous.collapseKey !== undefined && previous.collapseKey === next.collapseKey) {
+    return true;
+  }
+  if (previous.toolCallId !== undefined && previous.toolCallId === next.toolCallId) {
     return true;
   }
   return (
@@ -818,9 +883,36 @@ function mergeDerivedWorkLogEntries(
   const toolCallId = next.toolCallId ?? previous.toolCallId;
   const toolLifecycleStatus = next.toolLifecycleStatus ?? previous.toolLifecycleStatus;
   const toolData = next.toolData ?? previous.toolData;
+  const toolName = next.toolName ?? previous.toolName;
+  const toolInput = next.toolInput ?? previous.toolInput;
+  const toolResult = next.toolResult ?? previous.toolResult;
+  const lifecycleDurationMs = (() => {
+    if (itemType !== "command_execution" || next.activityKind !== "tool.completed") return null;
+    const startedAt = Date.parse(previous.createdAt);
+    const completedAt = Date.parse(next.createdAt);
+    return Number.isFinite(startedAt) && Number.isFinite(completedAt)
+      ? Math.max(0, completedAt - startedAt)
+      : null;
+  })();
+  const commandDetails =
+    next.commandDetails || previous.commandDetails || lifecycleDurationMs !== null
+      ? {
+          ...previous.commandDetails,
+          ...next.commandDetails,
+          ...(next.commandDetails?.durationMs === undefined && lifecycleDurationMs !== null
+            ? { durationMs: lifecycleDurationMs }
+            : {}),
+        }
+      : undefined;
+  const fileChanges = next.fileChanges ?? previous.fileChanges;
+  const webSearch = next.webSearch ?? previous.webSearch;
+  const mcpDetails = next.mcpDetails ?? previous.mcpDetails;
+  const agent = next.agent ?? previous.agent;
   return {
     ...previous,
     ...next,
+    // A completed call keeps the instant it began as its place in the trace.
+    createdAt: previous.createdAt,
     ...(detail ? { detail } : {}),
     ...(command ? { command } : {}),
     ...(rawCommand ? { rawCommand } : {}),
@@ -832,6 +924,14 @@ function mergeDerivedWorkLogEntries(
     ...(toolCallId ? { toolCallId } : {}),
     ...(toolLifecycleStatus !== undefined ? { toolLifecycleStatus } : {}),
     ...(toolData !== undefined ? { toolData } : {}),
+    ...(toolName ? { toolName } : {}),
+    ...(toolInput !== undefined ? { toolInput } : {}),
+    ...(toolResult !== undefined ? { toolResult } : {}),
+    ...(commandDetails ? { commandDetails } : {}),
+    ...(fileChanges ? { fileChanges } : {}),
+    ...(webSearch ? { webSearch } : {}),
+    ...(mcpDetails ? { mcpDetails } : {}),
+    ...(agent ? { agent } : {}),
   };
 }
 
@@ -892,6 +992,379 @@ function asTrimmedString(value: unknown): string | null {
 
 function asNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function toolPayloadParts(payload: Record<string, unknown> | null) {
+  const data = asRecord(payload?.data);
+  const item = asRecord(data?.item);
+  const input = asRecord(data?.input) ?? asRecord(item?.input);
+  const result = data?.result ?? item?.result;
+  return { data, item, input, result };
+}
+
+function textFromToolValue(value: unknown, depth = 0): string | null {
+  if (depth > 5) return null;
+  const direct = asTrimmedString(value);
+  if (direct) return direct;
+  if (Array.isArray(value)) {
+    const parts = value
+      .map((entry) => textFromToolValue(entry, depth + 1))
+      .filter((entry): entry is string => entry !== null);
+    return parts.length > 0 ? parts.join("\n") : null;
+  }
+  const record = asRecord(value);
+  if (!record) return null;
+  for (const key of ["text", "stdout", "aggregatedOutput", "output", "content"]) {
+    const text = textFromToolValue(record[key], depth + 1);
+    if (text) return text;
+  }
+  return null;
+}
+
+function countTextLines(value: string): number {
+  if (value.length === 0) return 0;
+  return value.split(/\r?\n/u).length;
+}
+
+function diffStats(diff: string): { additions: number; deletions: number } {
+  let additions = 0;
+  let deletions = 0;
+  for (const line of diff.split(/\r?\n/u)) {
+    if (line.startsWith("+++") || line.startsWith("---")) continue;
+    if (line.startsWith("+")) additions += 1;
+    if (line.startsWith("-")) deletions += 1;
+  }
+  return { additions, deletions };
+}
+
+function replacementDiff(path: string, before: string, after: string): string {
+  const beforeLines = before.split(/\r?\n/u);
+  const afterLines = after.split(/\r?\n/u);
+  const cellCount = beforeLines.length * afterLines.length;
+  if (cellCount > 40_000) {
+    return [
+      `diff --git a/${path} b/${path}`,
+      `--- a/${path}`,
+      `+++ b/${path}`,
+      `@@ -1,${String(beforeLines.length)} +1,${String(afterLines.length)} @@`,
+      ...beforeLines.map((line) => `-${line}`),
+      ...afterLines.map((line) => `+${line}`),
+    ].join("\n");
+  }
+
+  const table = Array.from(
+    { length: beforeLines.length + 1 },
+    () => new Uint32Array(afterLines.length + 1),
+  );
+  for (let beforeIndex = beforeLines.length - 1; beforeIndex >= 0; beforeIndex -= 1) {
+    const row = table[beforeIndex]!;
+    const nextRow = table[beforeIndex + 1]!;
+    for (let afterIndex = afterLines.length - 1; afterIndex >= 0; afterIndex -= 1) {
+      row[afterIndex] =
+        beforeLines[beforeIndex] === afterLines[afterIndex]
+          ? nextRow[afterIndex + 1]! + 1
+          : Math.max(nextRow[afterIndex]!, row[afterIndex + 1]!);
+    }
+  }
+
+  const lines = [
+    `diff --git a/${path} b/${path}`,
+    `--- a/${path}`,
+    `+++ b/${path}`,
+    `@@ -1,${String(beforeLines.length)} +1,${String(afterLines.length)} @@`,
+  ];
+  let beforeIndex = 0;
+  let afterIndex = 0;
+  while (beforeIndex < beforeLines.length || afterIndex < afterLines.length) {
+    if (
+      beforeIndex < beforeLines.length &&
+      afterIndex < afterLines.length &&
+      beforeLines[beforeIndex] === afterLines[afterIndex]
+    ) {
+      lines.push(` ${beforeLines[beforeIndex]}`);
+      beforeIndex += 1;
+      afterIndex += 1;
+      continue;
+    }
+    const removeScore = table[beforeIndex + 1]?.[afterIndex] ?? 0;
+    const addScore = table[beforeIndex]?.[afterIndex + 1] ?? 0;
+    if (beforeIndex < beforeLines.length && removeScore >= addScore) {
+      lines.push(`-${beforeLines[beforeIndex]}`);
+      beforeIndex += 1;
+    } else if (afterIndex < afterLines.length) {
+      lines.push(`+${afterLines[afterIndex]}`);
+      afterIndex += 1;
+    }
+  }
+  return lines.join("\n");
+}
+
+function fileStatusFromCodexKind(kind: Record<string, unknown> | null): {
+  status?: WorkLogFileStatus;
+  movedTo?: string;
+} {
+  const type = asTrimmedString(kind?.type);
+  if (type === "add") return { status: "created" };
+  if (type === "delete") return { status: "deleted" };
+  if (type === "update") {
+    const movedTo = asTrimmedString(kind?.move_path);
+    return movedTo ? { status: "moved", movedTo } : { status: "modified" };
+  }
+  return {};
+}
+
+function extractFileChanges(
+  itemType: ToolLifecycleItemType | undefined,
+  toolName: string | null,
+  item: Record<string, unknown> | null,
+  input: Record<string, unknown> | null,
+  result: unknown,
+): WorkLogFileChange[] {
+  if (itemType !== "file_change") return [];
+
+  const codexChanges = Array.isArray(item?.changes) ? item.changes : [];
+  const structured = codexChanges.flatMap((value): WorkLogFileChange[] => {
+    const change = asRecord(value);
+    const originalPath = asTrimmedString(change?.path) ?? asTrimmedString(change?.filename);
+    if (!change || !originalPath) return [];
+    const kind = fileStatusFromCodexKind(asRecord(change.kind));
+    const path = kind.movedTo ?? originalPath;
+    const diff = asTrimmedString(change.diff) ?? undefined;
+    const stats = diff ? diffStats(diff) : { additions: 0, deletions: 0 };
+    return [
+      {
+        path,
+        ...(kind.status ? { status: kind.status } : {}),
+        ...(kind.movedTo ? { previousPath: originalPath } : {}),
+        ...stats,
+        ...(diff ? { diff } : {}),
+      },
+    ];
+  });
+  if (structured.length > 0) return structured;
+
+  const normalizedToolName = toolName?.toLowerCase() ?? "";
+  const sourcePath =
+    asTrimmedString(input?.file_path) ??
+    asTrimmedString(input?.path) ??
+    asTrimmedString(input?.notebook_path) ??
+    asTrimmedString(input?.old_path);
+  const targetPath =
+    asTrimmedString(input?.new_path) ??
+    asTrimmedString(input?.destination) ??
+    asTrimmedString(input?.move_path) ??
+    sourcePath;
+  if (!targetPath) return [];
+
+  const resultText = textFromToolValue(result)?.toLowerCase() ?? "";
+  const before = typeof input?.old_string === "string" ? input.old_string : undefined;
+  const after =
+    typeof input?.new_string === "string"
+      ? input.new_string
+      : typeof input?.content === "string"
+        ? input.content
+        : undefined;
+  let status: WorkLogFileStatus | undefined;
+  if (/delete|remove/u.test(normalizedToolName)) status = "deleted";
+  else if (/move|rename/u.test(normalizedToolName)) status = "moved";
+  else if (/edit|replace|patch/u.test(normalizedToolName)) status = "modified";
+  else if (/create/u.test(normalizedToolName) || /\bcreated\b/u.test(resultText))
+    status = "created";
+  else if (/\b(modified|updated)\b/u.test(resultText)) status = "modified";
+
+  const diff =
+    before !== undefined && after !== undefined
+      ? replacementDiff(targetPath, before, after)
+      : status === "created" && after !== undefined
+        ? [
+            `diff --git a/${targetPath} b/${targetPath}`,
+            `new file mode 100644`,
+            `--- /dev/null`,
+            `+++ b/${targetPath}`,
+            `@@ -0,0 +1,${String(countTextLines(after))} @@`,
+            ...after.split(/\r?\n/u).map((line) => `+${line}`),
+          ].join("\n")
+        : undefined;
+  const stats = diff
+    ? diffStats(diff)
+    : {
+        additions: after === undefined ? 0 : countTextLines(after),
+        deletions: before === undefined ? 0 : countTextLines(before),
+      };
+  return [
+    {
+      path: targetPath,
+      ...(status ? { status } : {}),
+      ...(status === "moved" && sourcePath && sourcePath !== targetPath
+        ? { previousPath: sourcePath }
+        : {}),
+      ...stats,
+      ...(diff ? { diff } : {}),
+    },
+  ];
+}
+
+function collectWebSources(
+  value: unknown,
+  target: WorkLogWebSource[],
+  seen: Set<string>,
+  depth = 0,
+): void {
+  if (depth > 6 || target.length >= 40) return;
+  if (typeof value === "string") {
+    for (const match of value.matchAll(/https?:\/\/[^\s<>"')\]]+/gu)) {
+      const url = match[0]?.replace(/[.,;:!?]+$/u, "");
+      if (url && !seen.has(url)) {
+        seen.add(url);
+        target.push({ url });
+      }
+    }
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const entry of value) collectWebSources(entry, target, seen, depth + 1);
+    return;
+  }
+  const record = asRecord(value);
+  if (!record) return;
+  const url = asTrimmedString(record.url) ?? asTrimmedString(record.uri);
+  if (url?.startsWith("http") && !seen.has(url)) {
+    seen.add(url);
+    const title = asTrimmedString(record.title) ?? asTrimmedString(record.name);
+    target.push({ url, ...(title ? { title } : {}) });
+  }
+  for (const nested of Object.values(record)) {
+    collectWebSources(nested, target, seen, depth + 1);
+  }
+}
+
+function extractWebSearchDetails(
+  itemType: ToolLifecycleItemType | undefined,
+  item: Record<string, unknown> | null,
+  input: Record<string, unknown> | null,
+  result: unknown,
+): WorkLogWebSearchDetails | undefined {
+  if (itemType !== "web_search") return undefined;
+  const action = item?.action;
+  const actionRecord = asRecord(action);
+  const actionQueries = Array.isArray(actionRecord?.queries) ? actionRecord.queries : [];
+  const query =
+    asTrimmedString(item?.query) ??
+    asTrimmedString(input?.query) ??
+    asTrimmedString(actionRecord?.query) ??
+    actionQueries.map(asTrimmedString).find((value): value is string => value !== null);
+  const sources: WorkLogWebSource[] = [];
+  const seen = new Set<string>();
+  collectWebSources(input, sources, seen);
+  collectWebSources(action, sources, seen);
+  collectWebSources(item?.results, sources, seen);
+  collectWebSources(result, sources, seen);
+  return {
+    ...(query ? { query } : {}),
+    ...(action !== undefined ? { action } : {}),
+    sources,
+  };
+}
+
+function extractMcpDetails(
+  itemType: ToolLifecycleItemType | undefined,
+  toolName: string | null,
+  item: Record<string, unknown> | null,
+  input: Record<string, unknown> | null,
+  result: unknown,
+): WorkLogMcpDetails | undefined {
+  if (itemType !== "mcp_tool_call") return undefined;
+  const mcpNameParts = toolName?.startsWith("mcp__") ? toolName.split("__") : [];
+  const server = asTrimmedString(item?.server) ?? asTrimmedString(mcpNameParts[1]);
+  const tool = asTrimmedString(item?.tool) ?? asTrimmedString(mcpNameParts.slice(2).join("__"));
+  const args = item?.arguments ?? input ?? undefined;
+  const mcpResult = item?.result ?? result;
+  const error = asTrimmedString(asRecord(item?.error)?.message);
+  const durationMs = asNumber(item?.durationMs);
+  return {
+    ...(server ? { server } : {}),
+    ...(tool ? { tool } : {}),
+    ...(args !== undefined ? { arguments: args } : {}),
+    ...(mcpResult !== undefined && mcpResult !== null ? { result: mcpResult } : {}),
+    ...(error ? { error } : {}),
+    ...(durationMs !== null ? { durationMs } : {}),
+  };
+}
+
+function extractCanonicalFileChanges(payload: Record<string, unknown> | null): WorkLogFileChange[] {
+  if (!Array.isArray(payload?.fileChanges)) return [];
+  return payload.fileChanges.flatMap((value): WorkLogFileChange[] => {
+    const change = asRecord(value);
+    const path = asTrimmedString(change?.path);
+    if (!change || !path) return [];
+    const status =
+      change.kind === "created" ||
+      change.kind === "modified" ||
+      change.kind === "deleted" ||
+      change.kind === "moved"
+        ? change.kind
+        : undefined;
+    const previousPath = asTrimmedString(change.previousPath) ?? undefined;
+    const diff = asTrimmedString(change.patch) ?? undefined;
+    return [
+      {
+        path,
+        ...(previousPath ? { previousPath } : {}),
+        ...(status ? { status } : {}),
+        additions: asNumber(change.additions) ?? 0,
+        deletions: asNumber(change.deletions) ?? 0,
+        ...(diff ? { diff } : {}),
+      },
+    ];
+  });
+}
+
+function extractRichToolDetails(
+  payload: Record<string, unknown> | null,
+  itemType: ToolLifecycleItemType | undefined,
+): {
+  toolName: string | null;
+  input: unknown;
+  result: unknown;
+  commandDetails?: WorkLogCommandDetails;
+  fileChanges: WorkLogFileChange[];
+  webSearch?: WorkLogWebSearchDetails;
+  mcpDetails?: WorkLogMcpDetails;
+} {
+  const { data, item, input, result } = toolPayloadParts(payload);
+  const toolName = asTrimmedString(data?.toolName) ?? asTrimmedString(item?.tool);
+  const commandOutput =
+    asTrimmedString(item?.aggregatedOutput) ??
+    (itemType === "command_execution" ? textFromToolValue(result) : null);
+  const exitCode = asNumber(item?.exitCode) ?? asNumber(asRecord(result)?.exitCode);
+  const durationMs = asNumber(item?.durationMs) ?? asNumber(asRecord(result)?.durationMs);
+  const cwd = asTrimmedString(item?.cwd) ?? asTrimmedString(input?.cwd);
+  const commandDetails =
+    itemType === "command_execution" &&
+    (commandOutput || exitCode !== null || durationMs !== null || cwd)
+      ? {
+          ...(commandOutput ? { output: commandOutput } : {}),
+          ...(exitCode !== null ? { exitCode } : {}),
+          ...(durationMs !== null ? { durationMs } : {}),
+          ...(cwd ? { cwd } : {}),
+        }
+      : undefined;
+  const canonicalFileChanges = extractCanonicalFileChanges(payload);
+  const fileChanges =
+    canonicalFileChanges.length > 0
+      ? canonicalFileChanges
+      : extractFileChanges(itemType, toolName, item, input, result);
+  const webSearch = extractWebSearchDetails(itemType, item, input, result);
+  const mcpDetails = extractMcpDetails(itemType, toolName, item, input, result);
+  return {
+    toolName,
+    input: input ?? undefined,
+    result,
+    ...(commandDetails ? { commandDetails } : {}),
+    fileChanges,
+    ...(webSearch ? { webSearch } : {}),
+    ...(mcpDetails ? { mcpDetails } : {}),
+  };
 }
 
 function trimMatchingOuterQuotes(value: string): string {
@@ -1049,7 +1522,7 @@ function extractToolCommand(payload: Record<string, unknown> | null): {
   const data = asRecord(payload?.data);
   const item = asRecord(data?.item);
   const itemResult = asRecord(item?.result);
-  const itemInput = asRecord(item?.input);
+  const itemInput = asRecord(item?.input) ?? asRecord(data?.input);
   const itemType = asTrimmedString(payload?.itemType);
   const detail = asTrimmedString(payload?.detail);
   const candidates: unknown[] = [
@@ -1083,7 +1556,7 @@ function extractToolTitle(payload: Record<string, unknown> | null): string | nul
 
 function extractToolCallId(payload: Record<string, unknown> | null): string | null {
   const data = asRecord(payload?.data);
-  return asTrimmedString(data?.toolCallId);
+  return asTrimmedString(payload?.toolCallId) ?? asTrimmedString(data?.toolCallId);
 }
 
 function normalizeInlinePreview(value: string): string {
@@ -1261,11 +1734,15 @@ function collectChangedFiles(value: unknown, target: string[], seen: Set<string>
   }
 
   pushChangedFile(target, seen, record.path);
+  pushChangedFile(target, seen, record.file_path);
   pushChangedFile(target, seen, record.filePath);
   pushChangedFile(target, seen, record.relativePath);
   pushChangedFile(target, seen, record.filename);
   pushChangedFile(target, seen, record.newPath);
   pushChangedFile(target, seen, record.oldPath);
+  pushChangedFile(target, seen, record.move_path);
+  pushChangedFile(target, seen, record.old_path);
+  pushChangedFile(target, seen, record.new_path);
 
   for (const nestedKey of [
     "item",
