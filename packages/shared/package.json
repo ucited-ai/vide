@@ -202,6 +202,14 @@
     "./devProxy": {
       "types": "./src/devProxy.ts",
       "import": "./src/devProxy.ts"
+    },
+    "./usageFormat": {
+      "types": "./src/usageFormat.ts",
+      "import": "./src/usageFormat.ts"
+    },
+    "./usageMerge": {
+      "types": "./src/usageMerge.ts",
+      "import": "./src/usageMerge.ts"
     }
   },
   "scripts": {

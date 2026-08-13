@@ -113,6 +113,7 @@ import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
 import * as CloudManagedEndpointRuntime from "./cloud/ManagedEndpointRuntime.ts";
 import * as CloudCliTokenManager from "./cloud/CliTokenManager.ts";
 import * as ProcessDiagnostics from "./diagnostics/ProcessDiagnostics.ts";
+import * as UsageService from "./usage/UsageService.ts";
 import * as ProcessResourceMonitor from "./diagnostics/ProcessResourceMonitor.ts";
 import * as TraceDiagnostics from "./diagnostics/TraceDiagnostics.ts";
 import * as Data from "effect/Data";
@@ -596,20 +597,25 @@ const buildAppUnderTest = (options?: {
         }),
       ),
       Layer.provide(
-        Layer.mock(ProcessResourceMonitor.ProcessResourceMonitor)({
-          readHistory: (input) =>
-            Effect.succeed({
-              readAt: TEST_EPOCH,
-              windowMs: input.windowMs,
-              bucketMs: input.bucketMs,
-              sampleIntervalMs: 5_000,
-              retainedSampleCount: 0,
-              totalCpuSecondsApprox: 0,
-              buckets: [],
-              topProcesses: [],
-              error: Option.none(),
-            }),
-        }),
+        Layer.mergeAll(
+          // The RPC surface only needs `UsageService` to resolve; no suite here
+          // asserts on transcript scanning.
+          UsageService.layerTest,
+          Layer.mock(ProcessResourceMonitor.ProcessResourceMonitor)({
+            readHistory: (input) =>
+              Effect.succeed({
+                readAt: TEST_EPOCH,
+                windowMs: input.windowMs,
+                bucketMs: input.bucketMs,
+                sampleIntervalMs: 5_000,
+                retainedSampleCount: 0,
+                totalCpuSecondsApprox: 0,
+                buckets: [],
+                topProcesses: [],
+                error: Option.none(),
+              }),
+          }),
+        ),
       ),
       Layer.provide(
         Layer.mock(TraceDiagnostics.TraceDiagnostics)({

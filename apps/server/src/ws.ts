@@ -103,6 +103,7 @@ import * as RepositoryIdentityResolver from "./project/RepositoryIdentityResolve
 import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
 import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
 import * as ProcessDiagnostics from "./diagnostics/ProcessDiagnostics.ts";
+import * as UsageService from "./usage/UsageService.ts";
 import * as ProcessResourceMonitor from "./diagnostics/ProcessResourceMonitor.ts";
 import * as TraceDiagnostics from "./diagnostics/TraceDiagnostics.ts";
 import * as SourceControlDiscovery from "./sourceControl/SourceControlDiscovery.ts";
@@ -327,6 +328,7 @@ const RPC_REQUIRED_SCOPE = new Map<string, AuthEnvironmentScope>([
   [WS_METHODS.serverGetProcessDiagnostics, AuthOrchestrationReadScope],
   [WS_METHODS.serverGetProcessResourceHistory, AuthOrchestrationReadScope],
   [WS_METHODS.serverSignalProcess, AuthOrchestrationOperateScope],
+  [WS_METHODS.serverGetUsageSummary, AuthOrchestrationReadScope],
   [WS_METHODS.cloudGetRelayClientStatus, AuthRelayWriteScope],
   [WS_METHODS.cloudInstallRelayClient, AuthRelayWriteScope],
   [WS_METHODS.sourceControlLookupRepository, AuthOrchestrationReadScope],
@@ -465,6 +467,7 @@ const makeWsRpcLayer = (
       const bootstrapCredentials = yield* PairingGrantStore.PairingGrantStore;
       const sessions = yield* SessionStore.SessionStore;
       const processDiagnostics = yield* ProcessDiagnostics.ProcessDiagnostics;
+      const usage = yield* UsageService.UsageService;
       const processResourceMonitor = yield* ProcessResourceMonitor.ProcessResourceMonitor;
       const relayClient = yield* RelayClient.RelayClient;
       const authorizationError = (requiredScope: AuthEnvironmentScope) =>
@@ -1589,6 +1592,10 @@ const makeWsRpcLayer = (
               "rpc.aggregate": "server",
             },
           ),
+        [WS_METHODS.serverGetUsageSummary]: (input) =>
+          observeRpcEffect(WS_METHODS.serverGetUsageSummary, usage.readSummary(input), {
+            "rpc.aggregate": "server",
+          }),
         [WS_METHODS.serverSignalProcess]: (input) =>
           observeRpcEffect(WS_METHODS.serverSignalProcess, processDiagnostics.signal(input), {
             "rpc.aggregate": "server",

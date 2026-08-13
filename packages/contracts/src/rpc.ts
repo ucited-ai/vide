@@ -135,6 +135,7 @@ import {
   ServerUpsertKeybindingResult,
 } from "./server.ts";
 import { ServerSettings, ServerSettingsError, ServerSettingsPatch } from "./settings.ts";
+import { UsageReadError, UsageSummary, UsageSummaryInput } from "./usage.ts";
 import {
   SourceControlCloneRepositoryInput,
   SourceControlCloneRepositoryResult,
@@ -218,6 +219,7 @@ export const WS_METHODS = {
   serverGetProcessDiagnostics: "server.getProcessDiagnostics",
   serverGetProcessResourceHistory: "server.getProcessResourceHistory",
   serverSignalProcess: "server.signalProcess",
+  serverGetUsageSummary: "server.getUsageSummary",
 
   // Cloud environment methods
   cloudGetRelayClientStatus: "cloud.getRelayClientStatus",
@@ -249,6 +251,12 @@ export const WsServerRemoveKeybindingRpc = Rpc.make(WS_METHODS.serverRemoveKeybi
   payload: ServerRemoveKeybindingInput,
   success: ServerRemoveKeybindingResult,
   error: Schema.Union([KeybindingsConfigError, EnvironmentAuthorizationError]),
+});
+
+export const WsServerGetUsageSummaryRpc = Rpc.make(WS_METHODS.serverGetUsageSummary, {
+  payload: UsageSummaryInput,
+  success: UsageSummary,
+  error: Schema.Union([EnvironmentAuthorizationError, UsageReadError]),
 });
 
 export const WsServerProbeRpc = Rpc.make(WS_METHODS.serverProbe, {
@@ -713,6 +721,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerGetProcessDiagnosticsRpc,
   WsServerGetProcessResourceHistoryRpc,
   WsServerSignalProcessRpc,
+  WsServerGetUsageSummaryRpc,
   WsCloudGetRelayClientStatusRpc,
   WsCloudInstallRelayClientRpc,
   WsSourceControlLookupRepositoryRpc,

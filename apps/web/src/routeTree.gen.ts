@@ -14,6 +14,7 @@ import { Route as PairRouteImport } from './routes/pair'
 import { Route as ConnectRouteImport } from './routes/connect'
 import { Route as ChatRouteImport } from './routes/_chat'
 import { Route as ChatIndexRouteImport } from './routes/_chat.index'
+import { Route as SettingsUsageRouteImport } from './routes/settings.usage'
 import { Route as SettingsThemeRouteImport } from './routes/settings.theme'
 import { Route as SettingsSourceControlRouteImport } from './routes/settings.source-control'
 import { Route as SettingsProvidersRouteImport } from './routes/settings.providers'
@@ -49,6 +50,11 @@ const ChatIndexRoute = ChatIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => ChatRoute,
+} as any)
+const SettingsUsageRoute = SettingsUsageRouteImport.update({
+  id: '/usage',
+  path: '/usage',
+  getParentRoute: () => SettingsRoute,
 } as any)
 const SettingsThemeRoute = SettingsThemeRouteImport.update({
   id: '/theme',
@@ -121,6 +127,7 @@ export interface FileRoutesByFullPath {
   '/settings/providers': typeof SettingsProvidersRoute
   '/settings/source-control': typeof SettingsSourceControlRoute
   '/settings/theme': typeof SettingsThemeRoute
+  '/settings/usage': typeof SettingsUsageRoute
   '/$environmentId/$threadId': typeof ChatEnvironmentIdThreadIdRoute
   '/draft/$draftId': typeof ChatDraftDraftIdRoute
 }
@@ -137,6 +144,7 @@ export interface FileRoutesByTo {
   '/settings/providers': typeof SettingsProvidersRoute
   '/settings/source-control': typeof SettingsSourceControlRoute
   '/settings/theme': typeof SettingsThemeRoute
+  '/settings/usage': typeof SettingsUsageRoute
   '/': typeof ChatIndexRoute
   '/$environmentId/$threadId': typeof ChatEnvironmentIdThreadIdRoute
   '/draft/$draftId': typeof ChatDraftDraftIdRoute
@@ -156,6 +164,7 @@ export interface FileRoutesById {
   '/settings/providers': typeof SettingsProvidersRoute
   '/settings/source-control': typeof SettingsSourceControlRoute
   '/settings/theme': typeof SettingsThemeRoute
+  '/settings/usage': typeof SettingsUsageRoute
   '/_chat/': typeof ChatIndexRoute
   '/_chat/$environmentId/$threadId': typeof ChatEnvironmentIdThreadIdRoute
   '/_chat/draft/$draftId': typeof ChatDraftDraftIdRoute
@@ -176,6 +185,7 @@ export interface FileRouteTypes {
     | '/settings/providers'
     | '/settings/source-control'
     | '/settings/theme'
+    | '/settings/usage'
     | '/$environmentId/$threadId'
     | '/draft/$draftId'
   fileRoutesByTo: FileRoutesByTo
@@ -192,6 +202,7 @@ export interface FileRouteTypes {
     | '/settings/providers'
     | '/settings/source-control'
     | '/settings/theme'
+    | '/settings/usage'
     | '/'
     | '/$environmentId/$threadId'
     | '/draft/$draftId'
@@ -210,6 +221,7 @@ export interface FileRouteTypes {
     | '/settings/providers'
     | '/settings/source-control'
     | '/settings/theme'
+    | '/settings/usage'
     | '/_chat/'
     | '/_chat/$environmentId/$threadId'
     | '/_chat/draft/$draftId'
@@ -259,6 +271,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof ChatIndexRouteImport
       parentRoute: typeof ChatRoute
+    }
+    '/settings/usage': {
+      id: '/settings/usage'
+      path: '/usage'
+      fullPath: '/settings/usage'
+      preLoaderRoute: typeof SettingsUsageRouteImport
+      parentRoute: typeof SettingsRoute
     }
     '/settings/theme': {
       id: '/settings/theme'
@@ -363,6 +382,7 @@ interface SettingsRouteChildren {
   SettingsProvidersRoute: typeof SettingsProvidersRoute
   SettingsSourceControlRoute: typeof SettingsSourceControlRoute
   SettingsThemeRoute: typeof SettingsThemeRoute
+  SettingsUsageRoute: typeof SettingsUsageRoute
 }
 
 const SettingsRouteChildren: SettingsRouteChildren = {
@@ -374,6 +394,7 @@ const SettingsRouteChildren: SettingsRouteChildren = {
   SettingsProvidersRoute: SettingsProvidersRoute,
   SettingsSourceControlRoute: SettingsSourceControlRoute,
   SettingsThemeRoute: SettingsThemeRoute,
+  SettingsUsageRoute: SettingsUsageRoute,
 }
 
 const SettingsRouteWithChildren = SettingsRoute._addFileChildren(
