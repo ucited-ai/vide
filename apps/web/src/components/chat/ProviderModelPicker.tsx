@@ -3,7 +3,7 @@ import {
   type ProviderDriverKind,
   type ResolvedKeybindingsConfig,
 } from "@vide/contracts";
-import { memo, useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import type { VariantProps } from "class-variance-authority";
 import { ChevronDownIcon } from "lucide-react";
 import { Button, buttonVariants } from "../ui/button";
@@ -20,6 +20,7 @@ import {
 } from "./providerIconUtils";
 import type { TraitsControlProps } from "./TraitsPicker";
 import type { ProviderInstanceEntry } from "../../providerInstances";
+import { resolveComposerPopupSideOffset } from "./composerPopupPosition";
 
 /**
  * Collision handling for a popup whose direction is a decision, not a
@@ -83,6 +84,7 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
   getModelDisabledReason?: (instanceId: ProviderInstanceId, model: string) => string | null;
   onInstanceModelChange: (instanceId: ProviderInstanceId, model: string) => void;
 }) {
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const [uncontrolledIsMenuOpen, setUncontrolledIsMenuOpen] = useState(false);
   const isMenuOpen = props.open ?? uncontrolledIsMenuOpen;
 
@@ -189,6 +191,7 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
       <PopoverTrigger
         render={
           <Button
+            ref={triggerRef}
             aria-label={props.triggerAriaLabel}
             size="sm"
             variant={props.triggerVariant ?? "ghost"}
@@ -234,6 +237,11 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
       <PopoverPopup
         align="start"
         side={props.popupSide ?? "bottom"}
+        sideOffset={
+          props.popupSide === "top"
+            ? () => resolveComposerPopupSideOffset(triggerRef.current)
+            : undefined
+        }
         {...(props.popupSide ? { collisionAvoidance: PINNED_POPUP_COLLISION_AVOIDANCE } : {})}
         /*
          * The popup carries the one pane of glass, like every other popover;

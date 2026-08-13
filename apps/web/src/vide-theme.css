@@ -39,6 +39,30 @@
 
 /* ---------------------------------------------------------- surface ladder */
 
+[data-agent-color="0"] {
+  --agent-mark-bg: var(--agent-mark-0);
+}
+
+[data-agent-color="1"] {
+  --agent-mark-bg: var(--agent-mark-1);
+}
+
+[data-agent-color="2"] {
+  --agent-mark-bg: var(--agent-mark-2);
+}
+
+[data-agent-color="3"] {
+  --agent-mark-bg: var(--agent-mark-3);
+}
+
+[data-agent-color="4"] {
+  --agent-mark-bg: var(--agent-mark-4);
+}
+
+[data-agent-color="5"] {
+  --agent-mark-bg: var(--agent-mark-5);
+}
+
 /*
  * The six rungs below are the whole palette the user owns. Everything after
  * them — border, hover, popover, card, ring, primary — is derived, so the app
@@ -144,6 +168,16 @@
   --wash-hover: rgb(0 0 0 / 4%);
   --wash-active: rgb(0 0 0 / 7%);
   --wash-selected: rgb(0 0 0 / 6%);
+  --agent-chip-bg: var(--wash-hover);
+  --agent-chip-hover: var(--wash-active);
+  --agent-mark-bg: var(--ink-secondary);
+  --agent-mark-ink: var(--surface-content);
+  --agent-mark-0: color-mix(in srgb, var(--ink) 96%, transparent);
+  --agent-mark-1: color-mix(in srgb, var(--ink) 82%, transparent);
+  --agent-mark-2: color-mix(in srgb, var(--ink) 70%, transparent);
+  --agent-mark-3: color-mix(in srgb, var(--ink) 58%, transparent);
+  --agent-mark-4: color-mix(in srgb, var(--ink) 46%, transparent);
+  --agent-mark-5: color-mix(in srgb, var(--ink) 34%, transparent);
 
   /*
    * The highlight the sheen carries through live type. Light, not ink — which is
@@ -343,6 +377,16 @@
   --wash-hover: rgb(255 255 255 / 5%);
   --wash-active: rgb(255 255 255 / 9%);
   --wash-selected: rgb(255 255 255 / 7%);
+  --agent-chip-bg: var(--wash-hover);
+  --agent-chip-hover: var(--wash-active);
+  --agent-mark-bg: var(--ink-secondary);
+  --agent-mark-ink: var(--surface-content);
+  --agent-mark-0: color-mix(in srgb, var(--ink) 96%, transparent);
+  --agent-mark-1: color-mix(in srgb, var(--ink) 82%, transparent);
+  --agent-mark-2: color-mix(in srgb, var(--ink) 70%, transparent);
+  --agent-mark-3: color-mix(in srgb, var(--ink) 58%, transparent);
+  --agent-mark-4: color-mix(in srgb, var(--ink) 46%, transparent);
+  --agent-mark-5: color-mix(in srgb, var(--ink) 34%, transparent);
 
   --chat-sheen: #ffffff;
 }
@@ -644,6 +688,49 @@
 }
 
 /*
+ * The right workspace rail is one panel surface, regardless of whether its
+ * current tab is Review, Files, Plan, Browser or Terminal. Those children
+ * historically repainted `--background` / `--surface-content`, which are the
+ * chat floor outside this subtree: the tab bar followed one colour while the
+ * selected tool followed another, and translucent panels stacked two fills.
+ *
+ * Paint the panel once at the shell and make the generic floor tokens inside
+ * it transparent. Existing tool components can keep their `bg-background`
+ * classes and Pierre shadow-DOM overrides; in this context those now reveal
+ * the one panel underneath instead of introducing a second material.
+ *
+ * The surfaces that are painted rather than revealed — a card, a raised block —
+ * cannot be transparent, so they are re-pointed at the panel rung instead. They
+ * used to resolve to the chrome rung, which is invisible only for as long as the
+ * user leaves `--surface-panel` aliasing `--surface-chrome`: the moment the
+ * "Chat input & side panels" swatch is given its own colour, every card in the
+ * rail stayed the menu colour while the rail moved.
+ */
+:root:root:root [data-preview-panel-mode] {
+  --background: transparent;
+  --surface-content: transparent;
+  --content-surface: transparent;
+
+  --card: var(--panel-surface);
+  --card-foreground: var(--ink);
+  --surface-raised-1: var(--surface-panel);
+  --surface-raised: var(--surface-panel);
+
+  background: var(--panel-surface);
+  -webkit-backdrop-filter: var(--panel-backdrop-filter, var(--chrome-backdrop-filter));
+  backdrop-filter: var(--panel-backdrop-filter, var(--chrome-backdrop-filter));
+}
+
+/* Sheet mode has one portalled wrapper outside the panel subtree. Keep that
+   wrapper on the same material so no chrome-coloured edge flashes during its
+   entrance or exit. */
+:root:root:root [data-slot="sheet-popup"]:has([data-preview-panel-mode]) {
+  background: var(--panel-surface);
+  -webkit-backdrop-filter: var(--panel-backdrop-filter, var(--chrome-backdrop-filter));
+  backdrop-filter: var(--panel-backdrop-filter, var(--chrome-backdrop-filter));
+}
+
+/*
  * The one definition of popup glass. Every popup in the app — menus, selects,
  * comboboxes, popovers, tooltips, toasts, dialogs — carries one of these two
  * classes, and everything they paint is decided here: the fill is the chrome
@@ -797,6 +884,13 @@ html.electron:not(.electron-windows) body {
   background: transparent;
 }
 
+/* Every visible app surface owns its grain. Leaving a second noise tile on the
+   transparent document floor made a 0%-opacity sidebar or chat pane retain a
+   faint grey veil even after its own fill, frost and grain had switched off. */
+html.electron:not(.electron-windows) body {
+  background-image: none;
+}
+
 /*
  * The sidebar panel and the content pane both animate their width on collapse.
  * Upstream drives that with a linear ease; the shared curve makes the panel
@@ -938,10 +1032,17 @@ html.electron:not(.electron-windows) body {
    *
    * Every step below is mixed from --panel-diff-code-surface, because that is
    * the value handed to Pierre as --diffs-bg and so the floor the rows actually
-   * paint on. They used to be mixed from --surface-content, which is a
-   * different colour: in light the code sat in a grey trough inside a near-white
-   * card and the file header came out the same grey as the code beneath it, and
-   * in dark an added line landed darker than the unchanged code around it.
+   * paint on. That floor is now --surface-panel, the rung the right rail is
+   * painted from, so the code sits on the rail rather than beside it.
+   *
+   * It has to be said here, at root, rather than by overriding --surface-content
+   * inside `[data-preview-panel-mode]` the way the rail's other floor tokens are
+   * handled. A custom property that references var() is substituted where it is
+   * *declared*, and every step of this ladder is declared at root: overriding an
+   * ingredient further down the tree cannot re-resolve a mix that was already
+   * computed on the html element. That is exactly why the rail's `bg-background`
+   * children followed the panel colour while the diff did not — the two look
+   * like the same mechanism and are not.
    *
    * Steps are sized by perceived distance from that floor rather than by mix
    * percentage, which is why the two hue ladders do not share numbers. Equal
@@ -950,12 +1051,19 @@ html.electron:not(.electron-windows) body {
    * dark base, so the addition ladder holds at one set of percentages while the
    * deletion ladder takes its own in the dark block below.
    */
-  --panel-diff-viewport-surface: color-mix(
-    in srgb,
-    var(--surface-content) 94%,
-    var(--surface-chrome)
-  );
-  --panel-diff-code-surface: color-mix(in srgb, var(--surface-chrome) 90%, var(--surface-content));
+  /* No second floor: the scroller is the rail, so it paints nothing and lets the
+     one panel fill — and the one panel opacity — show through. It used to hold
+     the chat floor, which is how a near-black trough came to sit inside a rail
+     painted fifteen levels lighter than it. */
+  --panel-diff-viewport-surface: transparent;
+  /*
+   * The opaque rung, not --panel-surface: every step below mixes from this, and
+   * color-mix carries alpha through, so a translucent floor would quietly make
+   * an added line see-through. Pierre derives a further dozen values from it
+   * inside its shadow DOM that the app cannot override at all. Code stays a
+   * surface you read on; the rail around it is what answers the opacity.
+   */
+  --panel-diff-code-surface: var(--surface-panel);
   /* Unchanged code is the file's own surface, not a band inside it. The flat
      field is what the separator and the tinted rows get to read against. */
   --panel-diff-context-surface: var(--panel-diff-code-surface);
@@ -1031,10 +1139,17 @@ html.electron:not(.electron-windows) body {
 
   --panel-diff-title-underline-offset: 0.125rem;
   --panel-diff-title-hover-ink: var(--ink);
-  --panel-notice-surface: color-mix(in srgb, var(--surface-content) 98%, var(--ink));
-  --panel-raw-patch-surface: color-mix(in srgb, var(--surface-content) 70%, var(--surface-chrome));
-  --panel-loading-surface: color-mix(in srgb, var(--surface-content) 75%, var(--surface-chrome));
-  --panel-muted-ink: color-mix(in srgb, var(--ink-secondary) 70%, var(--surface-content));
+  /*
+   * The rail's remaining painted surfaces, on the same rung for the same reason.
+   * The raw patch and the loading card used to be mixed between the chat floor
+   * and the menu rung — a colour belonging to neither of the two surfaces they
+   * are ever seen against — so they now step off the panel toward ink, the way
+   * the diff's own separator and header do: a recess in light, a lift in dark.
+   */
+  --panel-notice-surface: color-mix(in srgb, var(--surface-panel) 98%, var(--ink));
+  --panel-raw-patch-surface: color-mix(in srgb, var(--surface-panel) 96%, var(--ink));
+  --panel-loading-surface: color-mix(in srgb, var(--surface-panel) 97%, var(--ink));
+  --panel-muted-ink: color-mix(in srgb, var(--ink-secondary) 70%, var(--surface-panel));
   --panel-edge-muted: var(--edge);
   --panel-loading-edge: var(--edge);
   --panel-loading-divider: var(--edge);
@@ -1203,6 +1318,23 @@ html.electron:not(.electron-windows) body {
   --composer-context-strip-width-offset: 2.75rem;
   --composer-context-strip-edge-fade: 1rem;
   --hero-title-size-narrow: 1.25rem;
+
+  /*
+   * What the context strip keeps clear at its right end for the stash pill.
+   *
+   * The pill is perched on the composer's top-right shoulder, twelve pixels
+   * above the input — and the strip meets that same edge, so on an empty
+   * timeline (the only time the strip is drawn, and exactly when a stashed
+   * prompt is most likely to be wanted) the pill landed across the checkout and
+   * branch chips. The reserve is on the strip's *content* row rather than its
+   * wrapper: padding the wrapper would pull the strip's rounded shape off the
+   * composer's centre line, where this only stops the chips short and lets the
+   * pill straddle the seam over the strip's own fill.
+   *
+   * Sized for the widest the pill gets — glyph, "Stash", a two-digit count at
+   * the twenty-entry cap, its padding, and the pill's own inset from the edge.
+   */
+  --composer-stash-reserve: 7.5rem;
 }
 
 :root:root:root [data-composer-context-strip-content] {
@@ -1222,8 +1354,11 @@ html.electron:not(.electron-windows) body {
 
 /* --------------------------------------- empty right panel cards */
 
+/* Off the panel rung, not off --card: `--card` is substituted here at root,
+   where it still means the menu rung, so a hover mixed from it drifted away from
+   the card it lit the moment the rail took a colour of its own. */
 :root:root:root {
-  --right-panel-card-hover: color-mix(in srgb, var(--card) 92%, var(--ink));
+  --right-panel-card-hover: color-mix(in srgb, var(--surface-panel) 92%, var(--ink));
 }
 
 /* ---------------------------------------------------------- the agent turn */

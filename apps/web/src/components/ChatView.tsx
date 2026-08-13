@@ -114,6 +114,7 @@ import {
 } from "../types";
 import { useTheme } from "../hooks/useTheme";
 import { useTurnDiffSummaries } from "../hooks/useTurnDiffSummaries";
+import { deriveSubagentSummaries } from "../subagentActivity";
 import { isCommandPaletteOpen } from "../commandPaletteBus";
 import { buildTemporaryWorktreeBranchName } from "@vide/shared/git";
 import { useMediaQuery } from "../hooks/useMediaQuery";
@@ -2125,6 +2126,7 @@ function ChatViewContent(props: ChatViewProps) {
   const phase = derivePhase(activeThread?.session ?? null);
   const threadActivities = activeThread?.activities ?? EMPTY_ACTIVITIES;
   const workLogEntries = useMemo(() => deriveWorkLogEntries(threadActivities), [threadActivities]);
+  const [selectedSubagentId, setSelectedSubagentId] = useState<string | null>(null);
   const pendingApprovals = useMemo(
     () => derivePendingApprovals(threadActivities),
     [threadActivities],
@@ -2458,9 +2460,35 @@ function ChatViewContent(props: ChatViewProps) {
   }, [attachmentPreviewHandoffByMessageId, displayServerMessages, optimisticUserMessages]);
   const timelineEntries = useMemo(
     () =>
-      deriveTimelineEntries(timelineMessages, activeThread?.proposedPlans ?? [], workLogEntries),
+      deriveTimelineEntries(
+        timelineMessages.filter((message) => !message.agent),
+        activeThread?.proposedPlans ?? [],
+        workLogEntries.filter(
+          (entry) => !entry.agent && entry.itemType !== "collab_agent_tool_call",
+        ),
+      ),
     [activeThread?.proposedPlans, timelineMessages, workLogEntries],
   );
+  const subagents = useMemo(
+    () =>
+      deriveSubagentSummaries({
+        messages: displayServerMessages,
+        workEntries: workLogEntries,
+        activities: threadActivities,
+      }),
+    [displayServerMessages, threadActivities, workLogEntries],
+  );
+  const webSources = useMemo(() => {
+    const byUrl = new Map<string, { readonly url: string; readonly title?: string }>();
+    for (const entry of workLogEntries) {
+      for (const source of entry.webSearch?.sources ?? []) byUrl.set(source.url, source);
+    }
+    return [...byUrl.values()];
+  }, [workLogEntries]);
+  const openSubagent = useCallback((agentId: string) => {
+    setSelectedSubagentId(agentId);
+    setEnvironmentColumnIntent("open");
+  }, []);
   const [dockedDraftHeroThreadKey, setDockedDraftHeroThreadKey] = useState<string | null>(null);
   const draftHeroDockRequested =
     activeThreadKey !== null && dockedDraftHeroThreadKey === activeThreadKey;
@@ -2583,9 +2611,6 @@ function ChatViewContent(props: ChatViewProps) {
    * and BranchToolbar already decides that for itself.
    */
   const showComposerContextStrip = activeProject !== null;
-  const initialDiffPanelGitScope =
-    gitStatusQuery.data?.hasWorkingTreeChanges === true ? "unstaged" : "branch";
-  const diffPanelGitStatusResolutionKey = gitStatusQuery.data ? "resolved" : "pending";
   const terminalShortcutLabelOptions = useMemo(
     () => ({
       context: {
@@ -6135,11 +6160,11 @@ function ChatViewContent(props: ChatViewProps) {
         />
       ) : activeRightPanelSurface?.kind === "diff" ? (
         <Suspense fallback={null}>
-          <DiffPanel
-            key={`${activeThreadKey}:${diffPanelGitStatusResolutionKey}`}
-            composerDraftTarget={composerDraftTarget}
-            initialGitScope={initialDiffPanelGitScope}
-          />
+          {/* Keyed by thread alone. It used to carry a git-status resolution key
+              as well, purely to remount the panel once the working-tree probe
+              landed and re-seed a frozen initial scope — the panel no longer has
+              one to seed, so the remount is gone with it. */}
+          <DiffPanel key={activeThreadKey} composerDraftTarget={composerDraftTarget} />
         </Suspense>
       ) : activeRightPanelSurface?.kind === "plan" ? (
         <PlanSidebar
@@ -6314,6 +6339,8 @@ function ChatViewContent(props: ChatViewProps) {
                 onManualNavigation={cancelTimelineLiveFollowForUserNavigation}
                 hideEmptyPlaceholder={isDraftHeroState}
                 topFadeEnabled={!hasTimelineTopBanner}
+                subagents={subagents}
+                onOpenSubagent={openSubagent}
               />
 
               {/* scroll to end pill — shown when user has scrolled away from the live edge */}
@@ -6595,6 +6622,11 @@ function ChatViewContent(props: ChatViewProps) {
               fullAreaHidden={rightPanelMaximized}
               onClose={closeEnvironmentColumn}
               onOpenReview={isGitRepo && gitCwd !== null ? addDiffSurface : null}
+              subagents={subagents}
+              selectedSubagentId={selectedSubagentId}
+              onSelectSubagent={setSelectedSubagentId}
+              webSources={webSources}
+              resolvedTheme={resolvedTheme}
             />
           ) : null}
         </div>

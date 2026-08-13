@@ -108,9 +108,8 @@ interface CollapsedDiffFilesState {
 
 const EMPTY_COLLAPSED_DIFF_FILE_KEYS: ReadonlySet<string> = new Set();
 
-/** Module constants so falling back off a turn scope keeps a stable identity. */
+/** Module constant so falling back off a turn scope keeps a stable identity. */
 const WORKING_TREE_SELECTION: DiffPanelSelection = { kind: "unstaged" };
-const BRANCH_SELECTION: DiffPanelSelection = { kind: "branch", baseRef: null };
 
 const DIFF_PANEL_UNSAFE_CSS = `
 [data-diffs-header],
@@ -292,15 +291,11 @@ function DiffPanelLoadingState(props: { label: string }) {
 
 interface DiffPanelProps {
   composerDraftTarget: ScopedThreadRef | DraftId;
-  initialGitScope: "branch" | "unstaged";
 }
 
 export { DiffWorkerPoolProvider } from "./DiffWorkerPoolProvider";
 
-export default function DiffPanel({
-  composerDraftTarget,
-  initialGitScope: initialGitScopeProp,
-}: DiffPanelProps) {
+export default function DiffPanel({ composerDraftTarget }: DiffPanelProps) {
   const { resolvedTheme } = useTheme();
   const settings = useClientSettings();
   const updateClientSettings = useUpdateClientSettings();
@@ -308,7 +303,6 @@ export default function DiffPanel({
     () => resolveStorage(typeof window !== "undefined" ? window.localStorage : undefined),
     [],
   );
-  const [initialGitScope] = useState(initialGitScopeProp);
   const [diffRenderMode, setDiffRenderMode] = useState<ReviewViewMode>(() =>
     readReviewViewMode(preferenceStorage),
   );
@@ -396,11 +390,7 @@ export default function DiffPanel({
       : null,
   );
   const storedDiffSelection = useDiffPanelStore((state) =>
-    selectThreadDiffPanelSelection(
-      state.byThreadKey,
-      diffThreadRef,
-      initialGitScope === "unstaged",
-    ),
+    selectThreadDiffPanelSelection(state.byThreadKey, diffThreadRef),
   );
   const isGitRepo = gitStatusQuery.data?.isRepo ?? true;
   const { turnDiffSummaries, inferredCheckpointTurnCountByTurnId } =
@@ -434,9 +424,7 @@ export default function DiffPanel({
   const diffSelection =
     canReviewTurns || storedDiffSelection.kind !== "turn"
       ? storedDiffSelection
-      : initialGitScope === "unstaged"
-        ? WORKING_TREE_SELECTION
-        : BRANCH_SELECTION;
+      : WORKING_TREE_SELECTION;
 
   useEffect(() => {
     if (!diffThreadRef || diffSelection.kind !== "turn") return;

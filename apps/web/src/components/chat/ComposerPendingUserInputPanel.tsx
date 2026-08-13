@@ -7,6 +7,7 @@ import {
 } from "../../pendingUserInput";
 import { CheckIcon } from "lucide-react";
 import { cn } from "~/lib/utils";
+import { Kbd } from "../ui/kbd";
 
 interface PendingUserInputPanelProps {
   pendingUserInputs: PendingUserInput[];
@@ -152,25 +153,34 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
 
   const customAnswerActive = progress.customAnswer.trim().length > 0;
 
+  /*
+   * The question, in the task list's vocabulary.
+   *
+   * Header caption and count on one baseline, ink by role, selection carried by
+   * the ladder's washes. It used to run on ad-hoc alphas — `muted-foreground/55`,
+   * `bg-muted/22`, `border-border/45`, `bg-primary/8` — which are not steps on
+   * any ladder, and on an uppercase tracked caption that appears nowhere else in
+   * the app. `--primary` is `--ink` here, so the "accent" that marked a selected
+   * option was already monochrome; it just arrived at its grey by a different
+   * route than every other selected row in the app.
+   */
   return (
-    <div className="px-4 py-3 sm:px-5">
-      <div className="mb-2 flex items-center gap-3">
-        <span className="text-(length:--text-caption) font-semibold tracking-widest text-muted-foreground/55 uppercase">
-          {activeQuestion.header}
-        </span>
+    <div className="px-3 py-2.5">
+      <div className="mb-2 flex items-baseline justify-between gap-3 text-(length:--text-caption) text-(--ink-tertiary)">
+        <span className="min-w-0 truncate">{activeQuestion.header}</span>
         {prompt.questions.length > 1 ? (
-          <span className="flex h-5 items-center rounded-md bg-muted/60 px-1.5 text-(length:--text-micro) font-medium tabular-nums text-muted-foreground/60">
+          <span className="shrink-0 tabular-nums">
             {questionIndex + 1}/{prompt.questions.length}
           </span>
         ) : null}
       </div>
-      <p className="text-(length:--text-ui) text-foreground/90">{activeQuestion.question}</p>
+      <p className="text-(length:--text-ui) text-(--ink)">{activeQuestion.question}</p>
       {activeQuestion.multiSelect ? (
-        <p className="mt-1 text-(length:--text-caption) text-muted-foreground/65">
+        <p className="mt-1 text-(length:--text-caption) text-(--ink-tertiary)">
           Select one or more options.
         </p>
       ) : null}
-      <div className="mt-3 space-y-1.5">
+      <div className="mt-2.5 space-y-1">
         {activeQuestion.options.map((option, index) => {
           const isOptimisticallySelected =
             optimisticSingleSelect?.questionId === activeQuestion.id &&
@@ -180,34 +190,26 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
             (!customAnswerActive && progress.selectedOptionLabels.includes(option.label));
           const shortcutKey = index < 9 ? index + 1 : null;
           const className = cn(
-            "group flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left outline-none transition-all focus-visible:border-primary/40 focus-visible:ring-1 focus-visible:ring-primary/25",
+            "flex w-full items-center gap-2 rounded-(--radius) border px-2 py-1.5 text-left text-(--ink) outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring",
             isSelected
-              ? "border-primary/30 bg-primary/8 text-foreground"
-              : "border-transparent bg-muted/22 text-foreground/85 hover:border-border/45 hover:bg-muted/34",
-            isResponding && "opacity-50 cursor-not-allowed",
-            !isResponding && "cursor-pointer",
+              ? "border-(--edge-strong) bg-(--wash-selected)"
+              : "border-(--edge) hover:bg-(--wash-hover)",
+            isResponding ? "cursor-not-allowed opacity-50" : "cursor-pointer",
           );
           const content = (
             <>
-              <div className="min-w-0 flex-1 flex flex-col gap-0.5">
+              <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                 <span className="text-(length:--text-ui) font-medium">{option.label}</span>
                 {option.description && option.description !== option.label ? (
-                  <span className="text-(length:--text-caption) text-muted-foreground">
+                  <span className="text-(length:--text-caption) text-(--ink-tertiary)">
                     {option.description}
                   </span>
                 ) : null}
               </div>
               {isSelected ? (
-                <CheckIcon className="size-3.5 shrink-0 text-primary" />
+                <CheckIcon aria-hidden="true" className="size-3.5 shrink-0 text-(--ink)" />
               ) : shortcutKey !== null ? (
-                <kbd
-                  className={cn(
-                    "flex size-5 shrink-0 items-center justify-center rounded border border-border/50 text-(length:--text-caption) font-medium tabular-nums transition-colors",
-                    "bg-background/35 text-muted-foreground/70 group-hover:border-border/70 group-hover:text-muted-foreground",
-                  )}
-                >
-                  {shortcutKey}
-                </kbd>
+                <Kbd className="shrink-0 tabular-nums">{shortcutKey}</Kbd>
               ) : null}
             </>
           );

@@ -245,7 +245,7 @@ function MenuRadioItem({
   return (
     <MenuPrimitive.RadioItem
       className={cn(
-        "flex min-h-(--popup-item-height) in-data-[side=none]:min-w-[calc(var(--anchor-width)+1.25rem)] cursor-default items-center rounded-(--popup-item-radius) px-(--popup-item-padding-inline) py-1 text-(length:--text-ui) text-foreground outline-none data-checked:bg-foreground/[0.08] data-disabled:pointer-events-none data-highlighted:bg-accent data-highlighted:text-accent-foreground data-disabled:opacity-64 [&_svg:not([class*='size-'])]:size-(--popup-icon-size) [&_svg]:pointer-events-none [&_svg]:shrink-0",
+        "flex min-h-(--popup-item-height) in-data-[side=none]:min-w-[calc(var(--anchor-width)+1.25rem)] cursor-default items-center rounded-(--popup-item-radius) px-(--popup-item-padding-inline) py-1 text-(length:--text-ui) text-foreground outline-none data-checked:bg-(--wash-selected) data-disabled:pointer-events-none data-highlighted:bg-accent data-highlighted:text-accent-foreground data-disabled:opacity-64 [&_svg:not([class*='size-'])]:size-(--popup-icon-size) [&_svg]:pointer-events-none [&_svg]:shrink-0",
         className,
       )}
       data-slot="menu-radio-item"

@@ -1,8 +1,11 @@
 import { scopeThreadRef } from "@vide/client-runtime/environment";
 import type { EnvironmentId, ThreadId, VcsRef } from "@vide/contracts";
 import {
+  ArrowLeftIcon,
+  BotIcon,
   CheckIcon,
   ChevronDownIcon,
+  CircleAlertIcon,
   CloudUploadIcon,
   FileDiffIcon,
   FolderGit2Icon,
@@ -26,7 +29,10 @@ import {
 import { type DraftId } from "~/composerDraftStore";
 import { keepPrintableKeysInField } from "~/lib/menuTypeahead";
 import { cn } from "~/lib/utils";
+import type { WorkLogWebSource } from "../../session-logic";
+import type { SubagentSummary } from "../../subagentActivity";
 import { usePaginatedBranches } from "~/state/queries";
+import ChatMarkdown from "../ChatMarkdown";
 import { resolveLockedWorkspaceLabel } from "../BranchToolbar.logic";
 import { useThreadBranchSelection } from "../BranchToolbarBranchSelector";
 import { GitActionItemIcon, GitQuickActionIcon, useGitActions } from "../GitActionsControl";
@@ -35,6 +41,7 @@ import { Menu, MenuItem, MenuPopup, MenuRow, MenuTrigger, menuRowVariants } from
 import { Skeleton } from "../ui/skeleton";
 import { Spinner } from "../ui/spinner";
 import { DiffStatLabel } from "./DiffStatLabel";
+import { WorkCallExpandedDetails } from "./WorkGroupRow";
 
 interface ChatEnvironmentColumnProps {
   environmentId: EnvironmentId;
@@ -48,6 +55,11 @@ interface ChatEnvironmentColumnProps {
   /** Opens the review surface in the right panel, or `null` where review is not
    *  available — a draft thread, or a workspace that is not a Git repository. */
   onOpenReview: (() => void) | null;
+  subagents: ReadonlyArray<SubagentSummary>;
+  selectedSubagentId: string | null;
+  onSelectSubagent: (agentId: string | null) => void;
+  webSources: ReadonlyArray<WorkLogWebSource>;
+  resolvedTheme: "light" | "dark";
 }
 
 /**
@@ -312,6 +324,11 @@ export const ChatEnvironmentColumn = memo(function ChatEnvironmentColumn({
   fullAreaHidden,
   onClose,
   onOpenReview,
+  subagents,
+  selectedSubagentId,
+  onSelectSubagent,
+  webSources,
+  resolvedTheme,
 }: ChatEnvironmentColumnProps) {
   const visibleOpen = open && !fullAreaHidden;
 
@@ -433,6 +450,11 @@ export const ChatEnvironmentColumn = memo(function ChatEnvironmentColumn({
   const WorkspaceIcon = branch.activeWorktreePath ? FolderGit2Icon : FolderIcon;
   const branchLabel = branch.resolvedActiveBranch ?? "No ref";
   const showPublishRow = git.canPublishRepository && git.quickAction.kind !== "open_publish";
+  const selectedSubagent =
+    subagents.find((agent) => agent.agent.agentId === selectedSubagentId) ?? null;
+  const runningSubagents = subagents.filter((agent) => agent.status === "running");
+  const finishedSubagents = subagents.filter((agent) => agent.status !== "running");
+  const [allSourcesOpen, setAllSourcesOpen] = useState(false);
 
   return (
     <>
@@ -487,176 +509,259 @@ export const ChatEnvironmentColumn = memo(function ChatEnvironmentColumn({
           {/* The rows establish the window's natural height, then shrink into
               an internal scroller when the available workspace is exhausted. */}
           <div className="min-h-0 flex-auto overflow-y-auto p-(--popup-padding)">
-            <div>
-              <MenuRow variant="static" label="Environment" tone="heading" />
-              {!git.isRepo ? (
-                <>
-                  <MenuRow
-                    variant="static"
-                    icon={<GitBranchPlusIcon aria-hidden />}
-                    label="Not a Git repository"
-                    tone="muted"
-                  />
-                  <MenuRow
-                    icon={
-                      git.isInitPending ? (
-                        <Spinner aria-hidden />
-                      ) : (
-                        <GitBranchPlusIcon aria-hidden />
-                      )
-                    }
-                    label={git.isInitPending ? "Initializing Git…" : "Initialize Git repository"}
-                    disabled={git.isInitPending}
-                    onClick={git.initRepository}
-                  />
-                </>
-              ) : (
-                <>
-                  {/*
-                   * Reading the diff, not committing it. This row used to open
-                   * the commit dialog, which put the one surface built for
-                   * reading a change behind a dialog built for shipping it —
-                   * and committing is already the quick action below, so
-                   * nothing is lost by letting this row mean review.
-                   *
-                   * It is also the only row here that navigates rather than
-                   * acting in place, so it is the only one the column steps
-                   * aside for: opening the right panel auto-collapses this
-                   * column, which is why it needs no explicit close.
-                   */}
-                  <EnvironmentPendingGroup pending={isSwitchingRef}>
-                    <MenuRow
-                      icon={<FileDiffIcon aria-hidden />}
-                      label="Changes"
-                      caption={changesCaption}
-                      disabled={onOpenReview === null}
-                      {...(onOpenReview ? { onClick: onOpenReview } : {})}
-                    />
-                    <MenuRow
-                      variant="static"
-                      icon={<WorkspaceIcon aria-hidden />}
-                      label={workspaceLabel}
-                      caption={branch.activeWorktreePath}
-                      tone="muted"
-                    />
-                  </EnvironmentPendingGroup>
-                  <EnvironmentBranchRow
-                    environmentId={environmentId}
-                    branchCwd={branch.branchCwd}
-                    activeBranch={branch.resolvedActiveBranch}
-                    branchLabel={branchLabel}
-                    pending={isSwitchingRef}
-                    onSelectBranch={branch.selectBranch}
-                  />
-                  {/* The advisory lines stay put rather than disappearing for
+            {selectedSubagent ? (
+              <SubagentDetail
+                agent={selectedSubagent}
+                environmentId={environmentId}
+                gitCwd={gitCwd}
+                onBack={() => onSelectSubagent(null)}
+                resolvedTheme={resolvedTheme}
+                threadId={threadId}
+              />
+            ) : (
+              <>
+                <div>
+                  <MenuRow variant="static" label="Environment" tone="heading" />
+                  {!git.isRepo ? (
+                    <>
+                      <MenuRow
+                        variant="static"
+                        icon={<GitBranchPlusIcon aria-hidden />}
+                        label="Not a Git repository"
+                        tone="muted"
+                      />
+                      <MenuRow
+                        icon={
+                          git.isInitPending ? (
+                            <Spinner aria-hidden />
+                          ) : (
+                            <GitBranchPlusIcon aria-hidden />
+                          )
+                        }
+                        label={
+                          git.isInitPending ? "Initializing Git…" : "Initialize Git repository"
+                        }
+                        disabled={git.isInitPending}
+                        onClick={git.initRepository}
+                      />
+                    </>
+                  ) : (
+                    <>
+                      {/*
+                       * Reading the diff, not committing it. This row used to open
+                       * the commit dialog, which put the one surface built for
+                       * reading a change behind a dialog built for shipping it —
+                       * and committing is already the quick action below, so
+                       * nothing is lost by letting this row mean review.
+                       *
+                       * It is also the only row here that navigates rather than
+                       * acting in place, so it is the only one the column steps
+                       * aside for: opening the right panel auto-collapses this
+                       * column, which is why it needs no explicit close.
+                       */}
+                      <EnvironmentPendingGroup pending={isSwitchingRef}>
+                        <MenuRow
+                          icon={<FileDiffIcon aria-hidden />}
+                          label="Changes"
+                          caption={changesCaption}
+                          disabled={onOpenReview === null}
+                          {...(onOpenReview ? { onClick: onOpenReview } : {})}
+                        />
+                        <MenuRow
+                          variant="static"
+                          icon={<WorkspaceIcon aria-hidden />}
+                          label={workspaceLabel}
+                          caption={branch.activeWorktreePath}
+                          tone="muted"
+                        />
+                      </EnvironmentPendingGroup>
+                      <EnvironmentBranchRow
+                        environmentId={environmentId}
+                        branchCwd={branch.branchCwd}
+                        activeBranch={branch.resolvedActiveBranch}
+                        branchLabel={branchLabel}
+                        pending={isSwitchingRef}
+                        onSelectBranch={branch.selectBranch}
+                      />
+                      {/* The advisory lines stay put rather than disappearing for
                       the duration: they are conditioned on the same stale
                       status as everything else here, so hiding them would move
                       the whole panel twice on the way to the same answer. */}
-                  <EnvironmentPendingGroup pending={isSwitchingRef}>
-                    <MenuRow
-                      icon={
-                        <GitQuickActionIcon
-                          quickAction={git.quickAction}
-                          SourceControlIcon={SourceControlIcon}
+                      <EnvironmentPendingGroup pending={isSwitchingRef}>
+                        <MenuRow
+                          icon={
+                            <GitQuickActionIcon
+                              quickAction={git.quickAction}
+                              SourceControlIcon={SourceControlIcon}
+                            />
+                          }
+                          label={git.quickAction.label}
+                          caption={git.quickActionDisabledReason}
+                          disabled={git.isBusy || git.quickAction.disabled}
+                          onClick={git.runQuickAction}
                         />
-                      }
-                      label={git.quickAction.label}
-                      caption={git.quickActionDisabledReason}
-                      disabled={git.isBusy || git.quickAction.disabled}
-                      onClick={git.runQuickAction}
+                        {secondaryItems.map((item) => (
+                          <MenuRow
+                            key={`${item.id}-${item.label}`}
+                            icon={
+                              <GitActionItemIcon
+                                icon={item.icon}
+                                SourceControlIcon={SourceControlIcon}
+                              />
+                            }
+                            label={item.label}
+                            caption={git.menuItemDisabledReason(item)}
+                            disabled={item.disabled}
+                            onClick={() => {
+                              git.runMenuItem(item);
+                            }}
+                          />
+                        ))}
+                        {pullRequestItem ? (
+                          <MenuRow
+                            icon={
+                              <GitActionItemIcon
+                                icon={pullRequestItem.icon}
+                                SourceControlIcon={SourceControlIcon}
+                              />
+                            }
+                            label={pullRequestItem.label}
+                            caption={
+                              isSwitchingRef ? (
+                                <ReadingSkeleton />
+                              ) : pullRequest ? (
+                                `#${pullRequest.number} ${pullRequest.state}`
+                              ) : (
+                                git.menuItemDisabledReason(pullRequestItem)
+                              )
+                            }
+                            disabled={pullRequestItem.disabled}
+                            onClick={() => {
+                              git.runMenuItem(pullRequestItem);
+                            }}
+                          />
+                        ) : null}
+                        {showPublishRow ? (
+                          <MenuRow
+                            icon={<CloudUploadIcon aria-hidden />}
+                            label="Publish repository"
+                            disabled={git.isBusy}
+                            onClick={git.openPublishDialog}
+                          />
+                        ) : null}
+                        {git.gitStatus?.refName === null ? (
+                          <MenuRow
+                            variant="static"
+                            label="Detached HEAD: check out a ref to push or open a pull request."
+                            tone="muted"
+                          />
+                        ) : null}
+                        {git.gitStatus &&
+                        git.gitStatus.refName !== null &&
+                        !git.gitStatus.hasWorkingTreeChanges &&
+                        git.gitStatus.behindCount > 0 &&
+                        git.gitStatus.aheadCount === 0 ? (
+                          <MenuRow
+                            variant="static"
+                            label="Behind upstream. Pull or rebase first."
+                            tone="muted"
+                          />
+                        ) : null}
+                        {git.gitStatusError ? (
+                          <MenuRow variant="static" label={git.gitStatusError} tone="destructive" />
+                        ) : null}
+                      </EnvironmentPendingGroup>
+                    </>
+                  )}
+                </div>
+                <div
+                  aria-hidden
+                  className="mx-(--popup-padding) my-(--popup-padding) h-px bg-border"
+                />
+                <div>
+                  <MenuRow variant="static" label="Subagents" tone="heading" />
+                  {subagents.length === 0 ? (
+                    <MenuRow
+                      icon={<BotIcon aria-hidden />}
+                      label="No subagents"
+                      tone="muted"
+                      variant="static"
                     />
-                    {secondaryItems.map((item) => (
-                      <MenuRow
-                        key={`${item.id}-${item.label}`}
-                        icon={
-                          <GitActionItemIcon
-                            icon={item.icon}
-                            SourceControlIcon={SourceControlIcon}
-                          />
-                        }
-                        label={item.label}
-                        caption={git.menuItemDisabledReason(item)}
-                        disabled={item.disabled}
-                        onClick={() => {
-                          git.runMenuItem(item);
-                        }}
-                      />
-                    ))}
-                    {pullRequestItem ? (
-                      <MenuRow
-                        icon={
-                          <GitActionItemIcon
-                            icon={pullRequestItem.icon}
-                            SourceControlIcon={SourceControlIcon}
-                          />
-                        }
-                        label={pullRequestItem.label}
-                        caption={
-                          isSwitchingRef ? (
-                            <ReadingSkeleton />
-                          ) : pullRequest ? (
-                            `#${pullRequest.number} ${pullRequest.state}`
-                          ) : (
-                            git.menuItemDisabledReason(pullRequestItem)
-                          )
-                        }
-                        disabled={pullRequestItem.disabled}
-                        onClick={() => {
-                          git.runMenuItem(pullRequestItem);
-                        }}
-                      />
-                    ) : null}
-                    {showPublishRow ? (
-                      <MenuRow
-                        icon={<CloudUploadIcon aria-hidden />}
-                        label="Publish repository"
-                        disabled={git.isBusy}
-                        onClick={git.openPublishDialog}
-                      />
-                    ) : null}
-                    {git.gitStatus?.refName === null ? (
+                  ) : (
+                    <>
                       <MenuRow
                         variant="static"
-                        label="Detached HEAD: check out a ref to push or open a pull request."
-                        tone="muted"
+                        label={`Running · ${String(runningSubagents.length)}`}
+                        tone="heading"
                       />
-                    ) : null}
-                    {git.gitStatus &&
-                    git.gitStatus.refName !== null &&
-                    !git.gitStatus.hasWorkingTreeChanges &&
-                    git.gitStatus.behindCount > 0 &&
-                    git.gitStatus.aheadCount === 0 ? (
+                      {runningSubagents.map((agent) => (
+                        <MenuRow
+                          caption={`${String(agent.toolCallCount)} calls`}
+                          icon={<BotIcon aria-hidden />}
+                          key={agent.agent.agentId}
+                          label={agent.name}
+                          onClick={() => onSelectSubagent(agent.agent.agentId)}
+                        />
+                      ))}
                       <MenuRow
                         variant="static"
-                        label="Behind upstream. Pull or rebase first."
-                        tone="muted"
+                        label={`Finished · ${String(finishedSubagents.length)}`}
+                        tone="heading"
                       />
-                    ) : null}
-                    {git.gitStatusError ? (
-                      <MenuRow variant="static" label={git.gitStatusError} tone="destructive" />
-                    ) : null}
-                  </EnvironmentPendingGroup>
-                </>
-              )}
-            </div>
-            <div aria-hidden className="mx-(--popup-padding) my-(--popup-padding) h-px bg-border" />
-            <div>
-              <MenuRow variant="static" label="Sources" tone="heading" />
-              {/* No implementation behind either of these yet; they are shown
-                unavailable rather than wired to something that does not exist. */}
-              <MenuRow
-                icon={<GlobeIcon aria-hidden />}
-                label="Internet search"
-                caption="Unavailable"
-                disabled
-              />
-              <MenuRow
-                icon={<MoreHorizontalIcon aria-hidden />}
-                label="Show all"
-                caption="Unavailable"
-                disabled
-              />
-            </div>
+                      {finishedSubagents.map((agent) => (
+                        <MenuRow
+                          caption={`${String(agent.toolCallCount)} calls · ${agent.status}`}
+                          icon={
+                            agent.status === "failed" ? (
+                              <CircleAlertIcon aria-hidden />
+                            ) : (
+                              <CheckIcon aria-hidden />
+                            )
+                          }
+                          key={agent.agent.agentId}
+                          label={agent.name}
+                          onClick={() => onSelectSubagent(agent.agent.agentId)}
+                        />
+                      ))}
+                    </>
+                  )}
+                </div>
+                <div
+                  aria-hidden
+                  className="mx-(--popup-padding) my-(--popup-padding) h-px bg-border"
+                />
+                <div>
+                  <MenuRow variant="static" label="Sources" tone="heading" />
+                  {webSources.length === 0 ? (
+                    <MenuRow
+                      icon={<GlobeIcon aria-hidden />}
+                      label="No web sources"
+                      tone="muted"
+                      variant="static"
+                    />
+                  ) : (
+                    <>
+                      {webSources.slice(0, allSourcesOpen ? undefined : 3).map((source) => (
+                        <MenuRow
+                          icon={<GlobeIcon aria-hidden />}
+                          key={source.url}
+                          label={source.title ?? source.url}
+                          onClick={() => window.open(source.url, "_blank", "noopener,noreferrer")}
+                        />
+                      ))}
+                      {webSources.length > 3 ? (
+                        <MenuRow
+                          caption={String(webSources.length)}
+                          icon={<MoreHorizontalIcon aria-hidden />}
+                          label={allSourcesOpen ? "Show less" : "Show all"}
+                          onClick={() => setAllSourcesOpen((open) => !open)}
+                        />
+                      ) : null}
+                    </>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -664,3 +769,73 @@ export const ChatEnvironmentColumn = memo(function ChatEnvironmentColumn({
     </>
   );
 });
+
+function SubagentDetail({
+  agent,
+  environmentId,
+  gitCwd,
+  onBack,
+  resolvedTheme,
+  threadId,
+}: {
+  readonly agent: SubagentSummary;
+  readonly environmentId: EnvironmentId;
+  readonly gitCwd: string | null;
+  readonly onBack: () => void;
+  readonly resolvedTheme: "light" | "dark";
+  readonly threadId: ThreadId;
+}) {
+  const threadRef = useMemo(
+    () => scopeThreadRef(environmentId, threadId),
+    [environmentId, threadId],
+  );
+  return (
+    <div className="space-y-2">
+      <MenuRow
+        caption={agent.status}
+        icon={<ArrowLeftIcon aria-hidden />}
+        label={agent.name}
+        onClick={onBack}
+      />
+      <div className="px-(--popup-item-padding-inline) text-(length:--text-caption) text-(--ink-tertiary)">
+        {String(agent.messages.length)} messages · {String(agent.toolCallCount)} tool calls
+      </div>
+      {agent.messages.map((message) => (
+        <section
+          className="rounded-(--popup-item-radius) border border-(--edge) bg-(--wash) p-2"
+          key={message.id}
+        >
+          <div className="mb-1 text-(length:--text-caption) text-(--ink-tertiary)">
+            {message.role}
+          </div>
+          <ChatMarkdown
+            className="text-foreground"
+            cwd={gitCwd ?? undefined}
+            text={message.text}
+            threadRef={threadRef}
+          />
+        </section>
+      ))}
+      {agent.workEntries
+        .filter(
+          (entry) =>
+            entry.itemType !== "collab_agent_tool_call" &&
+            !entry.sourceActivityKind?.startsWith("task."),
+        )
+        .map((entry) => (
+          <details className="rounded-(--popup-item-radius) border border-(--edge)" key={entry.id}>
+            <summary className="cursor-pointer list-none px-2 py-1.5 font-mono text-(length:--text-caption) text-(--ink-secondary)">
+              {entry.rawCommand?.trim() || entry.command?.trim() || entry.toolTitle || entry.label}
+            </summary>
+            <div className="px-2">
+              <WorkCallExpandedDetails
+                entry={entry}
+                resolvedTheme={resolvedTheme}
+                workspaceRoot={gitCwd ?? undefined}
+              />
+            </div>
+          </details>
+        ))}
+    </div>
+  );
+}

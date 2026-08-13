@@ -85,6 +85,7 @@ import {
 } from "../composerFooterLayout";
 import { type ComposerPromptEditorHandle, ComposerPromptEditor } from "../ComposerPromptEditor";
 import { PINNED_POPUP_COLLISION_AVOIDANCE, ProviderModelPicker } from "./ProviderModelPicker";
+import { resolveComposerPopupSideOffset } from "./composerPopupPosition";
 import { type ComposerCommandItem, ComposerCommandMenu } from "./ComposerCommandMenu";
 import { ComposerPendingApprovalActions } from "./ComposerPendingApprovalActions";
 import { CompactComposerControlsMenu } from "./CompactComposerControlsMenu";
@@ -256,6 +257,17 @@ const COMPOSER_INPUT_PADDING_CLASS = "px-3 pb-2 sm:px-4";
 const COMPOSER_INPUT_PADDING_TOP_CLASS = "pt-3";
 const COMPOSER_INPUT_PADDING_TOP_WITH_HEADER_CLASS = "pt-3";
 const COMPOSER_FOOTER_PADDING_CLASS = "px-2 pb-2 sm:px-2.5 sm:pb-2.5";
+/*
+ * The shelf the composer's header blocks sit on: an approval, a question, a plan
+ * follow-up. One string because all five call sites are the same shelf.
+ *
+ * It carried `border-border/65` and `bg-muted/20`, which halve an alpha the
+ * ladder had already applied — `--muted` is `--wash-hover`, so a fifth of it is
+ * under one percent of black, a fill that is not there. Edge and wash are named
+ * directly now. The radius stays a number: it is the composer's inner corner
+ * (a 20px surface inside a 22px frame), not a role anything else can ask for.
+ */
+const COMPOSER_HEADER_BLOCK_CLASS = "rounded-t-[19px] border-b border-(--edge) bg-(--wash-hover)";
 
 /*
  * The control row: attachments, permissions, model, context.
@@ -390,6 +402,7 @@ const ComposerPermissionsPicker = memo(function ComposerPermissionsPicker(props:
   runtimeMode: RuntimeMode;
   onRuntimeModeChange: (mode: RuntimeMode) => void;
 }) {
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const runtimeModeOption = runtimeModeConfig[props.runtimeMode];
   const RuntimeModeIcon = runtimeModeOption.icon;
 
@@ -404,6 +417,7 @@ const ComposerPermissionsPicker = memo(function ComposerPermissionsPicker(props:
         <TooltipTrigger
           render={
             <SelectTrigger
+              ref={triggerRef}
               variant="ghost"
               size="sm"
               className={cn(
@@ -422,6 +436,7 @@ const ComposerPermissionsPicker = memo(function ComposerPermissionsPicker(props:
           alignItemWithTrigger={false}
           align="start"
           side="top"
+          sideOffset={() => resolveComposerPopupSideOffset(triggerRef.current)}
           collisionAvoidance={PINNED_POPUP_COLLISION_AVOIDANCE}
         >
           {runtimeModeOptions.map((mode) => {
@@ -2754,14 +2769,14 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         >
           {!isComposerCollapsedMobile &&
             (activePendingApproval ? (
-              <div className="rounded-t-[19px] border-b border-border/65 bg-muted/20">
+              <div className={COMPOSER_HEADER_BLOCK_CLASS}>
                 <ComposerPendingApprovalPanel
                   approval={activePendingApproval}
                   pendingCount={pendingApprovals.length}
                 />
               </div>
             ) : pendingUserInputs.length > 0 ? (
-              <div className="rounded-t-[19px] border-b border-border/65 bg-muted/20">
+              <div className={COMPOSER_HEADER_BLOCK_CLASS}>
                 <ComposerPendingUserInputPanel
                   pendingUserInputs={pendingUserInputs}
                   respondingRequestIds={respondingRequestIds}
@@ -2772,7 +2787,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                 />
               </div>
             ) : showPlanFollowUpPrompt && activeProposedPlan ? (
-              <div className="rounded-t-[19px] border-b border-border/65 bg-muted/20">
+              <div className={COMPOSER_HEADER_BLOCK_CLASS}>
                 <ComposerPlanFollowUpBanner
                   key={activeProposedPlan.id}
                   planTitle={proposedPlanTitle(activeProposedPlan.planMarkdown) ?? null}
@@ -2782,7 +2797,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
 
           {isComposerCollapsedMobile && activePendingApproval ? (
             <div
-              className="rounded-t-[19px] border-b border-border/65 bg-muted/20"
+              className={COMPOSER_HEADER_BLOCK_CLASS}
               data-chat-composer-collapsed-controls="true"
             >
               <ComposerPendingApprovalPanel
@@ -2799,7 +2814,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
             </div>
           ) : isComposerCollapsedMobile && pendingUserInputs.length > 0 ? (
             <div
-              className="rounded-t-[19px] border-b border-border/65 bg-muted/20"
+              className={COMPOSER_HEADER_BLOCK_CLASS}
               data-chat-composer-collapsed-controls="true"
             >
               <ComposerPendingUserInputPanel

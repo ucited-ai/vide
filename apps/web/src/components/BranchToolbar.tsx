@@ -12,6 +12,8 @@ import {
 import { memo, useCallback, useMemo } from "react";
 
 import { useComposerDraftStore, type DraftId } from "../composerDraftStore";
+import { cn } from "../lib/utils";
+import { usePromptStashStore } from "../promptStashStore";
 import { useProject, useThread, useThreadShellsForProjectRefs } from "../state/entities";
 import {
   type EnvMode,
@@ -244,6 +246,13 @@ export const BranchToolbar = memo(function BranchToolbar({
   const draftThread = useComposerDraftStore((store) =>
     draftId ? store.getDraftSession(draftId) : store.getDraftThreadByRef(threadRef),
   );
+  /*
+   * The stash pill hangs off the composer's top-right shoulder and crosses this
+   * strip's bottom edge, so the chips stop short of it. Read straight from the
+   * store rather than threaded down as a prop: the stash is deliberately one
+   * global bucket, not per thread, so there is nothing here to scope it to.
+   */
+  const hasStashedPrompts = usePromptStashStore((store) => store.entries.length > 0);
   const serverThread = useThread(threadRef, { waitForShell: draftThread !== null });
   const setDraftThreadContext = useComposerDraftStore((store) => store.setDraftThreadContext);
   const activeProjectRef = serverThread
@@ -330,7 +339,10 @@ export const BranchToolbar = memo(function BranchToolbar({
       data-composer-context-strip=""
     >
       <div
-        className="flex w-full min-w-0 items-center justify-start gap-1 overflow-hidden"
+        className={cn(
+          "flex w-full min-w-0 items-center justify-start gap-1 overflow-hidden",
+          hasStashedPrompts && "pe-(--composer-stash-reserve)",
+        )}
         data-composer-context-strip-content=""
       >
         <ProjectPickerMenu picker={projectPicker}>

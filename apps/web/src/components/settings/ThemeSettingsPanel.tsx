@@ -33,8 +33,8 @@ const THEME_OPTIONS = [
 ] as const;
 
 const SIDEBAR_VARIANT_OPTIONS = [
-  { value: "standard", label: "Standard" },
-  { value: "detailed", label: "Detailed" },
+  { value: "simple", label: "Simple" },
+  { value: "advanced", label: "Advanced" },
 ] as const;
 
 const AUTO_SETTLE_MIN_DAYS = 1;
@@ -84,8 +84,8 @@ function AutoSettleDaysInput({
 
 /*
  * Which sidebar the app wears — a presentation choice, so it lives with the
- * theme rather than behind a Beta flag. "Detailed" is the flat, filterable
- * list with rich cards for active work; "Standard" the classic grouped list.
+ * theme rather than behind a Beta flag. "Advanced" is the flat, filterable
+ * list with rich cards for active work; "Simple" the classic grouped list.
  * The auto-settle rows belong to the detailed variant and follow it here.
  */
 function SidebarSection() {
@@ -94,26 +94,26 @@ function SidebarSection() {
     (settings) => settings.sidebarAutoSettleAfterDays,
   );
   const updateSettings = useUpdateClientSettings();
-  const variant = sidebarV2Enabled ? "detailed" : "standard";
+  const variant = sidebarV2Enabled ? "advanced" : "simple";
 
   return (
     <SettingsSection title="Sidebar">
       <SettingsRow
         title="Layout"
-        description="Detailed shows one flat thread list in creation order — active work as rich cards with filters and search, settled threads as compact rows. Standard is the classic grouped list. Settling requires an up-to-date server; on older servers threads simply stay active."
+        description="Advanced shows one flat thread list with search, filters and compact lifecycle controls. Simple is the classic grouped project list."
         control={
           <Select
             value={variant}
             onValueChange={(value) => {
-              if (value === "standard" || value === "detailed") {
-                updateSettings({ sidebarV2Enabled: value === "detailed" });
+              if (value === "simple" || value === "advanced") {
+                updateSettings({ sidebarV2Enabled: value === "advanced" });
               }
             }}
           >
             <SelectTrigger className="w-full sm:w-40" aria-label="Sidebar layout">
               <SelectValue>
                 {SIDEBAR_VARIANT_OPTIONS.find((option) => option.value === variant)?.label ??
-                  "Standard"}
+                  "Simple"}
               </SelectValue>
             </SelectTrigger>
             <SelectPopup align="end" alignItemWithTrigger={false}>

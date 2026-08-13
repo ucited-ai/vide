@@ -29,6 +29,7 @@ import { vcsEnvironment } from "../../state/vcs";
 import { formatRelativeTimeLabel } from "../../timestampFormat";
 import type { SidebarThreadSummary } from "../../types";
 import { cn } from "~/lib/utils";
+import { resolveSidebarPopupSideOffset } from "./sidebarPopupPosition";
 
 /** The last path segment carries the worktree's name; the rest is noise here. */
 function worktreeLabel(worktreePath: string): string {
@@ -105,7 +106,7 @@ export function SidebarThreadTooltipContent({
     <TooltipPopup
       side="right"
       align="start"
-      sideOffset={12}
+      sideOffset={() => resolveSidebarPopupSideOffset(anchor?.current ?? null)}
       anchor={anchor}
       className="max-w-72 text-left"
     >

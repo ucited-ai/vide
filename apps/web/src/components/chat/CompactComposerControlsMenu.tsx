@@ -1,5 +1,5 @@
 import { RuntimeMode } from "@vide/contracts";
-import { memo } from "react";
+import { memo, useRef } from "react";
 import { EllipsisIcon, ListTodoIcon } from "lucide-react";
 import { Button } from "../ui/button";
 import {
@@ -12,6 +12,7 @@ import {
   MenuTrigger,
 } from "../ui/menu";
 import { PINNED_POPUP_COLLISION_AVOIDANCE } from "./ProviderModelPicker";
+import { resolveComposerPopupSideOffset } from "./composerPopupPosition";
 
 export const CompactComposerControlsMenu = memo(function CompactComposerControlsMenu(props: {
   activePlan: boolean;
@@ -21,11 +22,14 @@ export const CompactComposerControlsMenu = memo(function CompactComposerControls
   onTogglePlanSidebar: () => void;
   onRuntimeModeChange: (mode: RuntimeMode) => void;
 }) {
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
   return (
     <Menu>
       <MenuTrigger
         render={
           <Button
+            ref={triggerRef}
             size="sm"
             variant="ghost"
             className="shrink-0 px-2 text-muted-foreground/70 hover:text-foreground/80"
@@ -35,7 +39,12 @@ export const CompactComposerControlsMenu = memo(function CompactComposerControls
       >
         <EllipsisIcon aria-hidden="true" className="size-4" />
       </MenuTrigger>
-      <MenuPopup align="start" side="top" collisionAvoidance={PINNED_POPUP_COLLISION_AVOIDANCE}>
+      <MenuPopup
+        align="start"
+        side="top"
+        sideOffset={() => resolveComposerPopupSideOffset(triggerRef.current)}
+        collisionAvoidance={PINNED_POPUP_COLLISION_AVOIDANCE}
+      >
         <div className="px-2 py-1.5 font-medium text-muted-foreground text-(length:--text-caption)">
           Access
         </div>

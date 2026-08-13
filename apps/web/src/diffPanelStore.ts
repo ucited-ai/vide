@@ -10,8 +10,20 @@ export type DiffPanelSelection =
   | { kind: "unstaged" }
   | { kind: "turn"; turnId: TurnId; filePath: string | null; revealRequestId: number };
 
-const DEFAULT_SELECTION: DiffPanelSelection = { kind: "branch", baseRef: null };
-const DEFAULT_WORKING_TREE_SELECTION: DiffPanelSelection = { kind: "unstaged" };
+/*
+ * The working tree, always — what an editor's source-control view opens on.
+ *
+ * It used to be the branch range, with the working tree substituted only when a
+ * probe had already reported the tree dirty. That reads as the same thing and is
+ * not: the answer arrives after the panel does, so the panel had to be remounted
+ * once git status resolved, and on a branch level with its remote — this one,
+ * right now — a repository with fifty edited files opened on an empty diff.
+ *
+ * "What have I changed" is the question the panel is opened with. Where that is
+ * measured from is the range picker's business, and the range picker remembers
+ * per thread, so choosing a branch range once still sticks.
+ */
+const DEFAULT_SELECTION: DiffPanelSelection = { kind: "unstaged" };
 
 interface DiffPanelStoreState {
   byThreadKey: Record<string, DiffPanelSelection>;
@@ -134,11 +146,7 @@ export const useDiffPanelStore = create<DiffPanelStoreState>()(
 export function selectThreadDiffPanelSelection(
   byThreadKey: Record<string, DiffPanelSelection>,
   ref: ScopedThreadRef | null | undefined,
-  hasWorkingTreeChanges = false,
 ): DiffPanelSelection {
   if (!ref) return DEFAULT_SELECTION;
-  return (
-    byThreadKey[scopedThreadKey(ref)] ??
-    (hasWorkingTreeChanges ? DEFAULT_WORKING_TREE_SELECTION : DEFAULT_SELECTION)
-  );
+  return byThreadKey[scopedThreadKey(ref)] ?? DEFAULT_SELECTION;
 }

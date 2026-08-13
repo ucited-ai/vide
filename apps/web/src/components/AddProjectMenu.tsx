@@ -11,7 +11,15 @@ import {
   type SourceControlProviderKind,
 } from "@vide/contracts";
 import { FolderGit2Icon, FolderIcon, LinkIcon } from "lucide-react";
-import { memo, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ComponentProps,
+  type ReactNode,
+} from "react";
 
 import { desktopLocalBackendId } from "../connection/desktopLocal";
 import { useDesktopLocalBootstraps } from "../connection/useDesktopLocalBootstraps";
@@ -522,16 +530,25 @@ function AddProjectMenuItems({
 export const AddProjectMenu = memo(function AddProjectMenu({
   children,
   align = "start",
+  side = "bottom",
+  sideOffset,
 }: {
   readonly children: ReactNode;
   readonly align?: "start" | "center" | "end";
+  readonly side?: "top" | "bottom" | "left" | "right";
+  readonly sideOffset?: ComponentProps<typeof MenuPopup>["sideOffset"];
 }) {
   const [open, setOpen] = useState(false);
 
   return (
     <Menu open={open} onOpenChange={setOpen}>
       {children}
-      <MenuPopup align={align} className={MENU_POPUP_WIDTH_CLASS}>
+      <MenuPopup
+        align={align}
+        className={MENU_POPUP_WIDTH_CLASS}
+        side={side}
+        sideOffset={sideOffset}
+      >
         <AddProjectMenuItems open={open} onRequestClose={() => setOpen(false)} />
       </MenuPopup>
     </Menu>

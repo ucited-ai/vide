@@ -14,13 +14,11 @@ import {
   AlarmClockOffIcon,
   CheckIcon,
   ChevronDownIcon,
-  CircleAlertIcon,
   CircleCheckIcon,
   ClockIcon,
   CopyIcon,
   FolderIcon,
   FolderPlusIcon,
-  GitBranchIcon,
   EllipsisIcon,
   MessageSquareIcon,
   PinIcon,
@@ -113,7 +111,6 @@ import {
   sortThreadsForSidebarV2,
 } from "./Sidebar.logic";
 import { AddProjectMenu } from "./AddProjectMenu";
-import { resolveLocalCheckoutBranchMismatch } from "./BranchToolbar.logic";
 import {
   prStatusIndicator,
   resolveThreadPr,
@@ -127,7 +124,6 @@ import {
 } from "./Sidebar.snooze";
 import { ProjectFavicon } from "./ProjectFavicon";
 import { ProviderInstanceIcon } from "./chat/ProviderInstanceIcon";
-import { getTriggerDisplayModelLabel } from "./chat/providerIconUtils";
 import { deriveProviderInstanceEntries, type ProviderInstanceEntry } from "../providerInstances";
 import { primaryServerProvidersAtom } from "../state/server";
 import { stackedThreadToast, toastManager } from "./ui/toast";
@@ -149,6 +145,7 @@ import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "./u
 import { scrollSurfaceClassName } from "./ui/scroll-surface";
 import { SidebarContent, SidebarGroup, SidebarMenuButton, useSidebar } from "./ui/sidebar";
 import { SidebarChromeFooter, SidebarChromeHeader } from "./sidebar/SidebarChrome";
+import { resolveSidebarPopupSideOffset } from "./sidebar/sidebarPopupPosition";
 import {
   SidebarProjectIcon,
   SidebarSectionLabel,
@@ -165,6 +162,7 @@ import {
 import { SidebarPrimaryNav, useSidebarPrimaryNavEntries } from "./sidebar/SidebarPrimaryNav";
 import { Popover, PopoverPopup, PopoverTrigger } from "./ui/popover";
 import { Tooltip, TooltipPopup, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
+import { SidebarMarqueeTitle, SidebarThreadTooltipContent } from "./sidebar/SidebarThreadTooltip";
 import { useComposerDraftStore } from "../composerDraftStore";
 
 // Settled-tail paging: recent history is the common lookup; the deep tail
@@ -208,23 +206,6 @@ function settledTimeLabel(thread: SidebarThreadSummary): string {
   return timestamp === null ? "" : compactSidebarTimeLabel(formatRelativeTimeLabel(timestamp));
 }
 
-// Floats at the row's right edge, vertically centered, while the jump
-// modifier is held. An overlay pill instead of an inline slot: the hint
-// must neither displace the status/time label (holding ⌘ used to blank
-// out "Working") nor shift any layout when it appears. pointer-events-none
-// so it never swallows clicks meant for the settle/un-settle buttons it
-// can overlap.
-function JumpHintBadge(props: { label: string }) {
-  return (
-    <span
-      aria-hidden
-      className="pointer-events-none absolute right-1.5 top-1/2 z-10 inline-flex h-5 -translate-y-1/2 items-center rounded-full border border-border/80 bg-background/95 px-1.5 font-mono text-(length:--text-micro) font-medium tracking-tight text-foreground shadow-sm"
-    >
-      {props.label}
-    </span>
-  );
-}
-
 // Self-ticking so only this span re-renders each second, not the whole row.
 function WorkingDuration(props: { startedAt: string | null }) {
   const startedMs = props.startedAt !== null ? Date.parse(props.startedAt) : Number.NaN;
@@ -238,92 +219,6 @@ function WorkingDuration(props: { startedAt: string | null }) {
   return <span className="tabular-nums">{formatWorkingDurationLabel(Date.now() - startedMs)}</span>;
 }
 
-function SidebarV2ThreadTooltip({
-  thread,
-  projectTitle,
-  projectCwd,
-  environmentLabel,
-  driverKind,
-  modelInstanceId,
-  modelLabel,
-  branchMismatch,
-}: {
-  thread: SidebarThreadSummary;
-  projectTitle: string | null;
-  projectCwd: string | null;
-  environmentLabel: string | null;
-  driverKind: ProviderInstanceEntry["driverKind"] | null;
-  modelInstanceId: string;
-  modelLabel: string;
-  branchMismatch: {
-    threadBranch: string;
-    currentBranch: string;
-  } | null;
-}) {
-  return (
-    <TooltipPopup
-      side="right"
-      align="start"
-      sideOffset={8}
-      className="max-w-80 text-left whitespace-normal"
-    >
-      <div className="flex max-w-80 flex-col gap-2 p-2">
-        <div className="whitespace-nowrap text-(length:--text-ui) font-medium text-foreground">
-          {thread.title}
-        </div>
-        <div className="grid gap-1.5 text-(length:--text-caption) text-muted-foreground">
-          {projectTitle ? (
-            <div className="flex min-w-0 items-center gap-2">
-              <ProjectFavicon
-                environmentId={thread.environmentId}
-                cwd={projectCwd ?? ""}
-                className="size-4 shrink-0 stroke-muted-foreground"
-              />
-              <div className="min-w-0 wrap-break-word text-foreground/90">{projectTitle}</div>
-            </div>
-          ) : null}
-          {environmentLabel ? (
-            <div className="flex min-w-0 items-center gap-2">
-              <ServerIcon className="size-4 shrink-0 stroke-muted-foreground" />
-              <div className="min-w-0 wrap-break-word text-foreground/90">{environmentLabel}</div>
-            </div>
-          ) : null}
-          {thread.branch ? (
-            <div className="flex min-w-0 items-center gap-2">
-              <GitBranchIcon className="size-4 shrink-0 stroke-muted-foreground" />
-              <div className="min-w-0 wrap-break-word text-foreground/90">{thread.branch}</div>
-            </div>
-          ) : null}
-          {branchMismatch ? (
-            <div className="flex min-w-0 items-start gap-2 text-warning">
-              <CircleAlertIcon aria-hidden className="mt-0.5 size-4 shrink-0 stroke-current" />
-              <div className="min-w-0 flex-1 wrap-break-word leading-5">
-                You're currently checked out on another branch.
-              </div>
-            </div>
-          ) : null}
-          {driverKind ? (
-            <div className="flex min-w-0 items-center gap-2">
-              <ProviderInstanceIcon
-                driverKind={driverKind}
-                displayName={thread.session?.providerName ?? modelInstanceId}
-                iconClassName="size-4 shrink-0"
-              />
-              <div className="min-w-0 wrap-break-word text-foreground/90">{modelLabel}</div>
-            </div>
-          ) : null}
-          {thread.session?.lastError ? (
-            <div className="flex min-w-0 items-center gap-2 text-destructive">
-              <CircleAlertIcon className="size-4 shrink-0 stroke-current" />
-              <div className="min-w-0 wrap-break-word">{thread.session.lastError}</div>
-            </div>
-          ) : null}
-        </div>
-      </div>
-    </TooltipPopup>
-  );
-}
-
 /**
  * Hover entry point for snooze: a clock button opening the preset menu.
  * Controlled by the row (which also uses the open state to pin its hover
@@ -334,6 +229,7 @@ function SnoozePopoverButton(props: {
   onOpenChange: (open: boolean) => void;
   onSnooze: (preset: SnoozePreset) => void;
 }) {
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const { open, onOpenChange, onSnooze } = props;
   // Presets resolve at open time so "In 1 hour" is relative to the click,
   // not to when the row mounted.
@@ -343,12 +239,13 @@ function SnoozePopoverButton(props: {
       <PopoverTrigger
         render={
           <button
+            ref={triggerRef}
             type="button"
             aria-label="Snooze thread"
             onClick={(event) => event.stopPropagation()}
             onDoubleClick={(event) => event.stopPropagation()}
             className={cn(
-              "inline-flex h-full cursor-pointer items-center gap-0.5 rounded-md bg-transparent px-1.5 text-[length:var(--text-caption)] text-sidebar-muted-foreground hover:text-sidebar-foreground",
+              "inline-flex size-5 cursor-pointer items-center justify-center rounded-md bg-transparent p-0 text-[length:var(--text-caption)] text-sidebar-muted-foreground hover:bg-sidebar-row-hover hover:text-sidebar-foreground",
               SIDEBAR_ROW_MOTION_CLASS,
             )}
           />
@@ -356,7 +253,13 @@ function SnoozePopoverButton(props: {
       >
         <ClockIcon className="size-3" />
       </PopoverTrigger>
-      <PopoverPopup side="bottom" align="end" className="w-56" viewportClassName="p-1">
+      <PopoverPopup
+        side="right"
+        sideOffset={() => resolveSidebarPopupSideOffset(triggerRef.current)}
+        align="start"
+        className="w-56"
+        viewportClassName="p-1"
+      >
         {presets.map((preset) => (
           <button
             key={preset.id}
@@ -440,6 +343,7 @@ const SidebarV2Row = memo(function SidebarV2Row(props: {
     () => scopeThreadRef(thread.environmentId, thread.id),
     [thread.environmentId, thread.id],
   );
+  const rowAnchorRef = useRef<HTMLDivElement>(null);
   const threadKey = scopedThreadKey(threadRef);
   const lastVisitedAt = useUiStateStore((state) => state.threadLastVisitedAtById[threadKey]);
   const isSelected = useThreadSelectionStore((state) => state.selectedThreadKeys.has(threadKey));
@@ -524,12 +428,6 @@ const SidebarV2Row = memo(function SidebarV2Row(props: {
         })
       : null,
   );
-  const branchMismatch = resolveLocalCheckoutBranchMismatch({
-    effectiveEnvMode: thread.worktreePath === null ? "local" : "worktree",
-    activeWorktreePath: thread.worktreePath,
-    activeThreadBranch: thread.branch,
-    currentGitBranch: gitStatus.data?.refName ?? null,
-  });
   const pr = resolveThreadPr({
     threadBranch: thread.branch,
     gitStatus: gitStatus.data,
@@ -546,28 +444,11 @@ const SidebarV2Row = memo(function SidebarV2Row(props: {
   const modelInstanceId = thread.session?.providerInstanceId ?? thread.modelSelection.instanceId;
   const providerEntry = props.providerEntryByInstanceId.get(modelInstanceId) ?? null;
   const driverKind = providerEntry?.driverKind ?? null;
-  const selectedModel = providerEntry?.models.find(
-    (model) => model.slug === thread.modelSelection.model,
-  );
-  const modelLabel = selectedModel
-    ? getTriggerDisplayModelLabel(selectedModel)
-    : thread.modelSelection.model;
 
   const isRemote =
     props.currentEnvironmentId !== null && thread.environmentId !== props.currentEnvironmentId;
 
-  const detailsTooltip = (
-    <SidebarV2ThreadTooltip
-      thread={thread}
-      projectTitle={props.projectTitle}
-      projectCwd={props.projectCwd}
-      environmentLabel={props.environmentLabel}
-      driverKind={driverKind}
-      modelInstanceId={modelInstanceId}
-      modelLabel={modelLabel}
-      branchMismatch={branchMismatch}
-    />
-  );
+  const detailsTooltip = <SidebarThreadTooltipContent thread={thread} anchor={rowAnchorRef} />;
 
   const handleClick = useCallback(
     (event: ReactMouseEvent) => {
@@ -713,9 +594,10 @@ const SidebarV2Row = memo(function SidebarV2Row(props: {
       )}
     />
   ) : (
-    <span className={cn(SIDEBAR_ROW_LABEL_CLASS, shouldRecede ? "font-normal" : "font-medium")}>
-      {thread.title}
-    </span>
+    <SidebarMarqueeTitle
+      className={cn(SIDEBAR_ROW_LABEL_CLASS, shouldRecede ? "font-normal" : "font-medium")}
+      title={thread.title}
+    />
   );
 
   const prBadge =
@@ -753,6 +635,7 @@ const SidebarV2Row = memo(function SidebarV2Row(props: {
           <TooltipTrigger
             render={
               <div
+                ref={rowAnchorRef}
                 role="button"
                 tabIndex={0}
                 data-testid="sidebar-v2-row-slim"
@@ -789,39 +672,45 @@ const SidebarV2Row = memo(function SidebarV2Row(props: {
               the time/jump label yields to the settle affordance. */}
             {prBadge}
             <span className="relative ml-auto flex h-6 min-w-8 shrink-0 items-center justify-end">
-              <span
-                className={cn(
-                  "inline-flex justify-end tabular-nums group-hover/v2-row:opacity-0",
-                  SIDEBAR_ROW_META_CLASS,
-                  SIDEBAR_ROW_MOTION_CLASS,
-                )}
-              >
-                {variantAction === "unsnooze" && props.snoozeWakeLabelText !== null ? (
-                  // Snoozed rows show when they come BACK, not when they were
-                  // last touched — the return ticket is the row's whole story.
-                  <span className="tabular-nums text-muted-foreground">
-                    {props.snoozeWakeLabelText}
-                  </span>
-                ) : isWoke ? (
-                  // A wake can land straight in the settled tail (e.g. PR
-                  // merged while snoozed); the signal must survive the trip.
-                  <span
-                    role="status"
-                    aria-label="Woke from snooze"
-                    className="inline-flex items-center gap-1 font-medium text-(--thread-status-attention)"
-                  >
-                    <AlarmClockIcon aria-hidden className="size-3" />
-                    Woke
-                  </span>
-                ) : (
-                  <span>
-                    {variantAction === "unsettle"
-                      ? settledTimeLabel(thread)
-                      : threadTimeLabel(thread)}
-                  </span>
-                )}
-              </span>
-              {variantAction === "unsnooze" ? (
+              {props.jumpLabel ? (
+                <Kbd className="h-4 min-w-4 rounded-sm bg-sidebar-control-surface px-1 text-(length:--text-micro) text-sidebar-muted-foreground ring-1 ring-sidebar-border">
+                  {props.jumpLabel}
+                </Kbd>
+              ) : (
+                <span
+                  className={cn(
+                    "inline-flex justify-end tabular-nums group-hover/v2-row:opacity-0",
+                    SIDEBAR_ROW_META_CLASS,
+                    SIDEBAR_ROW_MOTION_CLASS,
+                  )}
+                >
+                  {variantAction === "unsnooze" && props.snoozeWakeLabelText !== null ? (
+                    // Snoozed rows show when they come BACK, not when they were
+                    // last touched — the return ticket is the row's whole story.
+                    <span className="tabular-nums text-muted-foreground">
+                      {props.snoozeWakeLabelText}
+                    </span>
+                  ) : isWoke ? (
+                    // A wake can land straight in the settled tail (e.g. PR
+                    // merged while snoozed); the signal must survive the trip.
+                    <span
+                      role="status"
+                      aria-label="Woke from snooze"
+                      className="inline-flex items-center gap-1 font-medium text-(--thread-status-attention)"
+                    >
+                      <AlarmClockIcon aria-hidden className="size-3" />
+                      Woke
+                    </span>
+                  ) : (
+                    <span>
+                      {variantAction === "unsettle"
+                        ? settledTimeLabel(thread)
+                        : threadTimeLabel(thread)}
+                    </span>
+                  )}
+                </span>
+              )}
+              {!props.jumpLabel && variantAction === "unsnooze" ? (
                 !props.snoozeSupported ? null : (
                   <button
                     type="button"
@@ -832,7 +721,8 @@ const SidebarV2Row = memo(function SidebarV2Row(props: {
                     <AlarmClockOffIcon className="size-3" />
                   </button>
                 )
-              ) : !props.settlementSupported ? null : variantAction === "unsettle" ? (
+              ) : props.jumpLabel || !props.settlementSupported ? null : variantAction ===
+                "unsettle" ? (
                 <button
                   type="button"
                   aria-label="Un-settle thread"
@@ -852,7 +742,6 @@ const SidebarV2Row = memo(function SidebarV2Row(props: {
                 </button>
               )}
             </span>
-            {props.jumpLabel ? <JumpHintBadge label={props.jumpLabel} /> : null}
           </TooltipTrigger>
           {detailsTooltip}
         </Tooltip>
@@ -865,12 +754,13 @@ const SidebarV2Row = memo(function SidebarV2Row(props: {
   return (
     <li
       data-thread-item
-      className="list-none py-0.5 [content-visibility:auto] [contain-intrinsic-size:auto_96px]"
+      className="list-none py-px [content-visibility:auto] [contain-intrinsic-size:auto_72px]"
     >
       <Tooltip>
         <TooltipTrigger
           render={
             <div
+              ref={rowAnchorRef}
               role="button"
               tabIndex={0}
               data-testid="sidebar-v2-row-card"
@@ -882,7 +772,7 @@ const SidebarV2Row = memo(function SidebarV2Row(props: {
             />
           }
         >
-          <div className="relative z-10 h-[4.875rem] px-2.5 py-2">
+          <div className="relative z-10 h-[4.25rem] px-2.5 py-1.5">
             {/* Same leading geometry as a slim row, so every favicon in the
                 list sits on one x and the two sections read as one column. */}
             <div className="flex h-5 min-w-0 items-center gap-2">
@@ -904,80 +794,58 @@ const SidebarV2Row = memo(function SidebarV2Row(props: {
               ) : (
                 <span className="flex-1" />
               )}
-              <span className="relative ml-auto flex h-5 min-w-8 shrink-0 items-center justify-end pl-1 text-[length:var(--text-caption)]">
-                <span
-                  className={cn(
-                    "tabular-nums text-sidebar-muted-foreground/70 group-hover/v2-row:opacity-0",
-                    SIDEBAR_ROW_MOTION_CLASS,
-                    snoozeMenuOpen && "opacity-0",
-                  )}
-                >
-                  {topStatus ? (
-                    <span
-                      className={cn(
-                        "inline-flex items-center gap-1 font-medium",
-                        topStatus.className,
-                      )}
-                    >
-                      {topStatus.icon === "working" ? (
-                        <SidebarWorkingIndicator className="shrink-0" />
-                      ) : topStatus.icon === "done" ? (
-                        <CircleCheckIcon aria-hidden className="size-4 shrink-0" />
-                      ) : topStatus.icon === "woke" ? (
-                        <AlarmClockIcon aria-hidden className="size-4 shrink-0" />
-                      ) : null}
-                      {/* The label alone is the live region: a role="status"
-                          wrapper around the ticking duration would make
-                          screen readers announce every second. */}
-                      <span role="status">{topStatus.label}</span>
-                      {status === "working" ? (
-                        <span aria-hidden>
-                          <WorkingDuration startedAt={resolveWorkingStartedAt(thread)} />
-                        </span>
-                      ) : null}
-                    </span>
-                  ) : (
-                    threadTimeLabel(thread)
-                  )}
-                </span>
-                {props.settlementSupported || showSnoozeButton ? (
-                  <span
-                    className={cn(
-                      "absolute inset-y-0 right-0 flex items-stretch gap-0.5 opacity-0 focus-within:opacity-100 group-hover/v2-row:opacity-100",
-                      SIDEBAR_ROW_MOTION_CLASS,
-                      snoozeMenuOpen && "opacity-100",
-                    )}
-                  >
-                    {showSnoozeButton ? (
-                      <SnoozePopoverButton
-                        open={snoozeMenuOpen}
-                        onOpenChange={setSnoozeMenuOpen}
-                        onSnooze={handleSnoozePreset}
-                      />
-                    ) : null}
-                    {props.settlementSupported ? (
-                      <button
-                        type="button"
-                        aria-label="Settle thread"
-                        onClick={handleSettleClick}
-                        className={cn(
-                          "inline-flex cursor-pointer items-center gap-1 rounded-md bg-transparent px-2 text-sidebar-muted-foreground hover:text-sidebar-foreground",
-                          SIDEBAR_ROW_MOTION_CLASS,
-                        )}
-                      >
-                        <CheckIcon className="size-3" />
-                        Settle
-                      </button>
-                    ) : null}
+              <span className="ml-auto inline-flex min-w-0 shrink-0 items-center gap-1.5">
+                {driverKind ? (
+                  <span className="inline-flex shrink-0 items-center opacity-60">
+                    <ProviderInstanceIcon
+                      driverKind={driverKind}
+                      displayName={thread.session?.providerName ?? modelInstanceId}
+                      iconClassName="size-3.5"
+                    />
                   </span>
                 ) : null}
+                {props.jumpLabel ? (
+                  <Kbd className="h-4 min-w-4 rounded-sm bg-sidebar-control-surface px-1 text-(length:--text-micro) text-sidebar-muted-foreground ring-1 ring-sidebar-border">
+                    {props.jumpLabel}
+                  </Kbd>
+                ) : (
+                  <span className="inline-flex min-w-8 justify-end text-[length:var(--text-caption)] tabular-nums text-sidebar-muted-foreground/70">
+                    {topStatus ? (
+                      <span
+                        className={cn(
+                          "inline-flex items-center gap-1 font-medium",
+                          topStatus.className,
+                        )}
+                      >
+                        {topStatus.icon === "working" ? (
+                          <SidebarWorkingIndicator className="shrink-0" />
+                        ) : topStatus.icon === "done" ? (
+                          <CircleCheckIcon aria-hidden className="size-4 shrink-0" />
+                        ) : topStatus.icon === "woke" ? (
+                          <AlarmClockIcon aria-hidden className="size-4 shrink-0" />
+                        ) : null}
+                        {/* The label alone is the live region: a role="status"
+                            wrapper around the ticking duration would make
+                            screen readers announce every second. */}
+                        <span role="status">{topStatus.label}</span>
+                        {status === "working" ? (
+                          <span aria-hidden>
+                            <WorkingDuration startedAt={resolveWorkingStartedAt(thread)} />
+                          </span>
+                        ) : null}
+                      </span>
+                    ) : (
+                      threadTimeLabel(thread)
+                    )}
+                  </span>
+                )}
               </span>
             </div>
-            <div className="mt-1 flex min-w-0 items-center gap-1">
+            <div className="mt-0.5 flex min-w-0 items-center gap-1">
               {pinIndicator}
               {title}
             </div>
-            <div className={cn("mt-0.5 flex min-w-0 items-center gap-1.5", SIDEBAR_ROW_META_CLASS)}>
+            <div className={cn("flex min-w-0 items-center gap-1.5", SIDEBAR_ROW_META_CLASS)}>
               {thread.branch ? (
                 <span className="min-w-0 flex-1 truncate whitespace-nowrap">{thread.branch}</span>
               ) : (
@@ -999,19 +867,39 @@ const SidebarV2Row = memo(function SidebarV2Row(props: {
                     <ServerIcon aria-hidden className="size-3.5" />
                   </span>
                 ) : null}
-                {driverKind ? (
-                  <span className="inline-flex shrink-0 items-center opacity-60">
-                    <ProviderInstanceIcon
-                      driverKind={driverKind}
-                      displayName={thread.session?.providerName ?? modelInstanceId}
-                      iconClassName="size-3.5"
-                    />
-                  </span>
-                ) : null}
               </span>
+              {props.settlementSupported || showSnoozeButton ? (
+                <span
+                  className={cn(
+                    "pointer-events-none flex h-5 shrink-0 items-stretch gap-0.5 opacity-0 focus-within:pointer-events-auto focus-within:opacity-100 group-hover/v2-row:pointer-events-auto group-hover/v2-row:opacity-100",
+                    SIDEBAR_ROW_MOTION_CLASS,
+                    snoozeMenuOpen && "pointer-events-auto opacity-100",
+                  )}
+                >
+                  {showSnoozeButton ? (
+                    <SnoozePopoverButton
+                      open={snoozeMenuOpen}
+                      onOpenChange={setSnoozeMenuOpen}
+                      onSnooze={handleSnoozePreset}
+                    />
+                  ) : null}
+                  {props.settlementSupported ? (
+                    <button
+                      type="button"
+                      aria-label="Settle thread"
+                      onClick={handleSettleClick}
+                      className={cn(
+                        "inline-flex size-5 cursor-pointer items-center justify-center rounded-md bg-transparent p-0 text-sidebar-muted-foreground hover:bg-sidebar-row-hover hover:text-sidebar-foreground",
+                        SIDEBAR_ROW_MOTION_CLASS,
+                      )}
+                    >
+                      <CheckIcon className="size-3" />
+                    </button>
+                  ) : null}
+                </span>
+              ) : null}
             </div>
           </div>
-          {props.jumpLabel ? <JumpHintBadge label={props.jumpLabel} /> : null}
         </TooltipTrigger>
         {detailsTooltip}
       </Tooltip>
@@ -1029,6 +917,8 @@ function latestTurnDiff(
 }
 
 export default function SidebarV2() {
+  const addProjectTriggerRef = useRef<HTMLButtonElement>(null);
+  const emptyAddProjectTriggerRef = useRef<HTMLButtonElement>(null);
   const projects = useProjects();
   const projectOrder = useUiStateStore((store) => store.projectOrder);
   const threads = useThreadShells();
@@ -2372,13 +2262,18 @@ export default function SidebarV2() {
                 </MenuPopup>
               </Menu>
               <span className={SIDEBAR_SECTION_ACTIONS_CLASS}>
-                <AddProjectMenu align="start">
+                <AddProjectMenu
+                  align="start"
+                  side="right"
+                  sideOffset={() => resolveSidebarPopupSideOffset(addProjectTriggerRef.current)}
+                >
                   <Tooltip>
                     <TooltipTrigger
                       render={
                         <MenuTrigger
                           render={
                             <SidebarMenuButton
+                              ref={addProjectTriggerRef}
                               size="sm"
                               // Sized to the scope row it sits beside, not to a
                               // caption: v2 has no section label to scale to.
@@ -2399,7 +2294,12 @@ export default function SidebarV2() {
                         aria-hidden="true"
                       />
                     </TooltipTrigger>
-                    <TooltipPopup side="right">New project</TooltipPopup>
+                    <TooltipPopup
+                      side="right"
+                      sideOffset={() => resolveSidebarPopupSideOffset(addProjectTriggerRef.current)}
+                    >
+                      New project
+                    </TooltipPopup>
                   </Tooltip>
                 </AddProjectMenu>
               </span>
@@ -2592,8 +2492,17 @@ export default function SidebarV2() {
               {projects.length === 0 ? (
                 <>
                   <span>No projects yet</span>
-                  <AddProjectMenu align="start">
-                    <MenuTrigger className="inline-flex items-center gap-1.5 rounded-md border border-sidebar-border px-2.5 py-1 text-(length:--text-caption) font-medium text-sidebar-muted-foreground transition-colors hover:bg-sidebar-row-hover hover:text-sidebar-foreground">
+                  <AddProjectMenu
+                    align="start"
+                    side="right"
+                    sideOffset={() =>
+                      resolveSidebarPopupSideOffset(emptyAddProjectTriggerRef.current)
+                    }
+                  >
+                    <MenuTrigger
+                      ref={emptyAddProjectTriggerRef}
+                      className="inline-flex items-center gap-1.5 rounded-md border border-sidebar-border px-2.5 py-1 text-(length:--text-caption) font-medium text-sidebar-muted-foreground transition-colors hover:bg-sidebar-row-hover hover:text-sidebar-foreground"
+                    >
                       <PlusIcon className="size-3" />
                       Add project
                     </MenuTrigger>
