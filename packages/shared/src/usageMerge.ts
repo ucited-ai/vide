@@ -38,11 +38,24 @@ export interface ModelTotals {
   readonly costShare: number;
 }
 
+export interface PeriodContributorTotals {
+  readonly costUsd: number;
+  readonly totalTokens: number;
+  readonly records: number;
+}
+
+export interface PeriodModelTotals extends PeriodContributorTotals {
+  readonly provider: UsageProviderKind;
+  readonly model: string;
+}
+
 export interface DailyTotals {
   readonly day: string;
   readonly costUsd: number;
   readonly totalTokens: number;
-  readonly byProvider: ReadonlyMap<UsageProviderKind, { costUsd: number; totalTokens: number }>;
+  readonly records: number;
+  readonly byProvider: ReadonlyMap<UsageProviderKind, PeriodContributorTotals>;
+  readonly byModel: ReadonlyMap<string, PeriodModelTotals>;
 }
 
 export interface HourlyTotals {
@@ -50,7 +63,25 @@ export interface HourlyTotals {
   readonly hourStart: string;
   readonly costUsd: number;
   readonly totalTokens: number;
-  readonly byProvider: ReadonlyMap<UsageProviderKind, { costUsd: number; totalTokens: number }>;
+  readonly records: number;
+  readonly byProvider: ReadonlyMap<UsageProviderKind, PeriodContributorTotals>;
+  readonly byModel: ReadonlyMap<string, PeriodModelTotals>;
+}
+
+export interface UsageMergeFilter {
+  readonly provider?: UsageProviderKind;
+  readonly model?: string;
+}
+
+interface MutablePeriodContributorTotals {
+  costUsd: number;
+  totalTokens: number;
+  records: number;
+}
+
+interface MutablePeriodModelTotals extends MutablePeriodContributorTotals {
+  readonly provider: UsageProviderKind;
+  readonly model: string;
 }
 
 export interface CostQuality {
@@ -135,6 +166,7 @@ function claimSources(environments: readonly EnvironmentUsage[]): {
 function ownedContribution(
   environment: EnvironmentUsage,
   ownerByFingerprint: ReadonlyMap<string, EnvironmentId>,
+  filter: UsageMergeFilter,
 ): { readonly buckets: readonly UsageBucket[]; readonly sessions: number } {
   const ownedProviders = new Set<UsageProviderKind>();
   let sessions = 0;
@@ -145,11 +177,18 @@ function ownedContribution(
       ownedProviders.add(source.fingerprint.provider);
       // Distinct within a directory. Summing per-bucket session counts instead
       // would count a session once per day and model it spans.
-      sessions += source.distinctSessions;
+      if (filter.provider === undefined || source.fingerprint.provider === filter.provider) {
+        sessions += source.distinctSessions;
+      }
     }
   }
   return {
-    buckets: environment.summary.buckets.filter((bucket) => ownedProviders.has(bucket.provider)),
+    buckets: environment.summary.buckets.filter(
+      (bucket) =>
+        ownedProviders.has(bucket.provider) &&
+        (filter.provider === undefined || bucket.provider === filter.provider) &&
+        (filter.model === undefined || bucket.model === filter.model),
+    ),
     sessions,
   };
 }
@@ -199,6 +238,7 @@ const EMPTY_MERGED: MergedUsage = {
 export function mergeUsage(
   environments: readonly EnvironmentUsage[],
   expectedContractVersion: number,
+  filter: UsageMergeFilter = {},
 ): MergedUsage {
   if (environments.length === 0) return EMPTY_MERGED;
 
@@ -239,7 +279,9 @@ export function mergeUsage(
     {
       costUsd: number;
       totalTokens: number;
-      byProvider: Map<UsageProviderKind, { costUsd: number; totalTokens: number }>;
+      records: number;
+      byProvider: Map<UsageProviderKind, MutablePeriodContributorTotals>;
+      byModel: Map<string, MutablePeriodModelTotals>;
     }
   >();
   const hourlyAccumulator = new Map<
@@ -249,7 +291,9 @@ export function mergeUsage(
       hourStart: string;
       costUsd: number;
       totalTokens: number;
-      byProvider: Map<UsageProviderKind, { costUsd: number; totalTokens: number }>;
+      records: number;
+      byProvider: Map<UsageProviderKind, MutablePeriodContributorTotals>;
+      byModel: Map<string, MutablePeriodModelTotals>;
     }
   >();
   const contributingEnvironments: EnvironmentId[] = [];
@@ -258,6 +302,7 @@ export function mergeUsage(
     const { buckets, sessions: environmentSessions } = ownedContribution(
       environment,
       ownerByFingerprint,
+      filter,
     );
     if (buckets.length > 0) contributingEnvironments.push(environment.environmentId);
     sessions += environmentSessions;
@@ -301,14 +346,33 @@ export function mergeUsage(
       const day = dailyAccumulator.get(bucket.day) ?? {
         costUsd: 0,
         totalTokens: 0,
-        byProvider: new Map<UsageProviderKind, { costUsd: number; totalTokens: number }>(),
+        records: 0,
+        byProvider: new Map<UsageProviderKind, MutablePeriodContributorTotals>(),
+        byModel: new Map<string, MutablePeriodModelTotals>(),
       };
       day.costUsd += bucket.costUsd;
       day.totalTokens += tokens;
-      const dayProvider = day.byProvider.get(bucket.provider) ?? { costUsd: 0, totalTokens: 0 };
+      day.records += bucket.records;
+      const dayProvider = day.byProvider.get(bucket.provider) ?? {
+        costUsd: 0,
+        totalTokens: 0,
+        records: 0,
+      };
       dayProvider.costUsd += bucket.costUsd;
       dayProvider.totalTokens += tokens;
+      dayProvider.records += bucket.records;
       day.byProvider.set(bucket.provider, dayProvider);
+      const dayModel = day.byModel.get(modelKey) ?? {
+        provider: bucket.provider,
+        model: bucket.model,
+        costUsd: 0,
+        totalTokens: 0,
+        records: 0,
+      };
+      dayModel.costUsd += bucket.costUsd;
+      dayModel.totalTokens += tokens;
+      dayModel.records += bucket.records;
+      day.byModel.set(modelKey, dayModel);
       dailyAccumulator.set(bucket.day, day);
 
       if (bucket.hourStart !== undefined) {
@@ -317,17 +381,33 @@ export function mergeUsage(
           hourStart: bucket.hourStart,
           costUsd: 0,
           totalTokens: 0,
-          byProvider: new Map<UsageProviderKind, { costUsd: number; totalTokens: number }>(),
+          records: 0,
+          byProvider: new Map<UsageProviderKind, MutablePeriodContributorTotals>(),
+          byModel: new Map<string, MutablePeriodModelTotals>(),
         };
         hour.costUsd += bucket.costUsd;
         hour.totalTokens += tokens;
+        hour.records += bucket.records;
         const hourProvider = hour.byProvider.get(bucket.provider) ?? {
           costUsd: 0,
           totalTokens: 0,
+          records: 0,
         };
         hourProvider.costUsd += bucket.costUsd;
         hourProvider.totalTokens += tokens;
+        hourProvider.records += bucket.records;
         hour.byProvider.set(bucket.provider, hourProvider);
+        const hourModel = hour.byModel.get(modelKey) ?? {
+          provider: bucket.provider,
+          model: bucket.model,
+          costUsd: 0,
+          totalTokens: 0,
+          records: 0,
+        };
+        hourModel.costUsd += bucket.costUsd;
+        hourModel.totalTokens += tokens;
+        hourModel.records += bucket.records;
+        hour.byModel.set(modelKey, hourModel);
         hourlyAccumulator.set(bucket.hourStart, hour);
       }
     }
@@ -362,7 +442,9 @@ export function mergeUsage(
       day,
       costUsd: totals.costUsd,
       totalTokens: totals.totalTokens,
+      records: totals.records,
       byProvider: totals.byProvider,
+      byModel: totals.byModel,
     }))
     .sort((a, b) => a.day.localeCompare(b.day));
 

@@ -1,12 +1,12 @@
 import { ChevronRightIcon } from "lucide-react";
-import { memo, use, useState } from "react";
+import { memo, use, useEffect, useState } from "react";
 
 import { cn } from "~/lib/utils";
 import { ChatGrow } from "./ChatGrow";
 import { ChatSwapText } from "./ChatSwapText";
 import { type MessagesTimelineRow } from "./MessagesTimeline.logic";
 import { ThinkingIndicator } from "./ThinkingIndicator";
-import { TimelineRowCtx } from "./timelineRowContext";
+import { TimelineRevealCtx, TimelineRowCtx } from "./timelineRowContext";
 import { WorkCallList } from "./WorkGroupRow";
 
 /**
@@ -26,6 +26,7 @@ type TurnTailRowData = Extract<MessagesTimelineRow, { kind: "turn-tail" }>;
 
 export const TurnTailRow = memo(function TurnTailRow({ row }: { row: TurnTailRowData }) {
   const ctx = use(TimelineRowCtx);
+  const revealCtx = use(TimelineRevealCtx);
   const openStateKey = "turn-tools:live";
   const [open, setOpenState] = useState(() => ctx.workRowOpenById.get(openStateKey) ?? false);
   const setOpen = (next: boolean) => {
@@ -33,18 +34,46 @@ export const TurnTailRow = memo(function TurnTailRow({ row }: { row: TurnTailRow
     setOpenState(next);
   };
   const callCount = row.groupedEntries.length;
+  const settlesAtMs =
+    row.revealAfterMessageId === null
+      ? undefined
+      : revealCtx.settlesAtByMessageId.get(row.revealAfterMessageId);
+  const [, setTimerRevision] = useState(0);
+  const [reportWaitExpiredFor, setReportWaitExpiredFor] = useState<string | null>(null);
+  const waitingForRevealReport =
+    row.revealAfterMessageId !== null &&
+    ctx.chatAppearance.streamAnimation !== "instant" &&
+    settlesAtMs === undefined &&
+    reportWaitExpiredFor !== row.revealAfterMessageId;
+  const revealPending =
+    waitingForRevealReport || (settlesAtMs !== undefined && settlesAtMs > Date.now());
+
+  useEffect(() => {
+    if (waitingForRevealReport) {
+      const fallback = setTimeout(() => setReportWaitExpiredFor(row.revealAfterMessageId), 100);
+      return () => clearTimeout(fallback);
+    }
+    if (settlesAtMs === undefined || settlesAtMs <= Date.now()) return;
+    const timer = setTimeout(
+      () => setTimerRevision((revision) => revision + 1),
+      settlesAtMs - Date.now(),
+    );
+    return () => clearTimeout(timer);
+  }, [row.revealAfterMessageId, settlesAtMs, waitingForRevealReport]);
+
+  const visibleCallCount = revealPending ? 0 : callCount;
 
   return (
     <div data-turn-tail>
       <button
-        aria-expanded={callCount > 0 ? open : undefined}
+        aria-expanded={visibleCallCount > 0 ? open : undefined}
         className={cn(
           "chat-turn-row py-0.5 pr-2 text-(length:--text-caption) text-(--ink-tertiary)",
-          callCount > 0 &&
+          visibleCallCount > 0 &&
             "cursor-pointer rounded-(--radius) transition-colors hover:bg-(--wash-hover) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70",
         )}
         data-scroll-anchor-ignore
-        disabled={callCount === 0}
+        disabled={visibleCallCount === 0}
         onClick={() => setOpen(!open)}
         type="button"
       >
@@ -55,11 +84,11 @@ export const TurnTailRow = memo(function TurnTailRow({ row }: { row: TurnTailRow
           />
         </span>
         <span className="flex min-w-0 items-center text-left">
-          <ChatSwapText morphWidth shimmer text={row.label} />
+          <ChatSwapText morphWidth shimmer text={revealPending ? "Writing" : row.label} />
         </span>
-        {callCount > 0 ? (
+        {visibleCallCount > 0 ? (
           <span className="flex items-center gap-1 tabular-nums text-(--ink-tertiary)">
-            <span aria-label={`${String(callCount)} tool calls`}>{callCount}</span>
+            <span aria-label={`${String(visibleCallCount)} tool calls`}>{visibleCallCount}</span>
             <ChevronRightIcon
               aria-hidden
               className={cn("size-3 shrink-0 transition-transform", open && "rotate-90")}
@@ -67,7 +96,7 @@ export const TurnTailRow = memo(function TurnTailRow({ row }: { row: TurnTailRow
           </span>
         ) : null}
       </button>
-      <ChatGrow open={callCount > 0 && open}>
+      <ChatGrow open={visibleCallCount > 0 && open}>
         <WorkCallList entries={row.groupedEntries} workspaceRoot={ctx.workspaceRoot} />
       </ChatGrow>
     </div>

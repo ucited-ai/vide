@@ -12,12 +12,18 @@ import {
   type EnvironmentId,
   type UsageSummary,
   type UsageSummaryInput,
+  type UsageProviderKind,
 } from "@vide/contracts";
 import * as Option from "effect/Option";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
 import { useCallback, useMemo } from "react";
 
-import { mergeUsage, type EnvironmentUsage, type MergedUsage } from "@vide/shared/usageMerge";
+import {
+  mergeUsage,
+  type EnvironmentUsage,
+  type MergedUsage,
+  type ModelTotals,
+} from "@vide/shared/usageMerge";
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import { environmentPresentations } from "./presentation";
 import { serverEnvironment } from "./server";
@@ -59,6 +65,8 @@ const usageByWindowAtom = Atom.family((windowKey: string) =>
 
 export interface UsageView {
   readonly merged: MergedUsage;
+  /** Models available inside the provider scope, before the model filter. */
+  readonly availableModels: readonly ModelTotals[];
   readonly environments: readonly EnvironmentUsageStatus[];
   /** True until at least one environment has answered. */
   readonly isPending: boolean;
@@ -71,7 +79,12 @@ export interface UsageView {
   readonly refresh: () => void;
 }
 
-export function useUsage(input: UsageSummaryInput): UsageView {
+export function useUsage(
+  input: UsageSummaryInput,
+  selection: { readonly provider?: UsageProviderKind; readonly model?: string } = {},
+): UsageView {
+  const selectedProvider = selection.provider;
+  const selectedModel = selection.model;
   const windowKey = useMemo(
     () =>
       JSON.stringify({
@@ -106,7 +119,7 @@ export function useUsage(input: UsageSummaryInput): UsageView {
     }
   }, [environments, windowKey]);
 
-  const merged = useMemo(() => {
+  const { merged, availableModels } = useMemo(() => {
     const answered: EnvironmentUsage[] = environments.flatMap((environment) =>
       environment.summary === null
         ? []
@@ -118,8 +131,18 @@ export function useUsage(input: UsageSummaryInput): UsageView {
             },
           ],
     );
-    return mergeUsage(answered, USAGE_CONTRACT_VERSION);
-  }, [environments]);
+    return {
+      merged: mergeUsage(answered, USAGE_CONTRACT_VERSION, {
+        ...(selectedProvider === undefined ? {} : { provider: selectedProvider }),
+        ...(selectedModel === undefined ? {} : { model: selectedModel }),
+      }),
+      availableModels: mergeUsage(
+        answered,
+        USAGE_CONTRACT_VERSION,
+        selectedProvider === undefined ? {} : { provider: selectedProvider },
+      ).models,
+    };
+  }, [environments, selectedModel, selectedProvider]);
 
   const answeredCount = environments.filter((environment) => environment.summary !== null).length;
   const stillReporting = environments.filter(
@@ -128,6 +151,7 @@ export function useUsage(input: UsageSummaryInput): UsageView {
 
   return {
     merged,
+    availableModels,
     environments,
     isPending: answeredCount === 0 && stillReporting > 0,
     isPartial: answeredCount > 0 && stillReporting > 0,

@@ -136,6 +136,10 @@ interface ChatMarkdownProps {
    * replays from the first word on every remount.
    */
   streamRevealKey?: string | undefined;
+  /** Publishes the reveal's visual end so the following live status can wait. */
+  onStreamRevealSettlesAtChange?:
+    | ((messageKey: string, settlesAtMs: number | null) => void)
+    | undefined;
   skills?: ReadonlyArray<Pick<ServerProviderSkill, "name" | "displayName">>;
   className?: string;
   /** Treat single newlines as hard breaks — chat-style user input. */
@@ -1329,6 +1333,7 @@ function ChatMarkdown({
   isLiveTurn = false,
   streamAnimation,
   streamRevealKey,
+  onStreamRevealSettlesAtChange,
   skills = EMPTY_MARKDOWN_SKILLS,
   className,
   lineBreaks = false,
@@ -1716,6 +1721,10 @@ function ChatMarkdown({
     live: isLiveTurn,
     memoryKey: streamRevealKey,
   });
+  useEffect(() => {
+    if (streamRevealKey === undefined || onStreamRevealSettlesAtChange === undefined) return;
+    onStreamRevealSettlesAtChange(streamRevealKey, reveal.settlesAtMs());
+  }, [onStreamRevealSettlesAtChange, reveal, streamRevealKey, text]);
   /* Word wrapping goes last: ordered before the sanitiser, its spans are stripped. */
   const rehypePlugins = useMemo(
     () =>

@@ -179,6 +179,16 @@
   --agent-mark-4: color-mix(in srgb, var(--ink) 46%, transparent);
   --agent-mark-5: color-mix(in srgb, var(--ink) 34%, transparent);
 
+  /* Usage follows the user's foreground/surface pair instead of owning a
+     chart palette. Every level therefore moves with the active theme. */
+  --usage-activity-empty: var(--wash-hover);
+  --usage-activity-1: color-mix(in srgb, var(--primary) 18%, var(--surface-content));
+  --usage-activity-2: color-mix(in srgb, var(--primary) 32%, var(--surface-content));
+  --usage-activity-3: color-mix(in srgb, var(--primary) 48%, var(--surface-content));
+  --usage-activity-4: color-mix(in srgb, var(--primary) 68%, var(--surface-content));
+  --usage-activity-5: color-mix(in srgb, var(--primary) 88%, var(--surface-content));
+  --usage-activity-outline: var(--ring);
+
   /*
    * The highlight the sheen carries through live type. Light, not ink — which is
    * why it is here beside the edges and washes, and why it darkens rather than

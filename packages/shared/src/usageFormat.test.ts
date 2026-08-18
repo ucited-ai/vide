@@ -54,4 +54,11 @@ describe("hourly usage formatting", () => {
     expect(window.sinceTime).toBe("2026-08-10T12:37:00.000Z");
     expect(window.untilTime).toBe("2026-08-11T12:37:00.000Z");
   });
+
+  it("builds a seven-day hourly request for the compact week field", () => {
+    const window = makeWindow(7, new Date("2026-08-11T12:37:42.123Z"), "hour");
+
+    expect(window.sinceTime).toBe("2026-08-04T12:37:00.000Z");
+    expect(window.untilTime).toBe("2026-08-11T12:37:00.000Z");
+  });
 });

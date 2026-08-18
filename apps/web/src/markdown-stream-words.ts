@@ -43,12 +43,11 @@ const STREAM_BLOCK_CLASS_NAME = "chat-stream-block";
 const SKIPPED_TAGS = new Set(["pre"]);
 
 /**
- * Blocks that reveal as a unit on their first word's clock. Lists and
- * blockquotes are absent on purpose: their `li`/`p` children stagger
- * individually, which reads as the writing continuing rather than a box
- * arriving.
+ * Prose blocks are deliberately not animated separately. Their words already
+ * reveal on this clock; also fading/growing the parent runs a second entrance
+ * over the same sentence and looks like a fast replay. A skipped block such as
+ * a code fence still arrives as one unit because its contents are not wrapped.
  */
-const BLOCK_TAGS = new Set(["p", "li", "h1", "h2", "h3", "h4", "h5", "h6", "pre", "table", "hr"]);
 
 /**
  * Elements the reveal treats as one word. Their insides stay untouched —
@@ -147,12 +146,6 @@ export function rehypeChatStreamWords(timing: ChatStreamWordTiming) {
           }
           if (WHOLE_TAGS.has(child.tagName)) {
             return [wrapAsWord([child])];
-          }
-          if (BLOCK_TAGS.has(child.tagName)) {
-            const firstWordIndex = wordCount;
-            wrapWords(child);
-            stampBlock(child, firstWordIndex);
-            return [child];
           }
         }
         wrapWords(child);

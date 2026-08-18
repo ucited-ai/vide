@@ -47,8 +47,11 @@ import {
 import {
   TimelineRowActivityCtx,
   TimelineRowCtx,
+  TimelineRevealCtx,
+  TimelineRevealReportCtx,
   type TimelineRowActivityState,
   type TimelineRowSharedState,
+  type TimelineRevealState,
 } from "./timelineRowContext";
 import { TurnHeadRow } from "./TurnHeadRow";
 import { TurnTailRow } from "./TurnTailRow";
@@ -194,6 +197,21 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   const chatAppearance = useChatAppearance();
   const [expandedTurnIds, setExpandedTurnIds] = useState<ReadonlySet<TurnId>>(new Set());
   const [minimapStripMap] = useState(() => new Map<string, HTMLSpanElement>());
+  const [settlesAtByMessageId, setSettlesAtByMessageId] = useState<ReadonlyMap<string, number>>(
+    new Map(),
+  );
+  const onStreamRevealSettlesAtChange = useCallback(
+    (messageId: string, settlesAtMs: number | null) => {
+      const nextSettlesAtMs = settlesAtMs ?? Date.now();
+      setSettlesAtByMessageId((current) => {
+        if (current.get(messageId) === nextSettlesAtMs) return current;
+        const next = new Map(current);
+        next.set(messageId, nextSettlesAtMs);
+        return next;
+      });
+    },
+    [],
+  );
 
   const onToggleTurnFold = useCallback((turnId: TurnId) => {
     setExpandedTurnIds((existing) => {
@@ -406,6 +424,10 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     }),
     [activeTurnInProgress, isRevertingCheckpoint, isWorking, latestTurn?.turnId],
   );
+  const revealState = useMemo<TimelineRevealState>(
+    () => ({ settlesAtByMessageId }),
+    [settlesAtByMessageId],
+  );
 
   // Stable renderItem — no closure deps. Row components read shared state
   // from TimelineRowCtx, which propagates through LegendList's memo.
@@ -437,97 +459,105 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   return (
     <TimelineRowCtx value={sharedState}>
       <TimelineRowActivityCtx value={activityState}>
-        {/*
+        <TimelineRevealReportCtx value={onStreamRevealSettlesAtChange}>
+          <TimelineRevealCtx value={revealState}>
+            {/*
           The transcript is clipped where the composer begins. Without this it
           keeps painting underneath it: the composer's own box is opaque, but the
           strip either side of it is not, so scrolling text slid through the gap.
           `contentInsetEndAdjustment` is the composer's measured height, so the
           mask tracks it as the input grows.
         */}
-        <div
-          ref={setTimelineViewportElement}
-          className="chat-timeline-viewport relative h-full min-h-0"
-          style={{ "--chat-timeline-end-inset": `${contentInsetEndAdjustment}px` } as CSSProperties}
-        >
-          <LegendList<MessagesTimelineRow>
-            ref={listRef}
-            data={rows}
-            keyExtractor={keyExtractor}
-            getItemType={getItemType}
-            renderItem={renderItem}
-            /*
-             * Explicitly remount-on-reuse. Rows hold no state that must
-             * survive them — reveal progress is keyed by message id, open
-             * states live in workRowOpenById — and recycling would instead
-             * hand one row's leftover DOM to a different item.
-             */
-            recycleItems={false}
-            estimatedItemSize={90}
-            initialScrollAtEnd
-            {...(anchoredEndSpace ? { anchoredEndSpace } : {})}
-            contentInsetEndAdjustment={contentInsetEndAdjustment}
-            /*
-             * Follow armed is the only authority — an unarmed list never moves
-             * the scroll itself. While armed, layout growth below the fold
-             * (an expanded tool group streaming output, a disclosure opening)
-             * re-pins the end; the anchored end-space absorbs what it can and
-             * the pin covers the growth the spacer has already run out of.
-             */
-            maintainScrollAtEnd={
-              !followEnabled
-                ? false
-                : {
-                    animated: false,
-                    on: {
-                      dataChange: true,
-                      itemLayout: true,
-                      layout: true,
-                    },
-                  }
-            }
-            /*
-             * `size: true` is what compensates the scroll when a row above the
-             * viewport resolves from its 90px estimate to its real height —
-             * without it, scrolling up through never-measured rows shifted the
-             * content under the reader (browser anchoring is off below).
-             */
-            maintainVisibleContentPosition={{
-              data: true,
-              size: true,
-            }}
-            onScroll={handleScroll}
-            className={cn(
-              // The inset is the composer's, from the same token, so the text and
-              // the input it answers sit in one column. The end reserve is the
-              // environment panel's room, taken as padding inside the scroller
-              // so the native scrollbar keeps the window edge.
-              // No padding transition: the end reserve is held for a panel's
-              // slide and snaps once at release (see ChatView's freeze block).
-              // Easing it here resized the scroller's content box on every
-              // frame, which rewrapped the prose and had the list re-pinning
-              // the scroll per frame — the environment column's stutter.
-              "scrollbar-gutter-both h-full min-h-0 overflow-x-hidden overscroll-y-contain ps-(--chat-column-inset) pe-[calc(var(--chat-column-inset)+var(--chat-column-end-reserve))] [overflow-anchor:none]",
-              topFadeEnabled && "chat-timeline-scroll-fade",
-            )}
-            ListHeaderComponent={topFadeEnabled ? TIMELINE_LIST_FADE_HEADER : TIMELINE_LIST_HEADER}
-            ListFooterComponent={TIMELINE_LIST_FOOTER}
-          />
-          <TimelineMinimap
-            items={minimapItems}
-            bottomInset={contentInsetEndAdjustment}
-            hasPersistentGutter={minimapHasPersistentGutter}
-            hitStripWidth={minimapHitStripWidth}
-            stripMap={minimapStripMap}
-            onSelect={(item) => {
-              onManualNavigation();
-              void listRef.current?.scrollToIndex({
-                index: item.rowIndex,
-                animated: true,
-                viewOffset: 24,
-              });
-            }}
-          />
-        </div>
+            <div
+              ref={setTimelineViewportElement}
+              className="chat-timeline-viewport relative h-full min-h-0"
+              style={
+                { "--chat-timeline-end-inset": `${contentInsetEndAdjustment}px` } as CSSProperties
+              }
+            >
+              <LegendList<MessagesTimelineRow>
+                ref={listRef}
+                data={rows}
+                keyExtractor={keyExtractor}
+                getItemType={getItemType}
+                renderItem={renderItem}
+                /*
+                 * Explicitly remount-on-reuse. Rows hold no state that must
+                 * survive them — reveal progress is keyed by message id, open
+                 * states live in workRowOpenById — and recycling would instead
+                 * hand one row's leftover DOM to a different item.
+                 */
+                recycleItems={false}
+                estimatedItemSize={90}
+                initialScrollAtEnd
+                {...(anchoredEndSpace ? { anchoredEndSpace } : {})}
+                contentInsetEndAdjustment={contentInsetEndAdjustment}
+                /*
+                 * Follow armed is the only authority — an unarmed list never moves
+                 * the scroll itself. While armed, layout growth below the fold
+                 * (an expanded tool group streaming output, a disclosure opening)
+                 * re-pins the end; the anchored end-space absorbs what it can and
+                 * the pin covers the growth the spacer has already run out of.
+                 */
+                maintainScrollAtEnd={
+                  !followEnabled
+                    ? false
+                    : {
+                        animated: false,
+                        on: {
+                          dataChange: true,
+                          itemLayout: true,
+                          layout: true,
+                        },
+                      }
+                }
+                /*
+                 * `size: true` is what compensates the scroll when a row above the
+                 * viewport resolves from its 90px estimate to its real height —
+                 * without it, scrolling up through never-measured rows shifted the
+                 * content under the reader (browser anchoring is off below).
+                 */
+                maintainVisibleContentPosition={{
+                  data: true,
+                  size: true,
+                }}
+                onScroll={handleScroll}
+                className={cn(
+                  // The inset is the composer's, from the same token, so the text and
+                  // the input it answers sit in one column. The end reserve is the
+                  // environment panel's room, taken as padding inside the scroller
+                  // so the native scrollbar keeps the window edge.
+                  // No padding transition: the end reserve is held for a panel's
+                  // slide and snaps once at release (see ChatView's freeze block).
+                  // Easing it here resized the scroller's content box on every
+                  // frame, which rewrapped the prose and had the list re-pinning
+                  // the scroll per frame — the environment column's stutter.
+                  "scrollbar-gutter-both h-full min-h-0 overflow-x-hidden overscroll-y-contain ps-(--chat-column-inset) pe-[calc(var(--chat-column-inset)+var(--chat-column-end-reserve))] [overflow-anchor:none]",
+                  topFadeEnabled && "chat-timeline-scroll-fade",
+                )}
+                ListHeaderComponent={
+                  topFadeEnabled ? TIMELINE_LIST_FADE_HEADER : TIMELINE_LIST_HEADER
+                }
+                ListFooterComponent={TIMELINE_LIST_FOOTER}
+              />
+              <TimelineMinimap
+                items={minimapItems}
+                bottomInset={contentInsetEndAdjustment}
+                hasPersistentGutter={minimapHasPersistentGutter}
+                hitStripWidth={minimapHitStripWidth}
+                stripMap={minimapStripMap}
+                onSelect={(item) => {
+                  onManualNavigation();
+                  void listRef.current?.scrollToIndex({
+                    index: item.rowIndex,
+                    animated: true,
+                    viewOffset: 24,
+                  });
+                }}
+              />
+            </div>
+          </TimelineRevealCtx>
+        </TimelineRevealReportCtx>
       </TimelineRowActivityCtx>
     </TimelineRowCtx>
   );
@@ -1005,6 +1035,7 @@ function RevertUserMessageButton({ messageId }: { messageId: MessageId }) {
  */
 function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" }> }) {
   const ctx = use(TimelineRowCtx);
+  const reportReveal = use(TimelineRevealReportCtx);
   const messageText = row.message.text || (row.message.streaming ? "" : "(empty response)");
 
   return (
@@ -1017,6 +1048,7 @@ function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "mess
         skills={ctx.skills}
         streamAnimation={ctx.chatAppearance.streamAnimation}
         streamRevealKey={row.message.id}
+        onStreamRevealSettlesAtChange={reportReveal}
         text={messageText}
         threadRef={ctx.threadRef ?? undefined}
       />

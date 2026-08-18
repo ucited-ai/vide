@@ -1177,6 +1177,7 @@ describe("deriveMessagesTimelineRows", () => {
     expect(head?.kind === "turn-head" && head.startedAt).toBe("2026-01-01T00:00:00Z");
     const tail = rows.find((row) => row.kind === "turn-tail");
     expect(tail?.kind === "turn-tail" && tail.label).toBe("Read");
+    expect(tail?.kind === "turn-tail" && tail.revealAfterMessageId).toBe("assistant-thought");
 
     const thought = rows.find((row) => row.id === "assistant-thought-entry");
     expect(thought?.kind === "message" && thought.isLiveThought).toBe(true);

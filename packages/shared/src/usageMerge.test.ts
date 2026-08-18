@@ -280,5 +280,37 @@ describe("mergeUsage", () => {
     ]);
     expect(merged.daily).toHaveLength(1);
     expect(merged.daily[0]?.costUsd).toBe(10);
+    expect(merged.daily[0]?.records).toBe(10);
+    expect(merged.daily[0]?.byProvider.get("claude")?.records).toBe(10);
+    expect(merged.daily[0]?.byModel.get("claude claude-fable-5")?.records).toBe(10);
+  });
+
+  it("filters all totals and periods by provider and model", () => {
+    const merged = mergeUsage(
+      [
+        environment(
+          "env-a",
+          summary(
+            [
+              bucket({ model: "claude-fable-5", costUsd: 6 }),
+              bucket({ model: "claude-sonnet-5", costUsd: 4, records: 2 }),
+              bucket({ provider: "codex", model: "gpt-5.6-sol", costUsd: 8 }),
+            ],
+            [
+              { provider: "claude", hostId: "mac", homePath: "/a/.claude" },
+              { provider: "codex", hostId: "mac", homePath: "/a/.codex" },
+            ],
+          ),
+        ),
+      ],
+      USAGE_CONTRACT_VERSION,
+      { provider: "claude", model: "claude-sonnet-5" },
+    );
+
+    expect(merged.costUsd).toBe(4);
+    expect(merged.records).toBe(2);
+    expect(merged.providers.map((provider) => provider.provider)).toEqual(["claude"]);
+    expect(merged.models.map((model) => model.model)).toEqual(["claude-sonnet-5"]);
+    expect(merged.daily[0]?.records).toBe(2);
   });
 });

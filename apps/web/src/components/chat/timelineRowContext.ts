@@ -55,5 +55,13 @@ export interface TimelineRowActivityState {
   latestTurnId: TurnId | null;
 }
 
+export interface TimelineRevealState {
+  settlesAtByMessageId: ReadonlyMap<string, number>;
+}
+
 export const TimelineRowCtx = createContext<TimelineRowSharedState>(null!);
 export const TimelineRowActivityCtx = createContext<TimelineRowActivityState>(null!);
+export const TimelineRevealCtx = createContext<TimelineRevealState>(null!);
+export const TimelineRevealReportCtx = createContext<
+  (messageId: string, settlesAtMs: number | null) => void
+>(null!);

@@ -1,71 +1,98 @@
 /**
- * Usage and cost reporting.
+ * Local usage ledger for Claude and Codex transcripts.
  *
- * Every connected environment scans the provider CLIs' own transcripts and
- * returns pre-aggregated buckets; this page merges them and presents the
- * result. Cost is API-equivalent, not money billed — subscriptions settle
- * separately, and the page says so rather than implying a bill.
+ * Cost is API-equivalent, not money billed. Multi-account readiness, live
+ * quotas and account switching deliberately live outside this layer.
  *
  * @module components/settings/UsageSettings
  */
 import { AlertTriangleIcon, InfoIcon, RefreshCwIcon } from "lucide-react";
-import { useMemo, useState, type ReactNode } from "react";
 import type { UsageProviderKind, UsageSummaryInput } from "@vide/contracts";
 import type { DailyTotals, HourlyTotals } from "@vide/shared/usageMerge";
 import {
   enumerateDays,
   enumerateHourStarts,
-  formatDayShort,
+  formatDateTimeShort,
   formatPercent,
-  formatRelativeHourShort,
   formatTokens,
   formatUsd,
   makeWindow,
 } from "@vide/shared/usageFormat";
+import { useMemo, useState, type ReactNode } from "react";
 
 import { cn } from "../../lib/utils";
 import { useUsage, type EnvironmentUsageStatus } from "../../state/usage";
 import { Button } from "../ui/button";
+import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { Skeleton } from "../ui/skeleton";
 import { Toggle, ToggleGroup } from "../ui/toggle-group";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
-import { UsageActivityChart, type UsageChartMetric } from "./UsageActivityChart";
-import { SettingsPageContainer, SettingsSection } from "./settingsLayout";
+import {
+  UsageActivityField,
+  type UsageActivityMetric,
+  type UsageGrouping,
+  type UsagePinnedPeriod,
+} from "./UsageActivityField";
+import { SettingsPageContainer, SettingsRow, SettingsSection } from "./settingsLayout";
 
-const WINDOW_OPTIONS = [
-  { days: 1, label: "24h" },
-  { days: 7, label: "7d" },
-  { days: 30, label: "30d" },
-  { days: 90, label: "90d" },
-] as const;
+export type UsageRangeDays = 1 | 7 | 30 | 90 | 365;
+export type UsageProviderScope = "all" | UsageProviderKind;
+
+export interface UsageSettingsSelection {
+  readonly rangeDays: UsageRangeDays;
+  readonly provider: UsageProviderScope;
+  readonly model?: string;
+  readonly groupBy: UsageGrouping;
+  readonly metric: UsageActivityMetric;
+}
+
+export type UsageSettingsSelectionPatch = Omit<Partial<UsageSettingsSelection>, "model"> & {
+  readonly model?: string | undefined;
+};
+
+const WINDOW_OPTIONS: readonly { days: UsageRangeDays; label: string }[] = [
+  { days: 1, label: "Last 24 hours" },
+  { days: 7, label: "Last 7 days" },
+  { days: 30, label: "Last 30 days" },
+  { days: 90, label: "Last 90 days" },
+  { days: 365, label: "Last year" },
+];
 
 const PROVIDER_LABEL: Record<UsageProviderKind, string> = {
   claude: "Claude",
   codex: "Codex",
 };
 
-function Stat({
+const EMPTY_PERIOD = {
+  costUsd: 0,
+  totalTokens: 0,
+  records: 0,
+  byProvider: new Map(),
+  byModel: new Map(),
+} as const;
+
+function HeadlineStat({
   label,
   value,
   tooltip,
-  emphasis = false,
+  className,
 }: {
-  label: string;
-  value: string;
-  tooltip?: ReactNode;
-  emphasis?: boolean;
+  readonly label: string;
+  readonly value: string;
+  readonly tooltip?: ReactNode;
+  readonly className?: string;
 }) {
   return (
-    <div className="min-w-0 px-4 py-3 sm:px-5">
-      <div className="flex min-w-0 items-center gap-1.5 text-(length:--text-caption) font-medium uppercase tracking-[0.08em] text-muted-foreground/70">
-        <span className="min-w-0 truncate">{label}</span>
-        {tooltip ? (
+    <div className={cn("min-w-0", className)}>
+      <div className="flex items-center gap-1.5 text-(length:--text-caption) text-muted-foreground/70">
+        <span className="truncate">{label}</span>
+        {tooltip === undefined ? null : (
           <Tooltip>
             <TooltipTrigger
               render={
                 <button
                   type="button"
-                  className="inline-flex size-3.5 shrink-0 items-center justify-center rounded-sm text-muted-foreground/60 hover:text-foreground"
+                  className="inline-flex size-3.5 shrink-0 items-center justify-center rounded-sm hover:text-foreground"
                   aria-label={`${label} details`}
                 >
                   <InfoIcon className="size-3" />
@@ -74,46 +101,133 @@ function Stat({
             />
             <TooltipPopup
               side="top"
-              className="max-w-[min(300px,calc(100vw-2rem))] whitespace-normal text-left text-(length:--text-caption) leading-relaxed text-wrap"
+              className="max-w-[min(300px,calc(100vw-2rem))] whitespace-normal text-left text-(length:--text-caption) leading-relaxed"
             >
               {tooltip}
             </TooltipPopup>
           </Tooltip>
-        ) : null}
-      </div>
-      <div
-        className={cn(
-          "mt-1 truncate font-mono tabular-nums text-foreground",
-          emphasis
-            ? "text-(length:--text-title) font-semibold"
-            : "text-(length:--text-section) font-semibold",
         )}
-      >
+      </div>
+      <div className="mt-1 truncate font-mono text-(length:--text-ui) font-semibold tracking-[-0.02em] text-foreground tabular-nums">
         {value}
       </div>
     </div>
   );
 }
 
-/** Hairline-separated cell strip, matching the diagnostics page's stat grid. */
-function StatStrip({ children, columns }: { children: ReactNode; columns: string }) {
+function UsageSkeleton() {
   return (
-    <div className={cn("grid divide-x divide-y divide-border/60 [&>*]:border-border/60", columns)}>
-      {children}
+    <div aria-label="Loading usage" className="animate-pulse rounded-xl px-3 py-3 sm:px-4">
+      <div className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-4">
+        {Array.from({ length: 4 }, (_, index) => (
+          <div key={index}>
+            <Skeleton className="h-3 w-16" />
+            <Skeleton className="mt-2 h-4 w-20" />
+          </div>
+        ))}
+      </div>
+      <div className="mt-5 border-t border-border/60 pt-4">
+        <Skeleton className="h-3 w-28" />
+        <div className="mt-3 flex gap-1 overflow-hidden">
+          {Array.from({ length: 24 }, (_, index) => (
+            <Skeleton key={index} className="size-2.5 shrink-0 rounded-[3px]" />
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
 
-function SurfaceCard({ children, className }: { children: ReactNode; className?: string }) {
+function UsageControls({
+  selection,
+  modelOptions,
+  onChange,
+}: {
+  readonly selection: UsageSettingsSelection;
+  readonly modelOptions: readonly string[];
+  readonly onChange: (patch: UsageSettingsSelectionPatch) => void;
+}) {
   return (
-    <div
-      className={cn(
-        "overflow-hidden rounded-xl border border-(--edge) bg-(--surface-raised)",
-        className,
-      )}
-    >
-      {children}
-    </div>
+    <>
+      <SettingsRow
+        title="Source"
+        description="Local Claude and Codex transcripts. Narrow the ledger to one provider or model."
+        control={
+          <div className="flex w-full items-center gap-2 sm:w-auto sm:justify-end">
+            <Select
+              value={selection.provider}
+              onValueChange={(value) => {
+                if (value === "all" || value === "claude" || value === "codex") {
+                  onChange({ provider: value, model: undefined });
+                }
+              }}
+            >
+              <SelectTrigger size="sm" className="w-32" aria-label="Provider scope">
+                <SelectValue>
+                  {selection.provider === "all" ? "All usage" : PROVIDER_LABEL[selection.provider]}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectPopup align="end" alignItemWithTrigger={false}>
+                <SelectItem value="all">All usage</SelectItem>
+                <SelectItem value="claude">Claude</SelectItem>
+                <SelectItem value="codex">Codex</SelectItem>
+              </SelectPopup>
+            </Select>
+
+            <Select
+              value={selection.model ?? "all"}
+              onValueChange={(value) => {
+                if (typeof value === "string") {
+                  onChange({ model: value === "all" ? undefined : value });
+                }
+              }}
+            >
+              <SelectTrigger size="sm" className="w-40" aria-label="Model filter">
+                <SelectValue>{selection.model ?? "All models"}</SelectValue>
+              </SelectTrigger>
+              <SelectPopup align="end" alignItemWithTrigger={false} className="max-w-72">
+                <SelectItem value="all">All models</SelectItem>
+                {modelOptions.map((model) => (
+                  <SelectItem key={model} value={model}>
+                    {model}
+                  </SelectItem>
+                ))}
+              </SelectPopup>
+            </Select>
+          </div>
+        }
+      />
+
+      <SettingsRow
+        title="Period"
+        description="Choose the reporting window. Recent ranges use hourly activity; longer ranges use daily totals."
+        control={
+          <Select
+            value={String(selection.rangeDays)}
+            onValueChange={(value) => {
+              const next = Number(value);
+              if (next === 1 || next === 7 || next === 30 || next === 90 || next === 365) {
+                onChange({ rangeDays: next });
+              }
+            }}
+          >
+            <SelectTrigger size="sm" className="w-40" aria-label="Reporting window">
+              <SelectValue>
+                {WINDOW_OPTIONS.find((option) => option.days === selection.rangeDays)?.label ??
+                  "Last 30 days"}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectPopup align="end" alignItemWithTrigger={false}>
+              {WINDOW_OPTIONS.map((option) => (
+                <SelectItem key={option.days} value={String(option.days)}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectPopup>
+          </Select>
+        }
+      />
+    </>
   );
 }
 
@@ -122,143 +236,282 @@ function CoverageNotice({
   staleCount,
   duplicateCount,
 }: {
-  unpricedShare: number;
-  staleCount: number;
-  duplicateCount: number;
+  readonly unpricedShare: number;
+  readonly staleCount: number;
+  readonly duplicateCount: number;
 }) {
   const notes: string[] = [];
-  if (unpricedShare > 0) {
+  if (unpricedShare > 0) notes.push(`${formatPercent(unpricedShare)} of turns have no known rate.`);
+  if (staleCount > 0)
     notes.push(
-      `${formatPercent(unpricedShare)} of tokens came from models with no known rate. They count toward tokens but not toward cost.`,
+      `${staleCount} environment ${staleCount === 1 ? "is" : "are"} on an older usage format.`,
     );
-  }
-  if (staleCount > 0) {
+  if (duplicateCount > 0)
     notes.push(
-      `${staleCount} ${staleCount === 1 ? "environment reports" : "environments report"} an older usage format, so their share may be incomplete.`,
+      `${duplicateCount} duplicate ${duplicateCount === 1 ? "source was" : "sources were"} excluded.`,
     );
-  }
-  if (duplicateCount > 0) {
-    notes.push(
-      `${duplicateCount} duplicate ${duplicateCount === 1 ? "source was" : "sources were"} dropped — two environments resolved the same transcript directory.`,
-    );
-  }
   if (notes.length === 0) return null;
 
   return (
-    <div className="flex gap-2.5 rounded-xl border border-(--edge) bg-(--surface-recessed) px-4 py-3 text-(length:--text-caption) leading-[1.5] text-muted-foreground sm:px-5">
-      <AlertTriangleIcon className="mt-px size-3.5 shrink-0 text-muted-foreground/70" />
-      <div className="space-y-1">
-        {notes.map((note) => (
-          <p key={note}>{note}</p>
-        ))}
+    <div className="flex gap-2.5 rounded-xl px-3 py-2.5 text-(length:--text-caption) leading-[1.5] text-muted-foreground sm:px-4">
+      <AlertTriangleIcon className="mt-px size-3.5 shrink-0" />
+      <p>{notes.join(" ")}</p>
+    </div>
+  );
+}
+
+function Breakdown({
+  merged,
+  grouping,
+  open,
+  pinnedPeriod,
+  onOpenChange,
+  onGroupingChange,
+  onSelectProvider,
+  onSelectModel,
+}: {
+  readonly merged: ReturnType<typeof useUsage>["merged"];
+  readonly grouping: UsageGrouping;
+  readonly open: boolean;
+  readonly pinnedPeriod: UsagePinnedPeriod | null;
+  readonly onOpenChange: (open: boolean) => void;
+  readonly onGroupingChange: (grouping: UsageGrouping) => void;
+  readonly onSelectProvider: (provider: UsageProviderKind) => void;
+  readonly onSelectModel: (model: string) => void;
+}) {
+  const rows = (
+    pinnedPeriod === null
+      ? grouping === "provider"
+        ? merged.providers.map((row) => ({
+            key: row.provider,
+            label: PROVIDER_LABEL[row.provider],
+            provider: row.provider,
+            costUsd: row.costUsd,
+            totalTokens: row.totalTokens,
+            records: row.records,
+          }))
+        : merged.models.map((row) => ({
+            key: `${row.provider}:${row.model}`,
+            label: row.model,
+            provider: row.provider,
+            costUsd: row.costUsd,
+            totalTokens: row.totalTokens,
+            records: row.records,
+          }))
+      : pinnedPeriod.contributors
+  ).toSorted((a, b) => b.totalTokens - a.totalTokens || b.records - a.records);
+  const totalTokens = pinnedPeriod?.totalTokens ?? merged.totalTokens;
+
+  return (
+    <div className="rounded-xl px-3 py-3 sm:px-4">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h3 className="text-(length:--text-ui) font-medium text-foreground">Breakdown</h3>
+          <p className="mt-0.5 text-(length:--text-caption) text-muted-foreground/70">
+            {pinnedPeriod === null ? "Select a row to narrow the ledger" : pinnedPeriod.label}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {open ? (
+            <ToggleGroup
+              size="xs"
+              variant="ghost"
+              value={[grouping]}
+              onValueChange={(value) => {
+                const next = value[0];
+                if (next === "provider" || next === "model") onGroupingChange(next);
+              }}
+            >
+              <Toggle value="provider">Providers</Toggle>
+              <Toggle value="model">Models</Toggle>
+            </ToggleGroup>
+          ) : null}
+          <Button size="xs" variant="ghost" onClick={() => onOpenChange(!open)}>
+            {open ? "Hide" : "Show breakdown"}
+          </Button>
+        </div>
       </div>
+
+      {!open ? null : rows.length === 0 ? (
+        <p className="mt-3 border-t border-border/60 pt-3 text-(length:--text-ui) text-muted-foreground">
+          No recorded usage in this window.
+        </p>
+      ) : (
+        <div className="mt-3 overflow-x-auto border-t border-border/60">
+          <table className="w-full min-w-[36rem] border-collapse text-(length:--text-ui)">
+            <thead>
+              <tr className="text-(length:--text-caption) text-muted-foreground/65">
+                <th className="py-2 pr-4 text-left font-normal">
+                  {grouping === "provider" ? "Provider" : "Model"}
+                </th>
+                <th className="px-4 py-2 text-right font-normal">Usage</th>
+                <th className="px-4 py-2 text-right font-normal">Share</th>
+                <th className="px-4 py-2 text-right font-normal">Turns</th>
+                <th className="py-2 pl-4 text-right font-normal">Cost</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => {
+                const share = totalTokens === 0 ? 0 : row.totalTokens / totalTokens;
+                return (
+                  <tr key={row.key} className="border-t border-border/60">
+                    <td className="max-w-0 py-2.5 pr-4">
+                      <button
+                        type="button"
+                        className="block max-w-full text-left hover:text-foreground/70 focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        onClick={() =>
+                          grouping === "provider"
+                            ? onSelectProvider(row.provider)
+                            : onSelectModel(row.label)
+                        }
+                      >
+                        <span className="block truncate text-foreground">{row.label}</span>
+                        {grouping === "provider" ? null : (
+                          <span className="block truncate text-(length:--text-caption) text-muted-foreground/65">
+                            {PROVIDER_LABEL[row.provider]}
+                          </span>
+                        )}
+                      </button>
+                    </td>
+                    <td className="px-4 py-2.5 text-right font-mono text-foreground tabular-nums">
+                      {formatTokens(row.totalTokens)}
+                    </td>
+                    <td className="px-4 py-2.5 text-right font-mono text-muted-foreground tabular-nums">
+                      {formatPercent(share)}
+                    </td>
+                    <td className="px-4 py-2.5 text-right font-mono text-muted-foreground tabular-nums">
+                      {row.records.toLocaleString("en-US")}
+                    </td>
+                    <td className="py-2.5 pl-4 text-right font-mono text-muted-foreground tabular-nums">
+                      {formatUsd(row.costUsd)}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
 
-function DeviceRow({ environment }: { environment: EnvironmentUsageStatus }) {
-  const state = environment.error
-    ? { label: "Unavailable", tone: "text-destructive" }
-    : environment.summary === null
-      ? { label: "Reporting…", tone: "text-muted-foreground" }
-      : { label: "Reported", tone: "text-muted-foreground" };
+function SourceFootnote({
+  environments,
+  mergedSessions,
+  modelFiltered,
+}: {
+  readonly environments: readonly EnvironmentUsageStatus[];
+  readonly mergedSessions: number;
+  readonly modelFiltered: boolean;
+}) {
+  const diagnostics = useMemo(() => {
+    let sourceCount = 0;
+    let scannedFiles = 0;
+    let skippedFiles = 0;
+    let malformedRecords = 0;
+    let scanDurationMs = 0;
+    let readAt: string | null = null;
+    for (const environment of environments) {
+      const summary = environment.summary;
+      if (summary === null) continue;
+      sourceCount += summary.sources.filter((source) => source.status !== "missing").length;
+      scannedFiles += summary.sources.reduce((total, source) => total + source.scannedFiles, 0);
+      skippedFiles += summary.sources.reduce((total, source) => total + source.skippedFiles, 0);
+      malformedRecords += summary.sources.reduce(
+        (total, source) => total + source.malformedRecords,
+        0,
+      );
+      scanDurationMs += summary.scanDurationMs;
+      if (readAt === null || summary.readAt > readAt) readAt = summary.readAt;
+    }
+    return { sourceCount, scannedFiles, skippedFiles, malformedRecords, scanDurationMs, readAt };
+  }, [environments]);
+
+  const healthNotes = [
+    diagnostics.skippedFiles > 0 ? `${diagnostics.skippedFiles} skipped` : null,
+    diagnostics.malformedRecords > 0 ? `${diagnostics.malformedRecords} malformed` : null,
+  ].filter((note): note is string => note !== null);
 
   return (
-    <div className="flex items-center justify-between gap-4 px-4 py-2.5 sm:px-5">
-      <span className="min-w-0 truncate text-(length:--text-ui) text-foreground">
-        {environment.label}
+    <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-1 px-3 py-2 text-(length:--text-caption) text-muted-foreground/65 sm:px-4">
+      <span>
+        {diagnostics.sourceCount.toLocaleString("en-US")} sources ·{" "}
+        {diagnostics.scannedFiles.toLocaleString("en-US")} files
+        {modelFiltered ? "" : ` · ${mergedSessions.toLocaleString("en-US")} sessions`}
+        {` · ${(diagnostics.scanDurationMs / 1000).toFixed(1)}s scan`}
       </span>
-      <span className={cn("shrink-0 text-(length:--text-caption)", state.tone)}>
-        {environment.error ?? state.label}
+      <span>
+        {healthNotes.length > 0 ? `${healthNotes.join(" · ")} · ` : ""}
+        {diagnostics.readAt === null
+          ? "Not yet indexed"
+          : `Updated ${formatDateTimeShort(diagnostics.readAt)}`}
       </span>
     </div>
   );
 }
 
-function UsageSkeleton() {
-  return (
-    <div className="space-y-3 px-4 py-4 sm:px-5">
-      <Skeleton className="h-32 w-full" />
-      <Skeleton className="h-4 w-40" />
-    </div>
+export function UsageSettingsPanel({
+  selection,
+  onSelectionChange,
+}: {
+  readonly selection: UsageSettingsSelection;
+  readonly onSelectionChange: (patch: UsageSettingsSelectionPatch) => void;
+}) {
+  const [windowRevision, setWindowRevision] = useState(0);
+  const [breakdownOpen, setBreakdownOpen] = useState(false);
+  const [pinnedPeriod, setPinnedPeriod] = useState<UsagePinnedPeriod | null>(null);
+  const usesHourlyBuckets = selection.rangeDays <= 7;
+  const window = useMemo(
+    () => makeWindow(selection.rangeDays, undefined, usesHourlyBuckets ? "hour" : "day"),
+    [selection.rangeDays, usesHourlyBuckets, windowRevision],
   );
-}
-
-export function UsageSettingsPanel() {
-  const [windowSelection, setWindowSelection] = useState(() => ({
-    days: 30,
-    window: makeWindow(30),
-  }));
-  const [metric, setMetric] = useState<UsageChartMetric>("cost");
-  const { days: windowDays, window } = windowSelection;
-  const isPast24Hours = windowDays === 1;
-  const { merged, environments, isPending, isPartial, refresh } = useUsage(window);
-
-  // Hold the numbers until every environment is terminal: rendering merged
-  // totals while devices still answer makes every figure on the page jump.
+  const provider = selection.provider === "all" ? undefined : selection.provider;
+  const { merged, availableModels, environments, isPending, isPartial, refresh } = useUsage(
+    window,
+    {
+      ...(provider === undefined ? {} : { provider }),
+      ...(selection.model === undefined ? {} : { model: selection.model }),
+    },
+  );
   const settling = isPending || isPartial;
 
-  // Enumerate the whole window and fill the gaps: a period with no traffic has
-  // to keep its slot, or the axis silently compresses and a quiet week reads
-  // like a busy one.
+  const modelOptions = useMemo(() => {
+    const names = new Set(availableModels.map((model) => model.model));
+    if (selection.model !== undefined) names.add(selection.model);
+    return [...names].toSorted((a, b) => a.localeCompare(b));
+  }, [availableModels, selection.model]);
+
   const periods = useMemo<readonly (DailyTotals | HourlyTotals)[]>(() => {
-    const empty = { costUsd: 0, totalTokens: 0, byProvider: new Map() } as const;
-    if (isPast24Hours) {
+    if (usesHourlyBuckets) {
       if (window.sinceTime === undefined || window.untilTime === undefined) return merged.hourly;
       const seen = new Map(merged.hourly.map((period) => [period.hourStart, period]));
       return enumerateHourStarts(window.sinceTime, window.untilTime).map(
-        (hourStart) => seen.get(hourStart) ?? { day: hourStart.slice(0, 10), hourStart, ...empty },
+        (hourStart) =>
+          seen.get(hourStart) ?? { day: hourStart.slice(0, 10), hourStart, ...EMPTY_PERIOD },
       );
     }
     const seen = new Map(merged.daily.map((period) => [period.day, period]));
     return enumerateDays(window.sinceDay, window.untilDay).map(
-      (day) => seen.get(day) ?? { day, ...empty },
+      (day) => seen.get(day) ?? { day, ...EMPTY_PERIOD },
     );
-  }, [
-    isPast24Hours,
-    merged.daily,
-    merged.hourly,
-    window.sinceDay,
-    window.untilDay,
-    window.sinceTime,
-    window.untilTime,
-  ]);
-
-  // Ranked by the metric on screen, so the densest ink is always the biggest
-  // band and the chart legend reads top-down.
-  const orderedProviders = useMemo(
-    () =>
-      merged.providers
-        .toSorted((a, b) =>
-          metric === "cost" ? b.costUsd - a.costUsd : b.totalTokens - a.totalTokens,
-        )
-        .map((provider) => provider.provider),
-    [merged.providers, metric],
-  );
+  }, [merged.daily, merged.hourly, usesHourlyBuckets, window]);
 
   const observedInput = merged.uncachedInputTokens + merged.cachedInputTokens;
-  const cachedShare = observedInput === 0 ? 0 : merged.cachedInputTokens / observedInput;
-
-  const labelFor = (period: DailyTotals | HourlyTotals) =>
-    "hourStart" in period
-      ? formatRelativeHourShort(period.hourStart, new Date().toISOString(), window.timeZone)
-      : formatDayShort(period.day);
-
-  const selectWindow = (days: number) => {
-    setWindowSelection({
-      days,
-      window: makeWindow(days, undefined, days === 1 ? "hour" : "day"),
-    });
+  const cacheReadShare = observedInput === 0 ? 0 : merged.cachedInputTokens / observedInput;
+  const relativeTo = window.untilTime ?? `${window.untilDay}T23:59:59.999Z`;
+  const changeSelection = (patch: UsageSettingsSelectionPatch) => {
+    setPinnedPeriod(null);
+    onSelectionChange(patch);
   };
 
   const refreshWindow = () => {
+    setPinnedPeriod(null);
     const nextWindow: UsageSummaryInput = makeWindow(
-      windowDays,
+      selection.rangeDays,
       undefined,
-      isPast24Hours ? "hour" : "day",
+      usesHourlyBuckets ? "hour" : "day",
     );
-    // Re-deriving the window would silently change nothing when the clock has
-    // not crossed a bucket, so refresh the queries instead.
     if (
       nextWindow.sinceDay === window.sinceDay &&
       nextWindow.untilDay === window.untilDay &&
@@ -267,7 +520,7 @@ export function UsageSettingsPanel() {
     ) {
       refresh();
     } else {
-      setWindowSelection({ days: windowDays, window: nextWindow });
+      setWindowRevision((revision) => revision + 1);
     }
   };
 
@@ -276,215 +529,135 @@ export function UsageSettingsPanel() {
       <SettingsSection
         title="Usage"
         headerAction={
-          <div className="flex items-center gap-2">
-            <ToggleGroup
-              size="xs"
-              variant="outline"
-              value={[String(windowDays)]}
-              onValueChange={(value) => {
-                const next = value[0];
-                if (next !== undefined) selectWindow(Number.parseInt(next, 10));
-              }}
-            >
-              {WINDOW_OPTIONS.map((option) => (
-                <Toggle
-                  key={option.days}
-                  value={String(option.days)}
-                  aria-label={`Show the past ${option.label}`}
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  size="icon-xs"
+                  variant="ghost"
+                  aria-label="Refresh usage"
+                  onClick={refreshWindow}
                 >
-                  {option.label}
-                </Toggle>
-              ))}
-            </ToggleGroup>
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <Button
-                    size="icon-xs"
-                    variant="ghost"
-                    aria-label="Refresh usage"
-                    onClick={refreshWindow}
-                  >
-                    <RefreshCwIcon className={cn("size-3.5", settling && "animate-spin")} />
-                  </Button>
-                }
-              />
-              <TooltipPopup side="top">Rescan transcripts</TooltipPopup>
-            </Tooltip>
-          </div>
+                  <RefreshCwIcon className={cn("size-3.5", settling && "animate-spin")} />
+                </Button>
+              }
+            />
+            <TooltipPopup side="top">Rescan local transcripts</TooltipPopup>
+          </Tooltip>
         }
       >
-        <SurfaceCard>
-          <StatStrip columns="grid-cols-2 sm:grid-cols-3">
-            <Stat
-              label="Cost"
-              emphasis
-              value={settling ? "—" : formatUsd(merged.costUsd)}
-              tooltip="API-equivalent cost of the tokens in this window. It is not money billed: subscription plans settle separately."
-            />
-            <Stat
-              label="Tokens"
-              emphasis
-              value={settling ? "—" : formatTokens(merged.totalTokens)}
-            />
-            <Stat
-              label="Cache savings"
-              emphasis
-              value={settling ? "—" : formatUsd(merged.costQuality.cacheSavingsUsd)}
-              tooltip="What the cached input would have cost at full input rates, minus what it actually cost."
-            />
-          </StatStrip>
-        </SurfaceCard>
+        <UsageControls
+          selection={selection}
+          modelOptions={modelOptions}
+          onChange={changeSelection}
+        />
 
-        <SurfaceCard>
-          {settling ? (
-            <UsageSkeleton />
-          ) : (
-            <>
-              <div className="flex items-center justify-between gap-4 border-b border-border/60 px-4 py-2.5 sm:px-5">
-                <div className="flex min-w-0 items-center gap-3">
-                  {orderedProviders.map((provider, index) => (
-                    <span
-                      key={provider}
-                      className="flex items-center gap-1.5 text-(length:--text-caption) text-muted-foreground"
-                    >
-                      <span
-                        className={cn(
-                          "size-2 rounded-[2px]",
-                          index === 0 ? "bg-(--ink-secondary)" : "bg-(--ink-tertiary)",
-                        )}
-                      />
-                      {PROVIDER_LABEL[provider]}
-                    </span>
-                  ))}
-                </div>
-                <ToggleGroup
-                  size="xs"
-                  variant="ghost"
-                  value={[metric]}
-                  onValueChange={(value) => {
-                    const next = value[0];
-                    if (next === "cost" || next === "tokens") setMetric(next);
-                  }}
-                >
-                  <Toggle value="cost" aria-label="Chart cost">
-                    Cost
-                  </Toggle>
-                  <Toggle value="tokens" aria-label="Chart tokens">
-                    Tokens
-                  </Toggle>
-                </ToggleGroup>
+        {settling ? (
+          <UsageSkeleton />
+        ) : (
+          <>
+            <div className="rounded-xl px-3 py-3 sm:px-4">
+              <div className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-4">
+                <HeadlineStat label="Total tokens" value={formatTokens(merged.totalTokens)} />
+                <HeadlineStat
+                  label="Average / day"
+                  value={formatTokens(merged.totalTokens / selection.rangeDays)}
+                />
+                <HeadlineStat
+                  label="Turns"
+                  value={merged.records.toLocaleString("en-US")}
+                  tooltip="Provider usage records in this scope — the closest stable measure of completed generation turns."
+                />
+                <HeadlineStat
+                  label="API-equivalent cost"
+                  value={formatUsd(merged.costUsd)}
+                  tooltip="Estimated API value of these tokens, not money billed. Subscription plans settle separately."
+                />
               </div>
-              <UsageActivityChart
-                periods={periods}
-                providers={orderedProviders}
-                metric={metric}
-                labelFor={labelFor}
-                emptyLabel="No recorded usage in this window."
-              />
-            </>
-          )}
-        </SurfaceCard>
 
-        {settling ? null : (
-          <CoverageNotice
-            unpricedShare={merged.costQuality.unpricedShare}
-            staleCount={merged.staleEnvironments.length}
-            duplicateCount={merged.duplicateSources.length}
-          />
+              <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 border-t border-border/60 pt-2.5 text-(length:--text-caption) text-muted-foreground">
+                <span>
+                  Input{" "}
+                  <strong className="font-mono font-normal text-foreground tabular-nums">
+                    {formatTokens(merged.uncachedInputTokens)}
+                  </strong>
+                </span>
+                <span>
+                  Cache read{" "}
+                  <strong className="font-mono font-normal text-foreground tabular-nums">
+                    {formatTokens(merged.cachedInputTokens)}
+                  </strong>{" "}
+                  · {formatPercent(cacheReadShare)}
+                </span>
+                <span>
+                  Cache write{" "}
+                  <strong className="font-mono font-normal text-foreground tabular-nums">
+                    {formatTokens(merged.cacheCreationTokens)}
+                  </strong>
+                </span>
+                <span>
+                  Output{" "}
+                  <strong className="font-mono font-normal text-foreground tabular-nums">
+                    {formatTokens(merged.outputTokens)}
+                  </strong>
+                </span>
+                <span>
+                  Reasoning{" "}
+                  <strong className="font-mono font-normal text-foreground tabular-nums">
+                    {formatTokens(merged.reasoningTokens)}
+                  </strong>
+                </span>
+                <span className="sm:ml-auto">
+                  Cache value{" "}
+                  <strong className="font-mono font-normal text-foreground tabular-nums">
+                    {formatUsd(merged.costQuality.cacheSavingsUsd)}
+                  </strong>
+                </span>
+              </div>
+            </div>
+
+            <UsageActivityField
+              key={`${selection.rangeDays}:${selection.provider}:${selection.model ?? "all"}:${selection.groupBy}`}
+              periods={periods}
+              rangeDays={selection.rangeDays}
+              metric={selection.metric}
+              grouping={selection.groupBy}
+              relativeTo={relativeTo}
+              timeZone={window.timeZone}
+              onMetricChange={(metric) => changeSelection({ metric })}
+              onPinnedPeriodChange={(period) => {
+                setPinnedPeriod(period);
+                if (period !== null) setBreakdownOpen(true);
+              }}
+            />
+
+            <CoverageNotice
+              unpricedShare={merged.costQuality.unpricedShare}
+              staleCount={merged.staleEnvironments.length}
+              duplicateCount={merged.duplicateSources.length}
+            />
+
+            <Breakdown
+              merged={merged}
+              grouping={selection.groupBy}
+              open={breakdownOpen}
+              pinnedPeriod={pinnedPeriod}
+              onOpenChange={setBreakdownOpen}
+              onGroupingChange={(groupBy) => changeSelection({ groupBy })}
+              onSelectProvider={(nextProvider) =>
+                changeSelection({ provider: nextProvider, model: undefined })
+              }
+              onSelectModel={(model) => changeSelection({ model })}
+            />
+
+            <SourceFootnote
+              environments={environments}
+              mergedSessions={merged.sessions}
+              modelFiltered={selection.model !== undefined}
+            />
+          </>
         )}
       </SettingsSection>
-
-      <SettingsSection title="Tokens">
-        <SurfaceCard>
-          <StatStrip columns="grid-cols-2 sm:grid-cols-4">
-            <Stat
-              label="Uncached input"
-              value={settling ? "—" : formatTokens(merged.uncachedInputTokens)}
-            />
-            <Stat
-              label="Cached input"
-              value={settling ? "—" : formatTokens(merged.cachedInputTokens)}
-              tooltip={`${formatPercent(cachedShare)} of observed input was served from cache.`}
-            />
-            <Stat label="Output" value={settling ? "—" : formatTokens(merged.outputTokens)} />
-            <Stat
-              label="Reasoning"
-              value={settling ? "—" : formatTokens(merged.reasoningTokens)}
-              tooltip="A subset of output tokens, not an addition to them."
-            />
-          </StatStrip>
-        </SurfaceCard>
-      </SettingsSection>
-
-      <SettingsSection title="Models">
-        <SurfaceCard>
-          {settling ? (
-            <UsageSkeleton />
-          ) : merged.models.length === 0 ? (
-            <div className="px-4 py-4 text-(length:--text-ui) text-muted-foreground sm:px-5">
-              No recorded usage in this window.
-            </div>
-          ) : (
-            <table className="w-full border-collapse text-(length:--text-ui)">
-              <thead>
-                <tr className="border-b border-border/60 text-(length:--text-caption) text-muted-foreground/70">
-                  <th className="px-4 py-2 text-left font-normal sm:px-5">Model</th>
-                  <th className="px-4 py-2 text-right font-normal">Cost</th>
-                  <th className="px-4 py-2 text-right font-normal">Share</th>
-                  <th className="px-4 py-2 text-right font-normal sm:px-5">Tokens</th>
-                </tr>
-              </thead>
-              <tbody>
-                {merged.models.map((model) => (
-                  <tr
-                    key={`${model.provider}:${model.model}`}
-                    className="border-b border-border/60 last:border-b-0"
-                  >
-                    <td className="max-w-0 px-4 py-2 sm:px-5">
-                      <div className="truncate text-foreground">{model.model}</div>
-                      <div className="truncate text-(length:--text-caption) text-muted-foreground/70">
-                        {PROVIDER_LABEL[model.provider]}
-                      </div>
-                    </td>
-                    <td className="px-4 py-2 text-right font-mono tabular-nums text-foreground">
-                      {formatUsd(model.costUsd)}
-                    </td>
-                    <td className="px-4 py-2 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <span className="hidden h-1 w-16 overflow-hidden rounded-full bg-(--edge) sm:block">
-                          <span
-                            className="block h-full bg-(--ink-tertiary)"
-                            style={{ width: `${Math.min(100, model.costShare * 100)}%` }}
-                          />
-                        </span>
-                        <span className="font-mono tabular-nums text-muted-foreground">
-                          {formatPercent(model.costShare)}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-2 text-right font-mono tabular-nums text-muted-foreground sm:px-5">
-                      {formatTokens(model.totalTokens)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </SurfaceCard>
-      </SettingsSection>
-
-      {environments.length > 1 ? (
-        <SettingsSection title="Devices">
-          <SurfaceCard>
-            <div className="divide-y divide-border/60">
-              {environments.map((environment) => (
-                <DeviceRow key={environment.environmentId} environment={environment} />
-              ))}
-            </div>
-          </SurfaceCard>
-        </SettingsSection>
-      ) : null}
     </SettingsPageContainer>
   );
 }

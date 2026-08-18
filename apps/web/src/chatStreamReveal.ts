@@ -163,6 +163,8 @@ export interface ChatStreamRevealState {
   /** Whether this render should wrap words at all. */
   readonly active: boolean;
   readonly timing: ChatStreamWordTiming;
+  /** The current wall-clock instant after which following UI may appear. */
+  readonly settlesAtMs: () => number | null;
 }
 
 const NO_REVEAL: ChatStreamRevealState = {
@@ -171,6 +173,7 @@ const NO_REVEAL: ChatStreamRevealState = {
     styleOf: () => null,
     blockStyleOf: () => null,
   },
+  settlesAtMs: () => null,
 };
 
 /**
@@ -237,12 +240,8 @@ export function useChatStreamReveal(input: {
   const memoryKey = input.memoryKey ?? instanceKey;
   const [settling, setSettling] = useState(false);
 
-  /*
-   * Acquired only while the reveal is live. A settled message that acquired on
-   * every render would refill the map right after the cleanup effect below
-   * emptied it — dead entries whose eviction eventually hit the one message
-   * still streaming, restarting its clock mid-answer.
-   */
+  /* Acquired only while the reveal is live or finishing. Settled anchors stay
+     in the capped registry, but settled renders do not touch their LRU order. */
   const memory = reveals || settling ? acquireRevealMemory(memoryKey) : null;
 
   /*
@@ -277,14 +276,10 @@ export function useChatStreamReveal(input: {
 
   const active = (reveals || settling) && animation !== undefined && animation !== "instant";
 
-  /* A settled message keeps no bookkeeping around — and must not, or the map
-     would hold every message the session ever revealed. Dropped only when the
-     reveal settles while mounted; an unmount mid-turn deliberately leaves the
-     entry, because surviving that unmount is the map's whole purpose. */
-  useEffect(() => {
-    if (active) return;
-    revealMemoryByKey.delete(memoryKey);
-  }, [active, memoryKey]);
+  /* Keep settled anchors in the bounded LRU. A provider snapshot can briefly
+     mark the same message inactive and live again while a turn changes phase;
+     deleting its anchor in that gap restarts every word from zero. The cap
+     still bounds the registry, while a re-acquired message resumes at rest. */
 
   return useMemo(() => {
     if (!active || animation === undefined || memory === null) return NO_REVEAL;
@@ -304,6 +299,7 @@ export function useChatStreamReveal(input: {
 
     return {
       active: true,
+      settlesAtMs: () => memory.headAtMs + WORD_MOTION_MS,
       timing: {
         styleOf: (index: number): string | null => {
           const delay = delayStyleOf(index);

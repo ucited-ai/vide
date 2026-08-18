@@ -225,6 +225,8 @@ export type MessagesTimelineRow =
       createdAt: string | null;
       label: string;
       groupedEntries: WorkLogEntry[];
+      /** Newest assistant prose immediately ahead of this live status. */
+      revealAfterMessageId: string | null;
     }
   | {
       kind: "message";
@@ -840,6 +842,9 @@ export function deriveMessagesTimelineRows(input: {
   // arrive between calls without collapsing or resetting that list. Once the
   // final answer lands the ordinary historical work rows return.
   const visible = settled.filter((row) => !liveWorkRowIds.has(row.id));
+  const revealAfterMessageId = visible.findLast(
+    (row) => row.kind === "message" && row.message.role === "assistant",
+  );
   /*
    * The animated reading of the turn, at its bottom. One constant id: exactly
    * one exists at a time, and a constant id is what stops it remounting when
@@ -853,6 +858,8 @@ export function deriveMessagesTimelineRows(input: {
       createdAt: input.activeTurnStartedAt,
       label: liveHead.label,
       groupedEntries: liveGroupedEntries,
+      revealAfterMessageId:
+        revealAfterMessageId?.kind === "message" ? revealAfterMessageId.message.id : null,
     },
   ];
 }
@@ -1037,6 +1044,7 @@ function isRowUnchanged(a: MessagesTimelineRow, b: MessagesTimelineRow): boolean
       return (
         a.createdAt === bt.createdAt &&
         a.label === bt.label &&
+        a.revealAfterMessageId === bt.revealAfterMessageId &&
         Equal.equals(a.groupedEntries, bt.groupedEntries)
       );
     }

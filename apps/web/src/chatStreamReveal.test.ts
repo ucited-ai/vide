@@ -135,6 +135,18 @@ describe("wrapping words for the reveal", () => {
     })(tree);
 
     expect(words(tree).map(delayOf)).toEqual(["0", "40", "80"]);
+    expect(tree.children?.[0]?.properties?.className).toBeUndefined();
+  });
+
+  it("does not run a second block entrance over animated prose", () => {
+    const tree = paragraph("one two");
+    rehypeChatStreamWords({
+      styleOf: (index) => `--chat-stream-delay:${String(index * 40)}ms`,
+      blockStyleOf: () => "--chat-stream-delay:0ms",
+    })(tree);
+
+    expect(tree.children?.[0]?.properties).toBeUndefined();
+    expect(words(tree).map(delayOf)).toEqual(["0", "40"]);
   });
 
   it("writes the delay still outstanding, negative once a word has arrived", () => {
